@@ -20,7 +20,7 @@
         <p class="mb-0">直接说一句话，我来帮你记录、分类和安排。</p>
       </div>
       <div class="text-end small opacity-75">
-        <div>{{ user.username }}</div>
+        <div><a href="{% url 'profile' %}" class="text-white">{{ user.username }}</a></div>
         <a href="{% url 'logout' %}" class="text-white text-decoration-none">登出</a>
       </div>
     </div>
