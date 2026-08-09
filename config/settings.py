@@ -19,6 +19,11 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "life",
     "accounts",
+    "finance",
+    "planning",
+    "notes",
+    "capture",
+    "common",
 ]
 
 MIDDLEWARE = [

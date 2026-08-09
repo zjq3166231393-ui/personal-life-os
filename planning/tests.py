@@ -1,2 +1,10 @@
-# planning app — 任务、提醒、日历测试
-# V0.4 起逐步实现。
+from django.test import TestCase
+from django.urls import reverse
+
+class SmokeTests(TestCase):
+    def test_planning_index_returns_ok(self):
+        response = self.client.get(reverse("planning_index"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["app"], "planning")
