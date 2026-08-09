@@ -1,4 +1,6 @@
 from django.urls import path
 from . import views
 
-urlpatterns = [path("", views.index, name="common_index")]
+urlpatterns = [
+    path("audit-log/", views.my_audit_log, name="my_audit_log"),
+]

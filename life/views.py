@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 
 from django.contrib.auth.decorators import login_required
 
+from common.audit import record
 from .models import Entry
 from .parser import parse_text
 
@@ -56,6 +57,7 @@ def save_entry(request):
             return HttpResponseBadRequest("金额格式无效。")
     occurred_on = datetime.fromisoformat(draft["occurred_on"]).date() if draft.get("occurred_on") else None
     due_at = datetime.fromisoformat(draft["due_at"]) if draft.get("due_at") else None
-    Entry.objects.create(user=request.user, kind=draft["kind"], title=str(draft["title"])[:200], raw_text=raw_text, category=draft.get("category", ""), amount=amount, occurred_on=occurred_on, due_at=due_at, priority=int(draft.get("priority", 2)))
+    entry = Entry.objects.create(user=request.user, kind=draft["kind"], title=str(draft["title"])[:200], raw_text=raw_text, category=draft.get("category", ""), amount=amount, occurred_on=occurred_on, due_at=due_at, priority=int(draft.get("priority", 2)))
+    record(request.user, "ai.save", entry.pk, f"保存记录: {entry.title}")
     return JsonResponse({"ok": True})
 

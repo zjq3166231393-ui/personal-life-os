@@ -1,4 +1,9 @@
-from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from .models import AuditLog
 
-def index(request):
-    return JsonResponse({"ok": True, "app": "common"})
+
+@login_required
+def my_audit_log(request):
+    logs = AuditLog.objects.filter(user=request.user)[:100]
+    return render(request, "common/audit_log.html", {"logs": logs, "title": "我的操作日志"})

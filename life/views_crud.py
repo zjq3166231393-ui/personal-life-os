@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from common.audit import record
 from .models import Category, Expense, Note, Task
 
 
@@ -42,6 +43,7 @@ def expense_edit(request, pk):
         if cat_id:
             expense.category_id = int(cat_id)
         expense.save()
+        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.title}")
         return redirect("expense_list")
     return render(request, "life/expense_edit.html", {"expense": expense, "categories": categories})
 
@@ -53,6 +55,7 @@ def expense_delete(request, pk):
         expense.is_deleted = True
         expense.deleted_at = timezone.now()
         expense.save()
+        record(request.user, "expense.delete", expense.pk, f"删除支出: {expense.title}")
         return redirect("expense_list")
     return render(request, "life/expense_delete.html", {"expense": expense})
 
@@ -85,6 +88,10 @@ def task_edit(request, pk):
             task.completed_at = None
         task.completed = completed
         task.save()
+        if completed:
+            record(request.user, "task.complete", task.pk, f"完成任务: {task.title}")
+        else:
+            record(request.user, "task.update", task.pk, f"修改任务: {task.title}")
         return redirect("task_list")
     return render(request, "life/task_edit.html", {"task": task})
 
@@ -96,6 +103,7 @@ def task_delete(request, pk):
         task.is_deleted = True
         task.deleted_at = timezone.now()
         task.save()
+        record(request.user, "task.delete", task.pk, f"删除任务: {task.title}")
         return redirect("task_list")
     return render(request, "life/task_delete.html", {"task": task})
 
@@ -121,6 +129,7 @@ def note_edit(request, pk):
         note.title = request.POST.get("title", note.title)
         note.occurred_on = request.POST.get("occurred_on") or None
         note.save()
+        record(request.user, "note.update", note.pk, f"修改随心记: {note.title}")
         return redirect("note_list")
     return render(request, "life/note_edit.html", {"note": note})
 
@@ -132,5 +141,6 @@ def note_delete(request, pk):
         note.is_deleted = True
         note.deleted_at = timezone.now()
         note.save()
+        record(request.user, "note.delete", note.pk, f"删除随心记: {note.title}")
         return redirect("note_list")
     return render(request, "life/note_delete.html", {"note": note})
