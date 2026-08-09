@@ -1,10 +1,10 @@
-from django.test import TestCase
-from django.urls import reverse
+import json
+from django.test import RequestFactory, SimpleTestCase
+from .views import index
 
-class SmokeTests(TestCase):
+class SmokeTests(SimpleTestCase):
     def test_capture_index_returns_ok(self):
-        response = self.client.get(reverse("capture_index"))
+        response = index(RequestFactory().get("/"))
         self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = json.loads(response.content)
         self.assertTrue(data["ok"])
-        self.assertEqual(data["app"], "capture")

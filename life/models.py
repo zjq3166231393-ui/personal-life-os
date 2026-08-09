@@ -64,6 +64,8 @@ class Expense(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     occurred_on = models.DateField()
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,6 +84,8 @@ class Task(models.Model):
     priority = models.PositiveSmallIntegerField(default=2, help_text="1 高，2 中，3 低")
     completed = models.BooleanField(default=False)
     completed_at = models.DateTimeField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -97,6 +101,8 @@ class Note(models.Model):
     title = models.CharField(max_length=200)
     raw_text = models.TextField(blank=True)
     occurred_on = models.DateField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
