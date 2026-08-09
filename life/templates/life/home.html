@@ -13,9 +13,17 @@
 <main class="container shell py-4 py-md-5">
   <form class="d-none">{% csrf_token %}</form>
   <section class="hero p-4 p-md-5 shadow-sm mb-4">
-    <p class="mb-1 opacity-75">{{ today|date:'Y年n月j日' }}</p>
-    <h1 class="h2 fw-bold">今天，先完成最重要的事。</h1>
-    <p class="mb-0">直接说一句话，我来帮你记录、分类和安排。</p>
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <p class="mb-1 opacity-75">{{ today|date:'Y年n月j日' }}</p>
+        <h1 class="h2 fw-bold">今天，先完成最重要的事。</h1>
+        <p class="mb-0">直接说一句话，我来帮你记录、分类和安排。</p>
+      </div>
+      <div class="text-end small opacity-75">
+        <div>{{ user.username }}</div>
+        <a href="{% url 'logout' %}" class="text-white text-decoration-none">登出</a>
+      </div>
+    </div>
   </section>
 
   <section class="card shadow-sm p-3 p-md-4 mb-4">

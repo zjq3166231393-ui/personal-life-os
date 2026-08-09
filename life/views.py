@@ -7,10 +7,13 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from django.contrib.auth.decorators import login_required
+
 from .models import Entry
 from .parser import parse_text
 
 
+@login_required
 def home(request):
     today = timezone.localdate()
     upcoming_tasks = Entry.objects.filter(kind=Entry.Kind.TASK, completed=False).filter(due_at__date__gte=today).order_by("due_at")[:5]
@@ -20,6 +23,7 @@ def home(request):
     return render(request, "life/home.html", {"today": today, "upcoming_tasks": upcoming_tasks, "month_total": total, "recent": recent})
 
 
+@login_required
 @require_POST
 def parse_entry(request):
     try:
@@ -32,6 +36,7 @@ def parse_entry(request):
     return JsonResponse({"draft": parse_text(text), "raw_text": text.strip()})
 
 
+@login_required
 @require_POST
 def save_entry(request):
     try:
