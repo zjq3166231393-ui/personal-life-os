@@ -16,10 +16,11 @@ from .parser import parse_text
 @login_required
 def home(request):
     today = timezone.localdate()
-    upcoming_tasks = Entry.objects.filter(kind=Entry.Kind.TASK, completed=False).filter(due_at__date__gte=today).order_by("due_at")[:5]
-    month_expenses = Entry.objects.filter(kind=Entry.Kind.EXPENSE, occurred_on__year=today.year, occurred_on__month=today.month)
+    entries = Entry.objects.filter(user=request.user)
+    upcoming_tasks = entries.filter(kind=Entry.Kind.TASK, completed=False).filter(due_at__date__gte=today).order_by("due_at")[:5]
+    month_expenses = entries.filter(kind=Entry.Kind.EXPENSE, occurred_on__year=today.year, occurred_on__month=today.month)
     total = sum((item.amount or Decimal("0") for item in month_expenses), Decimal("0"))
-    recent = Entry.objects.all()[:8]
+    recent = entries[:8]
     return render(request, "life/home.html", {"today": today, "upcoming_tasks": upcoming_tasks, "month_total": total, "recent": recent})
 
 
@@ -55,6 +56,6 @@ def save_entry(request):
             return HttpResponseBadRequest("金额格式无效。")
     occurred_on = datetime.fromisoformat(draft["occurred_on"]).date() if draft.get("occurred_on") else None
     due_at = datetime.fromisoformat(draft["due_at"]) if draft.get("due_at") else None
-    Entry.objects.create(kind=draft["kind"], title=str(draft["title"])[:200], raw_text=raw_text, category=draft.get("category", ""), amount=amount, occurred_on=occurred_on, due_at=due_at, priority=int(draft.get("priority", 2)))
+    Entry.objects.create(user=request.user, kind=draft["kind"], title=str(draft["title"])[:200], raw_text=raw_text, category=draft.get("category", ""), amount=amount, occurred_on=occurred_on, due_at=due_at, priority=int(draft.get("priority", 2)))
     return JsonResponse({"ok": True})
 

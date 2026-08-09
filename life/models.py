@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -15,6 +16,7 @@ class Entry(models.Model):
         SHOPPING = "购物", "购物"
         OTHER = "其他", "其他"
 
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entries", null=True, blank=True)
     kind = models.CharField(max_length=20, choices=Kind.choices)
     title = models.CharField(max_length=200)
     raw_text = models.TextField(blank=True)
