@@ -646,12 +646,44 @@ def dashboard(request):
     budget_amount = budget_total.amount if budget_total else Decimal("0")
     budget_pct = min(int(total_expense / budget_amount * 100) if budget_amount > 0 else 0, 100)
 
+    # ── monthly trend (last 6 months) ────────────────────────────
+    import json
+    monthly_labels = []
+    monthly_expense = []
+    monthly_income = []
+    for i in range(5, -1, -1):
+        m = today.month - i
+        y = today.year
+        if m <= 0:
+            m += 12
+            y -= 1
+        ms = date(y, m, 1)
+        _, ld = monthrange(y, m)
+        me = date(y, m, ld)
+        monthly_labels.append(f"{m}月")
+        monthly_expense.append(float(base.filter(type="expense", occurred_at__gte=ms, occurred_at__lte=me).aggregate(s=Sum("amount"))["s"] or Decimal("0")))
+        monthly_income.append(float(base.filter(type="income", occurred_at__gte=ms, occurred_at__lte=me).aggregate(s=Sum("amount"))["s"] or Decimal("0")))
+
+    chart_data = json.dumps({
+        "monthlyLabels": monthly_labels,
+        "monthlyExpense": monthly_expense,
+        "monthlyIncome": monthly_income,
+        "dailyLabels": [d["day"] for d in daily],
+        "dailyAmounts": [float(d["amount"]) for d in daily],
+        "catLabels": [c["name"] for c in cat_pct],
+        "catAmounts": [float(c["amount"]) for c in cat_pct],
+        "catColors": ["#f97316","#3b82f6","#8b5cf6","#06b6d4","#ec4899","#6b7280","#22c55e","#eab308"][:len(cat_pct)],
+        "budgetPct": budget_pct,
+        "recurringPct": round(float(rec_total / total_expense * 100) if total_expense > 0 else 0),
+    })
+
     return render(request, "life/dashboard.html", {
         "today": today, "month_start": month_start,
         "total_expense": total_expense, "total_income": total_income,
         "balance": balance, "cat_pct": cat_pct, "daily": daily,
         "rec_total": rec_total, "upcoming": upcoming[:10],
         "budget_amount": budget_amount, "budget_pct": budget_pct,
+        "chart_data": chart_data,
     })
 
 
