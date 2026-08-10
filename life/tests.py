@@ -1013,6 +1013,39 @@ class ConfirmActionsTests(TestCase):
         self.assertEqual(exp.amount, Decimal("99.99"))
 
 
+class ParserEvalTests(SimpleTestCase):
+    def test_fixture_file_exists_and_valid(self):
+        import json
+        from pathlib import Path
+        path = Path("tests/fixtures/parser_cases.json")
+        self.assertTrue(path.exists(), "Fixture file must exist")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.assertIn("cases", data)
+        self.assertGreaterEqual(len(data["cases"]), 20)
+
+    def test_all_cases_have_id_and_text(self):
+        import json
+        from pathlib import Path
+        data = json.loads(Path("tests/fixtures/parser_cases.json").read_text(encoding="utf-8"))
+        for case in data["cases"]:
+            self.assertIn("id", case, f"Case missing id")
+            self.assertIn("text", case, f"Case {case.get('id', '?')} missing text")
+
+    def test_fake_provider_does_not_crash_on_any_case(self):
+        import json
+        from pathlib import Path
+        data = json.loads(Path("tests/fixtures/parser_cases.json").read_text(encoding="utf-8"))
+        p = FakeProvider()
+        for case in data["cases"]:
+            if not case["text"]:
+                continue
+            try:
+                result = p.parse(case["text"])
+                self.assertIn("actions", result)
+            except Exception as e:
+                self.fail(f"Case {case['id']} crashed: {e}")
+
+
 class AIRouterTests(SimpleTestCase):
     def test_simple_expense_uses_rule(self):
         result = route_parse("午饭 18 元")

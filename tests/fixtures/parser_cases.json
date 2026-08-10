@@ -1,0 +1,162 @@
+{
+  "meta": {
+    "version": "1.0",
+    "description": "AI parser evaluation dataset. Each case has: text, expected (intent/category/amount/title), tags.",
+    "total_cases": 25
+  },
+  "cases": [
+    {
+      "id": "c01_dining",
+      "text": "今天中午吃饭花了18元",
+      "tags": ["餐饮", "简单支出", "标准金额"],
+      "expected": {"intent": "create_expense", "category": "餐饮", "amount": "18"}
+    },
+    {
+      "id": "c02_transport",
+      "text": "打车 16.5 元",
+      "tags": ["交通", "小数金额"],
+      "expected": {"intent": "create_expense", "category": "交通", "amount": "16.5"}
+    },
+    {
+      "id": "c03_shopping",
+      "text": "淘宝买衣服 299 元",
+      "tags": ["购物"],
+      "expected": {"intent": "create_expense", "category": "购物", "amount": "299"}
+    },
+    {
+      "id": "c04_phone_bill",
+      "text": "交话费 100 元",
+      "tags": ["生活缴费"],
+      "expected": {"intent": "create_expense", "category": "生活缴费", "amount": "100"}
+    },
+    {
+      "id": "c05_income_salary",
+      "text": "收到工资 5000 元",
+      "tags": ["收入"],
+      "expected": {"intent": "create_income", "amount": "5000"}
+    },
+    {
+      "id": "c06_income_refund",
+      "text": "退款 199 元",
+      "tags": ["收入", "退款"],
+      "expected": {"intent": "create_income", "amount": "199"}
+    },
+    {
+      "id": "c07_multi_expense",
+      "text": "今天中午吃饭 18，晚上买菜 42",
+      "tags": ["多笔消费"],
+      "expected": {"actions": [
+        {"intent": "create_expense", "category": "餐饮", "amount": "18"},
+        {"intent": "create_expense", "category": "餐饮", "amount": "42"}
+      ]}
+    },
+    {
+      "id": "c08_multi_mixed",
+      "text": "午饭 18 元，打车 20 元，提醒我交话费",
+      "tags": ["多笔消费", "混合意图"],
+      "expected": {"intents": ["create_expense", "create_expense", "create_task"]}
+    },
+    {
+      "id": "c09_relative_date_yesterday",
+      "text": "昨天加油 200 元",
+      "tags": ["相对日期", "昨天"],
+      "expected": {"intent": "create_expense", "category": "交通", "amount": "200", "date_relative": "yesterday"}
+    },
+    {
+      "id": "c10_relative_date_tomorrow",
+      "text": "明天晚上 8 点提醒我交话费",
+      "tags": ["相对日期", "明天", "提醒"],
+      "expected": {"intent": "create_task", "title": "交话费", "date_relative": "tomorrow"}
+    },
+    {
+      "id": "c11_birthday_reminder",
+      "text": "12月25日提醒我姐姐生日",
+      "tags": ["生日", "提醒"],
+      "expected": {"intent": "create_reminder", "title": "姐姐生日", "reminder_type": "birthday"}
+    },
+    {
+      "id": "c12_recurring_rent",
+      "text": "每月5号交房租 3000 元",
+      "tags": ["固定支出", "房租"],
+      "expected": {"intent": "create_expense", "category": "住房", "amount": "3000", "recurring": true}
+    },
+    {
+      "id": "c13_installment_phone",
+      "text": "iPhone 分期 12 期每期 500 元",
+      "tags": ["分期"],
+      "expected": {"intent": "create_expense", "amount": "500", "installment": true}
+    },
+    {
+      "id": "c14_vague_amount",
+      "text": "吃饭大概花了二三十块钱",
+      "tags": ["模糊金额"],
+      "expected": {"intent": "create_expense", "category": "餐饮", "amount_estimated": true}
+    },
+    {
+      "id": "c15_vague_no_amount",
+      "text": "今天买了好多东西花了不少钱",
+      "tags": ["模糊金额", "无明确数字"],
+      "expected": {"intent": "create_expense", "has_amount": false}
+    },
+    {
+      "id": "c16_unintelligible",
+      "text": "asdfghjkl",
+      "tags": ["无法理解"],
+      "expected": {"intent": "create_note"}
+    },
+    {
+      "id": "c17_empty",
+      "text": "",
+      "tags": ["无法理解", "空输入"],
+      "expected": {"should_reject": true}
+    },
+    {
+      "id": "c18_sensitive_id",
+      "text": "我的身份证号是 110101199001011234",
+      "tags": ["敏感文本", "身份证"],
+      "expected": {"should_fallback": true, "sensitive": true}
+    },
+    {
+      "id": "c19_sensitive_password",
+      "text": "我的密码是 abc123",
+      "tags": ["敏感文本", "密码"],
+      "expected": {"should_fallback": true, "sensitive": true}
+    },
+    {
+      "id": "c20_sensitive_bank",
+      "text": "银行卡号 6222021234567890",
+      "tags": ["敏感文本", "银行卡"],
+      "expected": {"should_fallback": true, "sensitive": true}
+    },
+    {
+      "id": "c21_ai_failure_simulation",
+      "text": "一个需要复杂推理的请求，AI 理应返回格式错误或超时",
+      "tags": ["AI失败", "复杂请求"],
+      "expected": {"should_not_crash": true}
+    },
+    {
+      "id": "c22_grocery_unitless",
+      "text": "晚上买菜 42 块",
+      "tags": ["餐饮", "块"],
+      "expected": {"intent": "create_expense", "category": "餐饮", "amount": "42"}
+    },
+    {
+      "id": "c23_charge_transport",
+      "text": "电瓶车充电 3 元",
+      "tags": ["交通", "充电"],
+      "expected": {"intent": "create_expense", "category": "交通", "amount": "3"}
+    },
+    {
+      "id": "c24_task_with_time",
+      "text": "明天晚上8点提醒我给姐姐买生日礼物",
+      "tags": ["提醒", "任务", "时间"],
+      "expected": {"intent": "create_task", "title": "给姐姐买生日礼物", "has_due_at": true}
+    },
+    {
+      "id": "c25_multi_expense_task",
+      "text": "今天中午吃饭 18，晚上买菜 42，明天下午提醒我给姐姐买礼物",
+      "tags": ["多笔消费", "任务", "混合"],
+      "expected": {"intents": ["create_expense", "create_expense", "create_task"], "min_actions": 3}
+    }
+  ]
+}
