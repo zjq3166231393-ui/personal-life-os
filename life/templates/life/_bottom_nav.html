@@ -1,15 +1,15 @@
-<!-- Fixed bottom navigation — mobile-first, touch-friendly -->
+<!-- Fixed bottom navigation — mobile-first -->
 {% url 'home' as home_url %}
 {% url 'expense_list' as exp_url %}
 {% url 'task_list' as task_url %}
-{% url 'dashboard' as dash_url %}
+{% url 'notification_list' as notif_url %}
 {% url 'budget' as bud_url %}
 
 <nav class="bottom-nav d-md-none">
   <a href="{{ home_url }}" class="nav-item {% if request.path == home_url %}active{% endif %}">🏠<span>今日</span></a>
   <a href="{{ exp_url }}" class="nav-item {% if exp_url in request.path %}active{% endif %}">💰<span>账目</span></a>
   <a href="{{ task_url }}" class="nav-item {% if task_url in request.path %}active{% endif %}">✅<span>任务</span></a>
-  <a href="{{ dash_url }}" class="nav-item {% if dash_url in request.path %}active{% endif %}">📊<span>看板</span></a>
+  <a href="{{ notif_url }}" class="nav-item {% if notif_url in request.path %}active{% endif %}">🔔<span>通知</span></a>
   <a href="{{ bud_url }}" class="nav-item {% if bud_url in request.path %}active{% endif %}">💵<span>预算</span></a>
 </nav>
 
