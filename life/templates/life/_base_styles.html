@@ -1,0 +1,55 @@
+{# Shared design-system styles. Include in <head> of every page. #}
+<style>
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1e40af;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --bg: #f5f7fb;
+  --text-secondary: #6b7280;
+}
+body {
+  background: var(--bg);
+  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  font-size: .95rem;
+  color: #1f2937;
+  padding-bottom: 70px;
+}
+.card {
+  border: 0;
+  border-radius: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  overflow: hidden;
+}
+.hero {
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+  color: #fff;
+  border-radius: 22px;
+}
+.hero-danger {
+  background: linear-gradient(135deg, #dc2626, #991b1b);
+  color: #fff;
+  border-radius: 22px;
+}
+.form-control, .form-select {
+  border-radius: 10px;
+}
+.form-label {
+  font-weight: 500;
+  font-size: .875rem;
+  margin-bottom: .25rem;
+}
+.section-title {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.text-success-custom { color: var(--success); }
+.text-danger-custom { color: var(--danger); }
+@media (min-width: 768px) {
+  body { padding-bottom: 0; }
+}
+</style>
