@@ -38,20 +38,22 @@ class Entry(models.Model):
 class Category(models.Model):
     """Expense category with system defaults and per-user customization."""
 
-    class Kind(models.TextChoices):
+    class Type(models.TextChoices):
         EXPENSE = "expense", "支出"
         INCOME = "income", "收入"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="categories", null=True, blank=True, help_text="NULL = system default category")
     name = models.CharField(max_length=50)
     icon = models.CharField(max_length=8, blank=True)
-    kind = models.CharField(max_length=20, choices=Kind.choices, default="expense")
-    is_default = models.BooleanField(default=False)
+    type = models.CharField(max_length=20, choices=Type.choices, default="expense")
+    color = models.CharField(max_length=20, blank=True, help_text="Tailwind or hex color, e.g. #f97316 or orange-500")
+    is_system = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["kind", "name"]
-        constraints = [models.UniqueConstraint(fields=["user", "name", "kind"], name="unique_category_per_user")]
+        ordering = ["type", "name"]
+        constraints = [models.UniqueConstraint(fields=["user", "name", "type"], name="unique_category_per_user")]
 
     def __str__(self):
         return f"{self.icon or ''} {self.name}"

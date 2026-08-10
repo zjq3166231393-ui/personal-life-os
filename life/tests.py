@@ -21,20 +21,94 @@ class ParserTests(SimpleTestCase):
 
 
 class CategoryTests(TestCase):
-    def test_create_default_category(self):
-        cat = Category.objects.create(name="餐饮", icon="🍽️", kind="expense", is_default=True)
+    def test_create_system_category(self):
+        cat = Category.objects.create(name="餐饮", icon="🍽️", type="expense", is_system=True, color="#f97316")
         self.assertEqual(str(cat), "🍽️ 餐饮")
+        self.assertEqual(cat.type, "expense")
+        self.assertTrue(cat.is_system)
+        self.assertTrue(cat.is_active)
 
     def test_create_user_category(self):
         user = User.objects.create_user("test", password="pass")
-        cat = Category.objects.create(user=user, name="宠物", kind="expense")
+        cat = Category.objects.create(user=user, name="宠物", type="expense", color="#ec4899")
         self.assertEqual(cat.user, user)
+        self.assertFalse(cat.is_system)
 
     def test_category_unique_per_user(self):
         user = User.objects.create_user("test", password="pass")
-        Category.objects.create(user=user, name="咖啡", kind="expense")
+        Category.objects.create(user=user, name="咖啡", type="expense")
         with self.assertRaises(Exception):
-            Category.objects.create(user=user, name="咖啡", kind="expense")
+            Category.objects.create(user=user, name="咖啡", type="expense")
+
+    def test_is_active_defaults_true(self):
+        cat = Category.objects.create(name="test", type="expense")
+        self.assertTrue(cat.is_active)
+
+
+class CategoryCRUDTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.sys_cat = Category.objects.filter(user__isnull=True, name="餐饮").first()
+        if not cls.sys_cat:
+            cls.sys_cat = Category.objects.create(name="餐饮", type="expense", is_system=True, is_active=True)
+        cls.user_cat = Category.objects.create(user=cls.user, name="宠物", type="expense", is_active=True)
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_category_list_shows_both_system_and_user(self):
+        r = self.client.get("/categories/")
+        # Verify both system category and user category render
+        self.assertContains(r, "宠物")
+        # System categories from migration 0005 should be present
+        all_cats = Category.objects.filter(is_active=True)
+        sys_count = all_cats.filter(user__isnull=True).count()
+        self.assertGreater(sys_count, 0, msg="System categories should exist after migration")
+        self.assertContains(r, Category.objects.filter(user__isnull=True).first().name)
+
+    def test_category_list_excludes_inactive(self):
+        cls = Category.objects.create(user=self.user, name="旧分类", type="expense", is_active=False)
+        r = self.client.get("/categories/")
+        self.assertNotContains(r, "旧分类")
+
+    def test_create_custom_category(self):
+        self.client.post("/categories/create/", {"name": "咖啡", "type": "expense", "icon": "☕", "color": "#6f4e37"})
+        cat = Category.objects.get(user=self.user, name="咖啡")
+        self.assertEqual(cat.type, "expense")
+        self.assertEqual(cat.color, "#6f4e37")
+        self.assertFalse(cat.is_system)
+
+    def test_edit_own_category(self):
+        self.client.post(f"/categories/{self.user_cat.pk}/edit/", {"name": "宠物食品", "icon": "🐱", "color": "#f97316"})
+        self.user_cat.refresh_from_db()
+        self.assertEqual(self.user_cat.name, "宠物食品")
+
+    def test_cannot_edit_system_category(self):
+        r = self.client.post(f"/categories/{self.sys_cat.pk}/edit/", {"name": "hacked"})
+        self.assertEqual(r.status_code, 404)
+
+    def test_deactivate_with_no_refs_succeeds(self):
+        self.client.post(f"/categories/{self.user_cat.pk}/deactivate/")
+        self.user_cat.refresh_from_db()
+        self.assertFalse(self.user_cat.is_active)
+
+    def test_deactivate_with_refs_is_blocked(self):
+        Expense.objects.create(user=self.user, category=self.user_cat, title="猫粮", amount=50, occurred_on="2026-08-10")
+        r = self.client.post(f"/categories/{self.user_cat.pk}/deactivate/")
+        self.assertContains(r, "无法停用")
+        self.user_cat.refresh_from_db()
+        self.assertTrue(self.user_cat.is_active)
+
+    def test_cannot_deactivate_system_category(self):
+        r = self.client.post(f"/categories/{self.sys_cat.pk}/deactivate/")
+        self.assertEqual(r.status_code, 404)
+
+    def test_other_user_cannot_edit_my_category(self):
+        User.objects.create_user("bob", password="passB")
+        self.client.login(username="bob", password="passB")
+        r = self.client.get(f"/categories/{self.user_cat.pk}/edit/")
+        self.assertEqual(r.status_code, 404)
 
 
 class ExpenseTests(TestCase):

@@ -17,4 +17,8 @@ urlpatterns = [
     path("notes/<int:pk>/", views_crud.note_detail, name="note_detail"),
     path("notes/<int:pk>/edit/", views_crud.note_edit, name="note_edit"),
     path("notes/<int:pk>/delete/", views_crud.note_delete, name="note_delete"),
+    path("categories/", views_crud.category_list, name="category_list"),
+    path("categories/create/", views_crud.category_create, name="category_create"),
+    path("categories/<int:pk>/edit/", views_crud.category_edit, name="category_edit"),
+    path("categories/<int:pk>/deactivate/", views_crud.category_deactivate, name="category_deactivate"),
 ]

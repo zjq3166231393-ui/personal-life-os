@@ -1,4 +1,5 @@
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -34,7 +35,8 @@ def expense_detail(request, pk):
 def expense_edit(request, pk):
     expense = get_object_or_404(Expense, pk=pk, is_deleted=False)
     _check_owner(expense, request)
-    categories = Category.objects.filter(user__in=[request.user, None], kind="expense", is_default=True)
+    from django.db.models import Q
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
     if request.method == "POST":
         expense.title = request.POST.get("title", expense.title)
         expense.amount = request.POST.get("amount", expense.amount)
@@ -144,3 +146,65 @@ def note_delete(request, pk):
         record(request.user, "note.delete", note.pk, f"删除随心记: {note.title}")
         return redirect("note_list")
     return render(request, "life/note_delete.html", {"note": note})
+
+
+# ── Category CRUD ────────────────────────────────────────────────────
+
+@login_required
+def category_list(request):
+    from django.db.models import Q
+    cats = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), is_active=True)
+    cat_data = []
+    for c in cats:
+        refs = Expense.objects.filter(category=c, is_deleted=False).count()
+        cat_data.append({"obj": c, "refs": refs, "is_system": c.user_id is None})
+    return render(request, "life/category_list.html", {"categories": cat_data})
+
+
+@login_required
+def category_create(request):
+    if request.method == "POST":
+        Category.objects.create(
+            user=request.user,
+            name=request.POST.get("name", "")[:50],
+            type=request.POST.get("type", "expense"),
+            icon=request.POST.get("icon", ""),
+            color=request.POST.get("color", ""),
+            is_system=False,
+        )
+        return redirect("category_list")
+    return render(request, "life/category_edit.html", {"category": None})
+
+
+@login_required
+def category_edit(request, pk):
+    cat = get_object_or_404(Category, pk=pk, is_active=True)
+    if cat.user_id and cat.user_id != request.user.id:
+        raise Http404()
+    if request.method == "POST":
+        if not cat.user_id:
+            raise Http404()
+        cat.name = request.POST.get("name", cat.name)[:50]
+        cat.icon = request.POST.get("icon", cat.icon)
+        cat.color = request.POST.get("color", cat.color)
+        cat.save()
+        return redirect("category_list")
+    return render(request, "life/category_edit.html", {"category": cat})
+
+
+@login_required
+def category_deactivate(request, pk):
+    cat = get_object_or_404(Category, pk=pk, is_active=True)
+    if cat.user_id and cat.user_id != request.user.id:
+        raise Http404()
+    if request.method == "POST":
+        if not cat.user_id:
+            raise Http404()
+        refs = Expense.objects.filter(category=cat, is_deleted=False).count()
+        if refs > 0:
+            return render(request, "life/category_delete.html", {"category": cat, "refs": refs, "blocked": True})
+        cat.is_active = False
+        cat.save()
+        return redirect("category_list")
+    refs = Expense.objects.filter(category=cat, is_deleted=False).count()
+    return render(request, "life/category_delete.html", {"category": cat, "refs": refs, "blocked": refs > 0})
