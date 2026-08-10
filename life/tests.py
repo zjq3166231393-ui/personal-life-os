@@ -5,6 +5,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from common.models import NotificationLog
+from .ai_schema import validate_ai_response
 from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
 from .parser import parse_text
 
@@ -825,3 +826,91 @@ class AIParseModelTests(TestCase):
         result = ParseResult.objects.create(conversation=conv, confidence=0.92, draft_json=draft)
         result.refresh_from_db()
         self.assertEqual(result.draft_json["expenses"][0]["amount"], 18)
+
+
+class AISchemaTests(SimpleTestCase):
+    def test_valid_expense(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "amount": "18.50", "category": "餐饮", "occurred_at": "2026-08-10T12:00:00"}]})
+        self.assertTrue(ok, msg=str(errs))
+
+    def test_valid_income(self):
+        ok, _ = validate_ai_response({"actions": [{"intent": "create_income", "action_id": "a1", "amount": "5000", "occurred_at": "2026-08-01"}]})
+        self.assertTrue(ok)
+
+    def test_valid_task(self):
+        ok, _ = validate_ai_response({"actions": [{"intent": "create_task", "action_id": "a1", "title": "交话费", "due_at": "2026-08-11T09:00:00"}]})
+        self.assertTrue(ok)
+
+    def test_valid_reminder(self):
+        ok, _ = validate_ai_response({"actions": [{"intent": "create_reminder", "action_id": "a1", "title": "姐姐生日", "event_at": "2026-12-25"}]})
+        self.assertTrue(ok)
+
+    def test_valid_note(self):
+        ok, _ = validate_ai_response({"actions": [{"intent": "create_note", "action_id": "a1", "title": "今天天气不错"}]})
+        self.assertTrue(ok)
+
+    def test_valid_multi_action(self):
+        ok, _ = validate_ai_response({"actions": [
+            {"intent": "create_expense", "action_id": "a1", "amount": "18", "category": "餐饮", "occurred_at": "2026-08-10T12:00:00"},
+            {"intent": "create_task", "action_id": "a2", "title": "交报告"},
+            {"intent": "create_reminder", "action_id": "a3", "title": "开会", "event_at": "2026-08-11T14:00:00"},
+        ]})
+        self.assertTrue(ok)
+
+    # ── rejections ──────────────────────────────────────────────
+
+    def test_reject_missing_amount(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "category": "餐饮", "occurred_at": "2026-08-10T12:00:00"}]})
+        self.assertFalse(ok)
+        self.assertTrue(any("amount" in e for e in errs))
+
+    def test_reject_missing_title_for_task(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_task", "action_id": "a1"}]})
+        self.assertFalse(ok)
+        self.assertTrue(any("title" in e for e in errs))
+
+    def test_reject_missing_title_for_reminder(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_reminder", "action_id": "a1", "event_at": "2026-12-25"}]})
+        self.assertFalse(ok)
+        self.assertTrue(any("title" in e for e in errs))
+
+    def test_reject_missing_event_and_remind_for_reminder(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_reminder", "action_id": "a1", "title": "test"}]})
+        self.assertFalse(ok)
+        self.assertTrue(any("event_at" in e for e in errs))
+
+    def test_reject_invalid_date(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "amount": "10", "category": "餐饮", "occurred_at": "not-a-date"}]})
+        self.assertFalse(ok)
+
+    def test_reject_negative_amount(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "amount": "-50", "category": "餐饮", "occurred_at": "2026-08-10"}]})
+        self.assertFalse(ok)
+
+    def test_reject_zero_amount(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "amount": "0", "category": "餐饮", "occurred_at": "2026-08-10"}]})
+        self.assertFalse(ok)
+
+    def test_reject_duplicate_action_id(self):
+        ok, errs = validate_ai_response({"actions": [
+            {"intent": "create_note", "action_id": "dup", "title": "note1"},
+            {"intent": "create_note", "action_id": "dup", "title": "note2"},
+        ]})
+        self.assertFalse(ok)
+
+    def test_reject_non_list_actions(self):
+        ok, errs = validate_ai_response({"actions": "not_a_list"})
+        self.assertFalse(ok)
+
+    def test_reject_empty_actions(self):
+        ok, errs = validate_ai_response({"actions": []})
+        self.assertFalse(ok)
+
+    def test_reject_invalid_intent(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "delete_everything", "action_id": "a1"}]})
+        self.assertFalse(ok)
+
+    def test_reject_expense_without_category(self):
+        ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "amount": "10", "occurred_at": "2026-08-10"}]})
+        self.assertFalse(ok)
+        self.assertTrue(any("category" in e for e in errs))
