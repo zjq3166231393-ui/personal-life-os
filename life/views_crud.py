@@ -22,8 +22,70 @@ def _check_owner(obj, request):
 
 @login_required
 def expense_list(request):
-    expenses = _user_queryset(Expense, request).select_related("category")
-    return render(request, "life/expense_list.html", {"expenses": expenses})
+    from datetime import date, datetime
+    from decimal import Decimal, InvalidOperation
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+
+    qs = _user_queryset(Expense, request).select_related("category")
+
+    # ── filters ──────────────────────────────────────────────────
+    date_from = request.GET.get("date_from", "")
+    date_to = request.GET.get("date_to", "")
+    cat_id = request.GET.get("category", "")
+    typ = request.GET.get("type", "")
+    amount_min = request.GET.get("amount_min", "")
+    amount_max = request.GET.get("amount_max", "")
+    query = request.GET.get("q", "").strip()
+
+    if date_from:
+        try:
+            dt = datetime.strptime(date_from, "%Y-%m-%d")
+            qs = qs.filter(occurred_at__gte=dt)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            from datetime import timedelta
+            dt = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            qs = qs.filter(occurred_at__lt=dt)
+        except ValueError:
+            pass
+    if cat_id and cat_id.isdigit():
+        qs = qs.filter(category_id=int(cat_id))
+    if typ and typ in dict(Expense.TransactionType.choices):
+        qs = qs.filter(type=typ)
+    if amount_min:
+        try:
+            qs = qs.filter(amount__gte=Decimal(amount_min))
+        except InvalidOperation:
+            pass
+    if amount_max:
+        try:
+            qs = qs.filter(amount__lte=Decimal(amount_max))
+        except InvalidOperation:
+            pass
+    if query:
+        qs = qs.filter(Q(note__icontains=query) | Q(merchant__icontains=query) | Q(raw_text__icontains=query))
+
+    # ── pagination ───────────────────────────────────────────────
+    paginator = Paginator(qs, 20)
+    page_num = request.GET.get("page", "1")
+    page_obj = paginator.get_page(page_num)
+
+    # ── category list for filter dropdown ────────────────────────
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+
+    return render(request, "life/expense_list.html", {
+        "page_obj": page_obj,
+        "categories": categories,
+        "filters": {
+            "date_from": date_from, "date_to": date_to,
+            "category": cat_id, "type": typ,
+            "amount_min": amount_min, "amount_max": amount_max,
+            "q": query,
+        },
+    })
 
 @login_required
 def expense_detail(request, pk):
