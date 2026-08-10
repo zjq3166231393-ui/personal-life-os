@@ -24,7 +24,7 @@
 <section class="card shadow-sm p-0">
 {% for e in page_obj %}
 <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-  <div class="text-truncate me-2">
+  <div class="text-truncate me-2 text-truncate-mobile">
     <span class="badge {% if e.type == 'income' %}text-bg-success{% elif e.type == 'transfer' %}text-bg-info{% else %}text-bg-secondary{% endif %} me-1">{{ e.get_type_display }}</span>
     {% if e.category %}<span class="badge text-bg-light me-1 d-none d-md-inline-block">{{ e.category.icon }} {{ e.category.name }}</span>{% endif %}
     <a href="{% url 'expense_detail' e.pk %}" class="text-decoration-none">{{ e.note|default:e.merchant|default:'未命名' }}</a>

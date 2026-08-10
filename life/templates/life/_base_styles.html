@@ -49,6 +49,24 @@ body {
 }
 .text-success-custom { color: var(--success); }
 .text-danger-custom { color: var(--danger); }
+/* ── Mobile optimizations ──────────────────────────── */
+@media (max-width: 575px) {
+  .container { padding-left: 8px; padding-right: 8px; }
+  .hero { padding: 12px 14px !important; border-radius: 16px; }
+  .hero .h5 { font-size: 1.05rem; }
+  .hero .h4 { font-size: 1.15rem; }
+  .card { border-radius: 14px; }
+  .card .px-3 { padding-left: 10px !important; padding-right: 10px !important; }
+  .btn-sm { padding: 6px 10px; font-size: .8rem; min-height: 36px; }
+  .form-control-sm, .form-select-sm { font-size: .875rem; min-height: 36px; }
+  table { font-size: .8rem; }
+  .d-mobile-none { display: none !important; }
+  .text-truncate-mobile { max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
+  .actions .btn { padding: 5px 8px; font-size: .75rem; min-width: 32px; }
+}
+@media (min-width: 576px) {
+  .d-mobile-only { display: none !important; }
+}
 @media (min-width: 768px) {
   body { padding-bottom: 0; }
 }
