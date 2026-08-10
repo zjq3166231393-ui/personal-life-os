@@ -187,3 +187,36 @@ class RecurringExpense(models.Model):
         freq = dict(self.Frequency.choices).get(self.frequency, self.frequency)
         status = "" if self.is_active else " (已停用)"
         return f"{freq}{self.due_day}日 {self.name} ¥{self.amount}{status}"
+
+
+class InstallmentPlan(models.Model):
+    """Installment plan: track multi-period payments like loans, large purchases."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "进行中"
+        COMPLETED = "completed", "已还清"
+        CANCELLED = "cancelled", "已取消"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="installment_plans")
+    name = models.CharField(max_length=200)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="installment_plans")
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    installment_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    total_periods = models.PositiveSmallIntegerField()
+    paid_periods = models.PositiveSmallIntegerField(default=0)
+    next_due_date = models.DateField()
+    status = models.CharField(max_length=20, choices=Status.choices, default="active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-status", "next_due_date"]
+
+    def remaining_amount(self):
+        return self.total_amount - (self.installment_amount * self.paid_periods)
+
+    def remaining_periods(self):
+        return max(0, self.total_periods - self.paid_periods)
+
+    def __str__(self):
+        return f"{self.name} — {self.paid_periods}/{self.total_periods}期 ¥{self.installment_amount}/期"

@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 
-from .models import Budget, Category, Entry, Expense, Note, RecurringExpense, Task
+from .models import Budget, Category, Entry, Expense, InstallmentPlan, Note, RecurringExpense, Task
 from .parser import parse_text
 
 
@@ -442,3 +442,80 @@ class RecurringExpenseTests(TestCase):
     def test_remind_days_before_default(self):
         item = RecurringExpense.objects.create(user=self.user, name="保险", amount=Decimal("500"), frequency="yearly", due_day=1, start_date="2026-01-01")
         self.assertEqual(item.remind_days_before, 3)
+
+
+class InstallmentPlanTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.cat = Category.objects.create(name="购物", type="expense")
+        cls.plan = InstallmentPlan.objects.create(
+            user=cls.user, name="iPhone 分期", category=cls.cat,
+            total_amount=Decimal("6000"), installment_amount=Decimal("500"),
+            total_periods=12, next_due_date="2026-09-01",
+        )
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_create_plan(self):
+        p = self.plan
+        self.assertEqual(p.status, "active")
+        self.assertEqual(p.paid_periods, 0)
+        self.assertEqual(p.remaining_amount(), Decimal("6000"))
+        self.assertEqual(p.remaining_periods(), 12)
+
+    def test_list_shows_plan(self):
+        r = self.client.get("/installments/")
+        self.assertContains(r, "iPhone 分期")
+        self.assertContains(r, "0/12")
+
+    def test_pay_one_period(self):
+        r = self.client.post(f"/installments/{self.plan.pk}/pay/")
+        self.assertRedirects(r, "/installments/")
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.paid_periods, 1)
+        self.assertEqual(self.plan.remaining_amount(), Decimal("5500"))
+
+    def test_pay_all_periods_completes(self):
+        for _ in range(12):
+            self.client.post(f"/installments/{self.plan.pk}/pay/")
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.status, "completed")
+        self.assertEqual(self.plan.paid_periods, 12)
+
+    def test_cannot_overpay(self):
+        # complete the plan
+        for _ in range(12):
+            self.client.post(f"/installments/{self.plan.pk}/pay/")
+        # 13th payment should be blocked
+        r = self.client.post(f"/installments/{self.plan.pk}/pay/")
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.paid_periods, 12)
+
+    def test_pay_creates_expense_record(self):
+        self.client.post(f"/installments/{self.plan.pk}/pay/")
+        e = Expense.objects.filter(note__icontains="iPhone 分期").first()
+        self.assertIsNotNone(e)
+        self.assertEqual(e.amount, Decimal("500"))
+        self.assertEqual(e.status, "confirmed")
+
+    def test_edit_plan(self):
+        self.client.post(f"/installments/{self.plan.pk}/edit/", {
+            "name": "MacBook 分期", "total_amount": "12000",
+            "installment_amount": "1000", "total_periods": "12",
+            "next_due_date": "2026-10-01", "category": str(self.cat.pk),
+        })
+        self.plan.refresh_from_db()
+        self.assertEqual(self.plan.name, "MacBook 分期")
+        self.assertEqual(self.plan.total_amount, Decimal("12000"))
+
+    def test_other_user_cannot_pay(self):
+        User.objects.create_user("bob", password="passB")
+        self.client.login(username="bob", password="passB")
+        r = self.client.post(f"/installments/{self.plan.pk}/pay/")
+        self.assertEqual(r.status_code, 404)
+
+    def test_amount_is_decimal(self):
+        self.assertIsInstance(self.plan.total_amount, Decimal)
+        self.assertIsInstance(self.plan.installment_amount, Decimal)

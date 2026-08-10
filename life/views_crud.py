@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from common.audit import record
-from .models import Budget, Category, Expense, Note, RecurringExpense, Task
+from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Task
 
 
 def _user_queryset(model, request):
@@ -414,3 +414,79 @@ def recurring_deactivate(request, pk):
         item.save()
         return redirect("recurring_list")
     return render(request, "life/recurring_delete.html", {"item": item})
+
+
+# ── Installment Plan CRUD ────────────────────────────────────────────
+
+@login_required
+def installment_list(request):
+    plans = InstallmentPlan.objects.filter(user=request.user).select_related("category")
+    return render(request, "life/installment_list.html", {"plans": plans})
+
+
+@login_required
+def installment_create(request):
+    from datetime import date
+    from django.db.models import Q
+    if request.method == "POST":
+        InstallmentPlan.objects.create(
+            user=request.user,
+            name=request.POST.get("name", "")[:200],
+            category_id=int(request.POST.get("category")) if request.POST.get("category") else None,
+            total_amount=request.POST.get("total_amount", "0"),
+            installment_amount=request.POST.get("installment_amount", "0"),
+            total_periods=int(request.POST.get("total_periods", "1")),
+            next_due_date=request.POST.get("next_due_date", date.today().isoformat()),
+        )
+        return redirect("installment_list")
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    return render(request, "life/installment_edit.html", {"plan": None, "categories": categories})
+
+
+@login_required
+def installment_edit(request, pk):
+    plan = get_object_or_404(InstallmentPlan, pk=pk)
+    _check_owner(plan, request)
+    if request.method == "POST":
+        plan.name = request.POST.get("name", plan.name)[:200]
+        plan.total_amount = request.POST.get("total_amount", plan.total_amount)
+        plan.installment_amount = request.POST.get("installment_amount", plan.installment_amount)
+        plan.total_periods = int(request.POST.get("total_periods", plan.total_periods))
+        plan.next_due_date = request.POST.get("next_due_date", plan.next_due_date)
+        cat_id = request.POST.get("category")
+        plan.category_id = int(cat_id) if cat_id else None
+        plan.save()
+        return redirect("installment_list")
+    from django.db.models import Q
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    return render(request, "life/installment_edit.html", {"plan": plan, "categories": categories})
+
+
+@login_required
+def installment_pay(request, pk):
+    plan = get_object_or_404(InstallmentPlan, pk=pk)
+    _check_owner(plan, request)
+    from datetime import date, timedelta
+    error = None
+    if request.method == "POST":
+        if plan.status != "active":
+            error = "该计划已结束。"
+        elif plan.paid_periods >= plan.total_periods:
+            error = "所有期数已还清。"
+        else:
+            plan.paid_periods += 1
+            if plan.paid_periods >= plan.total_periods:
+                plan.status = "completed"
+            # Advance next_due_date by roughly 1 month
+            nd = plan.next_due_date
+            plan.next_due_date = date(nd.year + (nd.month // 12), ((nd.month % 12) + 1), min(nd.day, 28))
+            plan.save()
+            # Also create an Expense record for this payment
+            Expense.objects.create(
+                user=request.user, category=plan.category, type="expense",
+                amount=plan.installment_amount, occurred_at=timezone.now(),
+                note=f"分期还款: {plan.name} (第{plan.paid_periods}/{plan.total_periods}期)",
+                source="manual", status="confirmed",
+            )
+            return redirect("installment_list")
+    return render(request, "life/installment_pay.html", {"plan": plan, "error": error})
