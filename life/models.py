@@ -60,22 +60,44 @@ class Category(models.Model):
 
 
 class Expense(models.Model):
+    class TransactionType(models.TextChoices):
+        EXPENSE = "expense", "支出"
+        INCOME = "income", "收入"
+        TRANSFER = "transfer", "转账"
+
+    class Source(models.TextChoices):
+        VOICE = "voice", "语音"
+        TEXT = "text", "文本"
+        MANUAL = "manual", "手动"
+        RECURRING = "recurring", "周期"
+        AI = "ai", "AI"
+
+    class Status(models.TextChoices):
+        CONFIRMED = "confirmed", "已确认"
+        PENDING = "pending", "待确认"
+        VOIDED = "voided", "已作废"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="expenses")
-    title = models.CharField(max_length=200)
-    raw_text = models.TextField(blank=True)
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="expenses")
+    type = models.CharField(max_length=20, choices=TransactionType.choices, default="expense")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    occurred_on = models.DateField()
+    occurred_at = models.DateTimeField()
+    merchant = models.CharField(max_length=200, blank=True)
+    note = models.CharField(max_length=500, blank=True)
+    source = models.CharField(max_length=20, choices=Source.choices, default="manual")
+    status = models.CharField(max_length=20, choices=Status.choices, default="confirmed")
+    raw_text = models.TextField(blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-occurred_on", "-created_at"]
+        ordering = ["-occurred_at", "-created_at"]
 
     def __str__(self):
-        return f"支出：{self.title} ¥{self.amount}"
+        sign = "+" if self.type == "income" else "-"
+        return f"{'收入' if self.type == 'income' else '支出'}：{self.note or self.merchant or '未命名'} {sign}¥{self.amount}"
 
 
 class Task(models.Model):

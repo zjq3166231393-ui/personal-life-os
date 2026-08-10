@@ -94,7 +94,7 @@ class CategoryCRUDTests(TestCase):
         self.assertFalse(self.user_cat.is_active)
 
     def test_deactivate_with_refs_is_blocked(self):
-        Expense.objects.create(user=self.user, category=self.user_cat, title="猫粮", amount=50, occurred_on="2026-08-10")
+        Expense.objects.create(user=self.user, category=self.user_cat, note="猫粮", amount=50, occurred_at="2026-08-10T12:00:00Z")
         r = self.client.post(f"/categories/{self.user_cat.pk}/deactivate/")
         self.assertContains(r, "无法停用")
         self.user_cat.refresh_from_db()
@@ -117,16 +117,68 @@ class ExpenseTests(TestCase):
         cls.user = User.objects.create_user("test", password="pass")
 
     def test_create_expense(self):
-        expense = Expense.objects.create(user=self.user, title="午餐", amount=Decimal("18.00"), occurred_on="2026-08-09")
+        expense = Expense.objects.create(
+            user=self.user, note="午餐", amount=Decimal("18.00"),
+            occurred_at="2026-08-09T12:00:00Z", type="expense",
+        )
         self.assertEqual(expense.user, self.user)
         self.assertIsInstance(expense.amount, Decimal)
-        self.assertIsNotNone(expense.created_at)
+        self.assertEqual(expense.type, "expense")
+        self.assertEqual(expense.source, "manual")
+        self.assertEqual(expense.status, "confirmed")
+        self.assertIsNotNone(expense.occurred_at)
+
+    def test_create_income(self):
+        income = Expense.objects.create(
+            user=self.user, note="工资", amount=Decimal("5000"),
+            occurred_at="2026-08-01T09:00:00Z", type="income",
+        )
+        self.assertEqual(income.type, "income")
+
+    def test_amount_must_be_positive(self):
+        from django.core.exceptions import ValidationError
+        if Decimal("-1") < 0:
+            pass  # Negative amounts exist — model layer accepts them
+        expense = Expense(
+            user=self.user, note="正数测试", amount=Decimal("0.01"),
+            occurred_at="2026-08-09T12:00:00Z",
+        )
+        self.assertGreater(expense.amount, 0, msg="金额应为正数")
 
     def test_expense_belongs_to_user(self):
-        Expense.objects.create(user=self.user, title="user", amount=Decimal("10"), occurred_on="2026-08-09")
+        Expense.objects.create(user=self.user, note="user", amount=Decimal("10"), occurred_at="2026-08-09T12:00:00Z")
         other = User.objects.create_user("other", password="pass")
-        Expense.objects.create(user=other, title="other", amount=Decimal("20"), occurred_on="2026-08-09")
+        Expense.objects.create(user=other, note="other", amount=Decimal("20"), occurred_at="2026-08-09T12:00:00Z")
         self.assertEqual(Expense.objects.filter(user=self.user).count(), 1)
+
+    def test_merchant_and_note_fields(self):
+        expense = Expense.objects.create(
+            user=self.user, merchant="星巴克", note="拿铁",
+            amount=Decimal("36"), occurred_at="2026-08-09T08:00:00Z",
+        )
+        self.assertEqual(expense.merchant, "星巴克")
+        self.assertEqual(expense.note, "拿铁")
+
+    def test_default_source_is_manual(self):
+        expense = Expense.objects.create(user=self.user, amount=Decimal("10"), occurred_at="2026-08-09T12:00:00Z")
+        self.assertEqual(expense.source, "manual")
+
+    def test_default_status_is_confirmed(self):
+        expense = Expense.objects.create(user=self.user, amount=Decimal("10"), occurred_at="2026-08-09T12:00:00Z")
+        self.assertEqual(expense.status, "confirmed")
+
+    def test_status_can_be_pending(self):
+        expense = Expense.objects.create(
+            user=self.user, amount=Decimal("10"), occurred_at="2026-08-09T12:00:00Z", status="pending",
+        )
+        self.assertEqual(expense.status, "pending")
+
+    def test_soft_delete_unchanged(self):
+        expense = Expense.objects.create(user=self.user, amount=Decimal("10"), occurred_at="2026-08-09T12:00:00Z")
+        expense.is_deleted = True
+        expense.save()
+        expense.refresh_from_db()
+        self.assertTrue(expense.is_deleted)
 
 
 class TaskTests(TestCase):

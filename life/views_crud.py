@@ -33,19 +33,22 @@ def expense_detail(request, pk):
 
 @login_required
 def expense_edit(request, pk):
+    from django.db.models import Q
     expense = get_object_or_404(Expense, pk=pk, is_deleted=False)
     _check_owner(expense, request)
-    from django.db.models import Q
     categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
     if request.method == "POST":
-        expense.title = request.POST.get("title", expense.title)
+        expense.note = request.POST.get("note", expense.note)[:500]
         expense.amount = request.POST.get("amount", expense.amount)
-        expense.occurred_on = request.POST.get("occurred_on", expense.occurred_on)
+        expense.type = request.POST.get("type", expense.type)
+        expense.occurred_at = request.POST.get("occurred_at", expense.occurred_at)
+        expense.merchant = request.POST.get("merchant", expense.merchant)[:200]
+        expense.source = request.POST.get("source", expense.source)
         cat_id = request.POST.get("category")
         if cat_id:
             expense.category_id = int(cat_id)
         expense.save()
-        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.title}")
+        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.note or expense.merchant}")
         return redirect("expense_list")
     return render(request, "life/expense_edit.html", {"expense": expense, "categories": categories})
 
