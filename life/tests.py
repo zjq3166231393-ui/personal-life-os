@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 
-from .models import Category, Entry, Expense, Note, Task
+from .models import Budget, Category, Entry, Expense, Note, Task
 from .parser import parse_text
 
 
@@ -295,3 +295,82 @@ class DataMigrationTests(TestCase):
         Entry.objects.create(user=self.user, kind="task", title="任务")
         Entry.objects.create(user=self.user, kind="note", title="笔记")
         self.assertEqual(Entry.objects.count(), 3)
+
+
+class BudgetTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("test", password="pass")
+        cls.cat = Category.objects.create(name="餐饮", type="expense")
+        cls.month = "2026-08-01"
+
+    def test_create_total_budget(self):
+        b = Budget.objects.create(user=self.user, month=self.month, amount=Decimal("5000"))
+        self.assertEqual(b.amount, Decimal("5000"))
+        self.assertIsNone(b.category)
+
+    def test_create_category_budget(self):
+        b = Budget.objects.create(user=self.user, category=self.cat, month=self.month, amount=Decimal("2000"))
+        self.assertEqual(b.category, self.cat)
+        self.assertIsInstance(b.amount, Decimal)
+
+    def test_budget_unique_per_user_category_month(self):
+        Budget.objects.create(user=self.user, category=self.cat, month=self.month, amount=Decimal("1000"))
+        with self.assertRaises(Exception):
+            Budget.objects.create(user=self.user, category=self.cat, month=self.month, amount=Decimal("2000"))
+
+    def test_budget_amount_is_decimal(self):
+        b = Budget.objects.create(user=self.user, month=self.month, amount=Decimal("3000.50"))
+        self.assertIsInstance(b.amount, Decimal)
+
+    def test_budget_page_loads(self):
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        self.assertEqual(r.status_code, 200)
+
+    def test_budget_page_shows_total(self):
+        Budget.objects.create(user=self.user, month=self.month, amount=Decimal("5000"))
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        self.assertContains(r, "5000")
+
+    def test_save_total_budget(self):
+        self.client.login(username="test", password="pass")
+        self.client.post("/budget/", {"total_budget": "8000"})
+        b = Budget.objects.get(user=self.user, category__isnull=True, month=self.month)
+        self.assertEqual(b.amount, Decimal("8000"))
+
+    def test_save_category_budget(self):
+        self.client.login(username="test", password="pass")
+        self.client.post("/budget/", {f"cat_{self.cat.pk}": "1500"})
+        b = Budget.objects.get(user=self.user, category=self.cat, month=self.month)
+        self.assertEqual(b.amount, Decimal("1500"))
+
+    def test_spent_calculation_only_confirmed_expenses(self):
+        from django.utils import timezone
+        Budget.objects.create(user=self.user, month=self.month, amount=Decimal("1000"))
+        Expense.objects.create(user=self.user, category=self.cat, type="expense", status="confirmed",
+                               amount=Decimal("200"), occurred_at=timezone.now().replace(day=5))
+        Expense.objects.create(user=self.user, category=self.cat, type="expense", status="pending",
+                               amount=Decimal("300"), occurred_at=timezone.now().replace(day=6))
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        # Only confirmed 200 counted, not pending 300
+        self.assertContains(r, "200.00")
+
+    def test_overspent_detection(self):
+        Budget.objects.create(user=self.user, month=self.month, amount=Decimal("100"))
+        Expense.objects.create(user=self.user, type="expense", status="confirmed",
+                               amount=Decimal("150"), occurred_at="2026-08-10T12:00:00Z")
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        self.assertContains(r, "超支")
+
+    def test_budget_user_isolation(self):
+        Budget.objects.create(user=self.user, month=self.month, amount=Decimal("1000"))
+        other = User.objects.create_user("other", password="pass")
+        Budget.objects.create(user=other, month=self.month, amount=Decimal("9999"))
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        self.assertContains(r, "1000")
+        self.assertNotContains(r, "9999")

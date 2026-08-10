@@ -21,4 +21,5 @@ urlpatterns = [
     path("categories/create/", views_crud.category_create, name="category_create"),
     path("categories/<int:pk>/edit/", views_crud.category_edit, name="category_edit"),
     path("categories/<int:pk>/deactivate/", views_crud.category_deactivate, name="category_deactivate"),
+    path("budget/", views_crud.budget, name="budget"),
 ]

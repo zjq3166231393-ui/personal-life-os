@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from common.audit import record
-from .models import Category, Expense, Note, Task
+from .models import Budget, Category, Expense, Note, Task
 
 
 def _user_queryset(model, request):
@@ -273,3 +273,82 @@ def category_deactivate(request, pk):
         return redirect("category_list")
     refs = Expense.objects.filter(category=cat, is_deleted=False).count()
     return render(request, "life/category_delete.html", {"category": cat, "refs": refs, "blocked": refs > 0})
+
+
+# ── Budget ────────────────────────────────────────────────────────────
+
+@login_required
+def budget(request):
+    from calendar import monthrange
+    from datetime import date
+    from decimal import Decimal
+    from django.db.models import Q, Sum
+
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
+    _, last_day = monthrange(today.year, today.month)
+    month_end = date(today.year, today.month, last_day)
+
+    # ── POST: save budget ──────────────────────────────────────────
+    if request.method == "POST":
+        total = request.POST.get("total_budget", "")
+        if total:
+            Budget.objects.update_or_create(
+                user=request.user, category__isnull=True, month=month_start,
+                defaults={"amount": Decimal(total)},
+            )
+        for key, val in request.POST.items():
+            if key.startswith("cat_") and val:
+                cat_id = int(key[4:])
+                Budget.objects.update_or_create(
+                    user=request.user, category_id=cat_id, month=month_start,
+                    defaults={"amount": Decimal(val)},
+                )
+        return redirect("budget")
+
+    # ── totals ─────────────────────────────────────────────────────
+    spent_total = Expense.objects.filter(
+        user=request.user, type="expense", status="confirmed", is_deleted=False,
+        occurred_at__gte=month_start, occurred_at__lte=month_end,
+    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+
+    budget_total = Budget.objects.filter(
+        user=request.user, category__isnull=True, month=month_start,
+    ).first()
+    total_amount = budget_total.amount if budget_total else Decimal("0")
+
+    remaining = total_amount - spent_total
+    pct = min(int(spent_total / total_amount * 100) if total_amount > 0 else 0, 100)
+
+    # ── per-category ───────────────────────────────────────────────
+    categories = Category.objects.filter(
+        Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True,
+    )
+    cat_budgets = {}
+    for b in Budget.objects.filter(user=request.user, category__isnull=False, month=month_start):
+        cat_budgets[b.category_id] = b.amount
+
+    cat_rows = []
+    for c in categories:
+        spent = Expense.objects.filter(
+            user=request.user, category=c, type="expense", status="confirmed",
+            is_deleted=False, occurred_at__gte=month_start, occurred_at__lte=month_end,
+        ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+        budgeted = cat_budgets.get(c.id, Decimal("0"))
+        rem = budgeted - spent
+        cat_pct = min(int(spent / budgeted * 100) if budgeted > 0 else 0, 100)
+        cat_rows.append({
+            "obj": c, "spent": spent, "budget": budgeted,
+            "remaining": rem, "pct": cat_pct,
+            "over": spent > budgeted > 0,
+            "over_amount": abs(rem) if rem < 0 else Decimal("0"),
+        })
+
+    return render(request, "life/budget.html", {
+        "today": today, "month_start": month_start,
+        "spent_total": spent_total, "total_amount": total_amount,
+        "remaining": remaining, "pct": pct,
+        "over_amount": abs(remaining) if remaining < 0 else Decimal("0"),
+        "over_total": total_amount > 0 and spent_total > total_amount,
+        "cat_rows": cat_rows,
+    })

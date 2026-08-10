@@ -1,0 +1,44 @@
+<!doctype html><html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>预算 - Personal Life OS</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}.progress{height:12px;border-radius:6px}.over-budget .progress-bar{background:#ef4444}</style></head>
+<body><main class="container py-3 py-md-4" style="max-width:780px">
+<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between"><div><h1 class="h5 fw-bold mb-0">{{ month_start|date:'Y年n月' }} 预算</h1></div><a href="{% url 'home' %}" class="text-white text-decoration-none small">← 首页</a></section>
+
+<!-- total budget card -->
+<section class="card shadow-sm p-4 mb-3 {% if over_total %}over-budget{% endif %}">
+  <div class="d-flex justify-content-between align-items-start mb-2">
+    <div><span class="text-secondary small">总预算</span><h2 class="h4 fw-bold mb-0">¥{{ total_amount|floatformat:2 }}</h2></div>
+    <div class="text-end"><span class="text-secondary small">已花</span><h3 class="h5 fw-bold mb-0 {% if over_total %}text-danger{% endif %}">¥{{ spent_total|floatformat:2 }}</h3></div>
+    <div class="text-end"><span class="text-secondary small">剩余</span><h3 class="h5 fw-bold mb-0 {% if remaining < 0 %}text-danger{% else %}text-success{% endif %}">¥{{ remaining|floatformat:2 }}</h3></div>
+  </div>
+  <div class="progress"><div class="progress-bar {% if over_total %}bg-danger{% elif pct > 80 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ pct }}%"></div></div>
+  <div class="d-flex justify-content-between mt-1"><small class="text-secondary">{{ pct }}%</small>{% if over_total %}<small class="text-danger">超支 ¥{{ over_amount|floatformat:2 }}</small>{% elif remaining > 0 %}<small class="text-success">剩余 ¥{{ remaining|floatformat:2 }}</small>{% endif %}</div>
+</section>
+
+<!-- set total budget -->
+<section class="card shadow-sm p-3 mb-3"><form method="post" class="row g-2 align-items-end">{% csrf_token %}
+  <div class="col-8 col-md-4"><label class="form-label small mb-0">设置总预算</label><input type="number" name="total_budget" class="form-control form-control-sm" step="0.01" min="0" value="{{ total_amount }}" placeholder="月度总预算"></div>
+  <div class="col-4 col-md-2"><button type="submit" class="btn btn-sm btn-dark w-100">保存</button></div>
+</form></section>
+
+<!-- category budgets -->
+<section class="card shadow-sm p-4 mb-3"><h2 class="h6 fw-bold mb-3">分类预算</h2>
+<form method="post">{% csrf_token %}
+{% for row in cat_rows %}
+<div class="border-bottom py-2">
+  <div class="d-flex justify-content-between align-items-center mb-1">
+    <span>{{ row.obj.icon }} <strong>{{ row.obj.name }}</strong></span>
+    <span class="small">已花 ¥{{ row.spent|floatformat:2 }} /
+      <input type="number" name="cat_{{ row.obj.pk }}" class="form-control form-control-sm d-inline-block" style="width:80px" step="0.01" min="0" value="{{ row.budget }}" placeholder="预算">
+    </span>
+  </div>
+  {% if row.budget > 0 %}
+  <div class="progress"><div class="progress-bar {% if row.over %}bg-danger{% elif row.pct > 80 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ row.pct }}%"></div></div>
+  <div class="d-flex justify-content-between"><small class="text-secondary">{{ row.pct }}%</small>{% if row.over %}<small class="text-danger">超支 ¥{{ row.over_amount|floatformat:2 }}</small>{% elif row.remaining > 0 %}<small class="text-success">剩余 ¥{{ row.remaining|floatformat:2 }}</small>{% endif %}</div>
+  {% endif %}
+</div>
+{% endfor %}
+<div class="mt-3"><button type="submit" class="btn btn-sm btn-dark">保存分类预算</button></div>
+</form></section>
+</main></body></html>

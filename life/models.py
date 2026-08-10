@@ -135,3 +135,24 @@ class Note(models.Model):
 
     def __str__(self):
         return f"随心记：{self.title}"
+
+
+class Budget(models.Model):
+    """Monthly budget — total or per-category. NULL category = total budget."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="budgets")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True, related_name="budgets")
+    month = models.DateField(help_text="First day of month, e.g. 2026-08-01")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-month", "category"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "category", "month"], name="unique_budget_per_user_category_month"),
+        ]
+
+    def __str__(self):
+        scope = self.category.name if self.category else "总预算"
+        return f"{self.month:%Y-%m} {scope} ¥{self.amount}"
