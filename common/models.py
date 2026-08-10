@@ -58,6 +58,8 @@ class NotificationLog(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default="pending")
     idempotency_key = models.CharField(max_length=200, unique=True, null=True, blank=True, help_text="Prevent duplicates, e.g. reminder-42-2026-08-10")
+    email_retry_count = models.PositiveSmallIntegerField(default=0)
+    email_last_error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

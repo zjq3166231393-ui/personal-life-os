@@ -16,6 +16,8 @@ class UserProfile(models.Model):
     )
     ai_parsing_enabled = models.BooleanField(default=True)
     daily_ai_limit = models.PositiveSmallIntegerField(default=20, help_text="单日 AI 调用上限，0=不限制")
+    email_notifications = models.BooleanField(default=False, help_text="启用邮件提醒")
+    email_important_only = models.BooleanField(default=True, help_text="仅发送重要提醒（优先级=高）")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

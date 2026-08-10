@@ -51,7 +51,7 @@ class AccountLogoutView(LogoutView):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = UserProfile
-        fields = ("display_name", "timezone", "currency", "monthly_budget", "ai_parsing_enabled", "daily_ai_limit")
+        fields = ("display_name", "timezone", "currency", "monthly_budget", "ai_parsing_enabled", "daily_ai_limit", "email_notifications", "email_important_only")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

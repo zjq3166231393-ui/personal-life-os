@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from common.email_util import send_notification_email
 from common.models import NotificationLog
 from life.models import RecurringExpense, Reminder, Task
 
@@ -53,12 +54,13 @@ class Command(BaseCommand):
             if NotificationLog.objects.filter(idempotency_key=key).exists():
                 continue
             if not dry_run:
-                NotificationLog.objects.create(
+                n = NotificationLog.objects.create(
                     user=r.user, title=r.title, body=f"提醒: {r.get_reminder_type_display()} · {r.event_at.date()}",
                     notification_type="reminder", source_type="Reminder", source_id=r.pk,
                     scheduled_at=now, status="pending", idempotency_key=key,
                 )
                 Reminder.objects.filter(pk=r.pk).update(last_triggered_at=now)
+                self._try_email(n, r.user, r.title)
             created += 1
         return created
 
@@ -72,11 +74,12 @@ class Command(BaseCommand):
             overdue = t.due_at and t.due_at.date() < today
             title = f"{'⚠ 逾期: ' if overdue else ''}{t.title}"
             if not dry_run:
-                NotificationLog.objects.create(
+                n = NotificationLog.objects.create(
                     user=t.user, title=title, body=f"任务截止: {t.due_at.date() if t.due_at else '无截止'} · 优先级: {t.priority}",
                     notification_type="task", source_type="Task", source_id=t.pk,
                     scheduled_at=now, status="pending", idempotency_key=key,
                 )
+                self._try_email(n, t.user, title, important_only=(t.priority == 1))
             created += 1
         return created
 
@@ -90,11 +93,29 @@ class Command(BaseCommand):
             if NotificationLog.objects.filter(idempotency_key=key).exists():
                 continue
             if not dry_run:
-                NotificationLog.objects.create(
+                n = NotificationLog.objects.create(
                     user=r.user, title=f"账单到期: {r.name}",
-                    body=f"金额: ¥{r.amount} · 每月{r.due_day}日 · 分类: {r.category.name if r.category else '未分类'}",
+                    body=f"每月{r.due_day}日 · {r.category.name if r.category else '未分类'}",
                     notification_type="bill", source_type="RecurringExpense", source_id=r.pk,
                     scheduled_at=now, status="pending", idempotency_key=key,
                 )
+                self._try_email(n, r.user, f"账单到期: {r.name}")
             created += 1
         return created
+
+    def _try_email(self, notification, user, title, important_only=False):
+        """Try sending email. Update notification with retry/error on failure.
+        Never includes amount or category details in the email."""
+        if not hasattr(user, 'profile') or not user.profile.email_notifications:
+            return
+        if user.profile.email_important_only and not important_only:
+            return
+        ok, err = send_notification_email(user, title, notification.body)
+        if ok:
+            notification.status = "delivered"
+            notification.delivered_at = timezone.now()
+            notification.save(update_fields=["status", "delivered_at"])
+        else:
+            notification.email_retry_count += 1
+            notification.email_last_error = err[:500]
+            notification.save(update_fields=["email_retry_count", "email_last_error"])
