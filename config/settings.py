@@ -34,6 +34,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "life.middleware.LoginRateLimitMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -67,6 +68,19 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 DEFAULT_FROM_EMAIL = "lifeos@localhost"
+
+# Session: auto-expire after 2 hours idle, 24 hours max
+SESSION_COOKIE_AGE = 7200  # 2 hours
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Cache for rate limiting (use local memory cache in dev, Redis in production)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "lifeos",
+    }
+}
 
 # ── Production security ──────────────────────────────────────────
 ENVIRONMENT = os.getenv("DJANGO_ENVIRONMENT", "development")

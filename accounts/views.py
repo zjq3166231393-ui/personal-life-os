@@ -42,6 +42,21 @@ class AccountLoginView(LoginView):
     def form_valid(self, form):
         return super().form_valid(form)
 
+    def form_invalid(self, form):
+        from life.middleware import record_login_failure, get_login_attempts
+        ip = self.request.META.get("REMOTE_ADDR", "127.0.0.1")
+        record_login_failure(ip)
+        remaining = get_login_attempts(ip)
+        if remaining == 0:
+            form.add_error(None, "登录失败次数过多，请 15 分钟后再试。")
+        return super().form_invalid(form)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        if self.request.session.pop("login_locked", False):
+            ctx["locked"] = True
+        return ctx
+
 
 class AccountLogoutView(LogoutView):
     next_page = reverse_lazy("login")
