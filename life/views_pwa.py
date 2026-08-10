@@ -75,6 +75,18 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
+self.addEventListener('push', e => {
+  const data = e.data ? e.data.json() : {};
+  const title = data.title || 'Personal Life OS';
+  const opts = { body: data.body || '', icon: '/pwa-icon/192/', badge: '/pwa-icon/192/' };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.openWindow('/'));
+});
+
 self.addEventListener('fetch', e => {
   // Never cache API calls or dynamic data
   if (e.request.url.includes('/api/') || e.request.url.includes('/accounts/')) {

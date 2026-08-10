@@ -2,7 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from .models import AuditLog, NotificationLog
+from .models import AuditLog, NotificationLog, PushSubscription
 
 
 @login_required
@@ -42,3 +42,60 @@ def notification_ignore(request, pk):
 
 def privacy(request):
     return render(request, "common/privacy.html")
+
+
+@login_required
+def push_subscribe(request):
+    """Save browser push subscription."""
+    import json
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, KeyError):
+        from django.http import HttpResponseBadRequest
+        return HttpResponseBadRequest("Invalid JSON.")
+
+    endpoint = data.get("endpoint", "")
+    if not endpoint:
+        from django.http import HttpResponseBadRequest
+        return HttpResponseBadRequest("Missing endpoint.")
+
+    keys = data.get("keys", {})
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            "user": request.user,
+            "p256dh": keys.get("p256dh", ""),
+            "auth": keys.get("auth", ""),
+            "user_agent": request.META.get("HTTP_USER_AGENT", ""),
+            "is_active": True,
+        },
+    )
+    from django.http import JsonResponse
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def push_unsubscribe(request):
+    """Deactivate a push subscription."""
+    import json
+    try:
+        data = json.loads(request.body)
+        endpoint = data.get("endpoint", "")
+    except (json.JSONDecodeError, KeyError):
+        endpoint = ""
+
+    if endpoint:
+        PushSubscription.objects.filter(user=request.user, endpoint=endpoint).update(is_active=False)
+    else:
+        PushSubscription.objects.filter(user=request.user).update(is_active=False)
+    from django.http import JsonResponse
+    return JsonResponse({"ok": True})
+
+
+@login_required
+def vapid_public_key(request):
+    """Return the VAPID public key so the client can subscribe."""
+    import os
+    from django.http import JsonResponse
+    key = os.getenv("VAPID_PUBLIC_KEY", "")
+    return JsonResponse({"publicKey": key})
