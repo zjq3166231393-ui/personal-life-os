@@ -49,6 +49,11 @@ body {
 }
 .text-success-custom { color: var(--success); }
 .text-danger-custom { color: var(--danger); }
+/* ── Accessibility ─────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+.btn:focus-visible, .form-control:focus-visible, .form-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
 /* ── Mobile optimizations ──────────────────────────── */
 @media (max-width: 575px) {
   .container { padding-left: 8px; padding-right: 8px; }
