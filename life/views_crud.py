@@ -729,6 +729,39 @@ def dashboard(request):
 
     anomalies.sort(key=lambda x: x["date"], reverse=True)
 
+    # ── task analytics ───────────────────────────────────────────
+    tasks_all = Task.objects.filter(user=request.user, is_deleted=False)
+    # This week (Mon-Sun)
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=6)
+    week_completed = tasks_all.filter(status="completed", completed_at__date__gte=week_start, completed_at__date__lte=week_end).count()
+    week_created = tasks_all.filter(created_at__date__gte=week_start, created_at__date__lte=week_end).count()
+    week_total = max(week_completed + tasks_all.filter(status__in=["todo", "in_progress"], created_at__date__lte=week_end).count(), 1)
+    week_rate = round(week_completed / week_total * 100) if week_total > 0 else 0
+
+    high_priority_done = tasks_all.filter(status="completed", priority=1).count()
+    high_priority_total = max(tasks_all.filter(priority=1).count(), 1)
+    high_rate = round(high_priority_done / high_priority_total * 100)
+
+    overdue_count = tasks_all.filter(status__in=["todo", "in_progress"], due_at__date__lt=today).count()
+    # Postpone count: tasks where updated_at > created_at and status changed via postpone
+    from django.db.models import F
+    postpone_count = tasks_all.filter(status__in=["todo", "in_progress"], updated_at__gt=F("created_at") + timedelta(hours=1)).count()
+
+    # Consecutive days (walk backwards from yesterday)
+    streak = 0
+    d = today - timedelta(days=1)
+    while d >= today - timedelta(days=365):
+        if tasks_all.filter(completed_at__date=d).exists():
+            streak += 1
+            d -= timedelta(days=1)
+        else:
+            break
+
+    # Today's most important task completed?
+    top_task = tasks_all.filter(status__in=["todo", "in_progress"]).order_by("-priority", "due_at").first()
+    top_done = top_task is None  # no tasks = all done
+
     return render(request, "life/dashboard.html", {
         "today": today, "month_start": month_start,
         "total_expense": total_expense, "total_income": total_income,
@@ -744,6 +777,10 @@ def dashboard(request):
         "large_items": large_items,
         "conservative_total": conservative_total,
         "anomalies": anomalies[:5],
+        "week_rate": week_rate, "high_rate": high_rate,
+        "overdue_count": overdue_count, "streak": streak,
+        "top_task": top_task, "top_done": top_done,
+        "week_completed": week_completed,
     })
 
 
