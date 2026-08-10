@@ -38,6 +38,13 @@
 <!-- daily trend -->
 <section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">每日消费趋势</h2><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></section>
 
+<!-- anomaly detection -->
+{% if anomalies %}
+<section class="card shadow-sm p-3 p-md-4 mb-3" style="border-left:4px solid #ef4444"><h2 class="h6 fw-bold mb-2 text-danger">异常提醒</h2>
+{% for a in anomalies %}<div class="d-flex justify-content-between border-bottom py-1"><div><span class="badge bg-danger me-1 small">{{ a.type }}</span><span class="small">{{ a.detail }}</span></div><small class="text-secondary">{{ a.date|date:'m/d' }}</small></div>{% endfor %}
+</section>
+{% endif %}
+
 <!-- upcoming bills -->
 <section class="card shadow-sm p-3 p-md-4"><h2 class="h6 fw-bold mb-2">即将到期账单</h2>
 {% for b in upcoming %}<div class="d-flex justify-content-between border-bottom py-1"><div><span class="badge text-bg-light me-1">{{ b.type }}</span>{{ b.name }}</div><div class="text-end"><strong>¥{{ b.amount }}</strong><span class="text-secondary small ms-2">{{ b.date|date:'m/d' }}</span></div></div>

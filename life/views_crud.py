@@ -600,7 +600,7 @@ def dashboard(request):
     from collections import defaultdict
     from datetime import date, timedelta
     from decimal import Decimal
-    from django.db.models import Q, Sum
+    from django.db.models import Avg, Q, Sum
 
     today = date.today()
     month_start = date(today.year, today.month, 1)
@@ -694,6 +694,41 @@ def dashboard(request):
     conservative_total = predicted_total - excluded if excluded else predicted_total
     predicted_extra = predicted_total - total_expense
 
+    # ── anomaly detection ─────────────────────────────────────────
+    anomalies = []
+    # 1. Single transaction > 3x category average this month
+    for c in categories:
+        cat_expenses = month_qs.filter(type="expense", category=c).exclude(amount=0)
+        cat_avg = cat_expenses.aggregate(a=Avg("amount"))["a"] or Decimal("0")
+        if cat_avg > 0:
+            for e in cat_expenses.filter(amount__gte=cat_avg * 3):
+                anomalies.append({"type": "单笔异常", "detail": f"{c.name}: {e.note or '未命名'} ¥{e.amount}（分类均值 ¥{cat_avg:.0f}）", "date": e.occurred_at.date()})
+
+    # 2. Today's total > 3x 30-day daily average
+    daily_30 = base.filter(type="expense", occurred_at__gte=today - timedelta(days=30)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    avg_30 = daily_30 / 30 if daily_30 > 0 else Decimal("0")
+    today_spent = base.filter(type="expense", occurred_at__date=today).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    if avg_30 > 0 and today_spent > avg_30 * 3:
+        anomalies.append({"type": "当日暴增", "detail": f"今天 ¥{today_spent:.0f}，30日均值 ¥{avg_30:.0f}", "date": today})
+
+    # 3. Category growth: this month > 2x last month
+    last_month_start = date(today.year, today.month - 1, 1) if today.month > 1 else date(today.year - 1, 12, 1)
+    _, last_ld = monthrange(last_month_start.year, last_month_start.month)
+    last_month_end = date(last_month_start.year, last_month_start.month, last_ld)
+    for c in categories:
+        this_m = float(month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or Decimal("0"))
+        last_m = float(base.filter(type="expense", category=c, occurred_at__gte=last_month_start, occurred_at__lte=last_month_end).aggregate(s=Sum("amount"))["s"] or Decimal("0"))
+        if last_m > 0 and this_m > last_m * 2:
+            anomalies.append({"type": "分类增长", "detail": f"{c.name}: 本月 ¥{this_m:.0f} vs 上月 ¥{last_m:.0f}", "date": today})
+
+    # 4. Recurring bill amount change > 20%
+    for r in RecurringExpense.objects.filter(user=request.user, is_active=True):
+        recent = Expense.objects.filter(user=request.user, note__icontains=r.name, type="expense", status="confirmed").order_by("-occurred_at").first()
+        if recent and recent.amount > 0 and abs(recent.amount - r.amount) / r.amount > Decimal("0.2"):
+            anomalies.append({"type": "账单异常", "detail": f"{r.name}: 实际 ¥{recent.amount} vs 预期 ¥{r.amount}", "date": recent.occurred_at.date()})
+
+    anomalies.sort(key=lambda x: x["date"], reverse=True)
+
     return render(request, "life/dashboard.html", {
         "today": today, "month_start": month_start,
         "total_expense": total_expense, "total_income": total_income,
@@ -708,6 +743,7 @@ def dashboard(request):
         "days_remaining": days_remaining,
         "large_items": large_items,
         "conservative_total": conservative_total,
+        "anomalies": anomalies[:5],
     })
 
 
