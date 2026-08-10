@@ -776,6 +776,29 @@ class ScanRemindersTests(TestCase):
         self.assertIsNone(log.read_at)
         self.assertEqual(log.status, "pending")
 
+    def test_dry_run_creates_nothing(self):
+        from io import StringIO
+        from django.core.management import call_command
+        count_before = NotificationLog.objects.count()
+        call_command("scan_reminders", "--dry-run")
+        self.assertEqual(NotificationLog.objects.count(), count_before)
+
+    def test_scan_tasks_creates_notification(self):
+        from io import StringIO
+        from django.core.management import call_command
+        Task.objects.create(user=self.user, title="今日任务", due_at=timezone.now(), status="todo")
+        call_command("scan_reminders", "--type=task")
+        log = NotificationLog.objects.filter(notification_type="task", title__icontains="今日任务").first()
+        self.assertIsNotNone(log)
+
+    def test_scan_does_not_duplicate(self):
+        from io import StringIO
+        from django.core.management import call_command
+        call_command("scan_reminders", "--type=reminder")
+        first_count = NotificationLog.objects.filter(notification_type="reminder").count()
+        call_command("scan_reminders", "--type=reminder")
+        self.assertEqual(NotificationLog.objects.filter(notification_type="reminder").count(), first_count)
+
 
 class AIParseModelTests(TestCase):
     @classmethod
