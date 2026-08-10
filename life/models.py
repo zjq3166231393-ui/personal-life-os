@@ -123,6 +123,9 @@ class Task(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     source = models.CharField(max_length=20, choices=Source.choices, default="manual")
     parent_task = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="subtasks")
+    recurrence_rule = models.CharField(max_length=20, default="none", help_text="none/daily/weekly/monthly/yearly")
+    recurrence_day = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Day of month (1-31) for monthly/yearly")
+    recurrence_days_before = models.PositiveSmallIntegerField(default=0, help_text="Remind N days before due date")
     raw_text = models.TextField(blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -134,6 +137,35 @@ class Task(models.Model):
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.title}"
+
+    def next_occurrence(self):
+        """Return the next due_at after completing this recurring task."""
+        from calendar import monthrange
+        from datetime import datetime, timedelta
+        if not self.recurrence_rule or self.recurrence_rule == "none" or not self.due_at:
+            return None
+        base = self.due_at
+        if isinstance(base, str):
+            from django.utils import timezone
+            base = datetime.fromisoformat(base.replace("Z", "+00:00"))
+            if timezone.is_naive(base):
+                base = timezone.make_aware(base)
+        rule = self.recurrence_rule
+        rday = self.recurrence_day or base.day
+        if rule == "daily":
+            return base + timedelta(days=1)
+        if rule == "weekly":
+            return base + timedelta(days=7)
+        if rule == "monthly":
+            y, m = base.year, base.month + 1
+            if m > 12:
+                y += 1
+                m = 1
+            last = monthrange(y, m)[1]
+            return base.replace(year=y, month=m, day=min(rday, last))
+        if rule == "yearly":
+            return base.replace(year=base.year + 1)
+        return None
 
 
 class Note(models.Model):

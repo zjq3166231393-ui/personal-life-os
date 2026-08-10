@@ -17,6 +17,7 @@ urlpatterns = [
     path("tasks/<int:pk>/postpone/", views_crud.task_postpone, name="task_postpone"),
     path("tasks/<int:pk>/cancel/", views_crud.task_cancel, name="task_cancel"),
     path("tasks/<int:pk>/archive/", views_crud.task_archive, name="task_archive"),
+    path("tasks/<int:pk>/renew/", views_crud.task_renew, name="task_renew"),
     path("notes/", views_crud.note_list, name="note_list"),
     path("notes/<int:pk>/", views_crud.note_detail, name="note_detail"),
     path("notes/<int:pk>/edit/", views_crud.note_edit, name="note_edit"),

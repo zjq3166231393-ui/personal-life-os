@@ -204,6 +204,31 @@ def task_archive(request, pk):
     task.save()
     return redirect("task_list")
 
+
+@login_required
+def task_renew(request, pk):
+    """Generate the next occurrence of a recurring task. Skips if already generated."""
+    task = get_object_or_404(Task, pk=pk, is_deleted=False)
+    _check_owner(task, request)
+    # Prevent duplicate: if a todo/in_progress task with same title already exists, skip
+    existing = Task.objects.filter(
+        user=request.user, title=task.title, is_deleted=False,
+        status__in=["todo", "in_progress"],
+    ).exists()
+    if not existing:
+        next_dt = task.next_occurrence()
+        if next_dt:
+            Task.objects.create(
+                user=request.user, title=task.title, description=task.description,
+                status="todo", priority=task.priority, due_at=next_dt,
+                source="manual", parent_task=task.parent_task,
+                recurrence_rule=task.recurrence_rule,
+                recurrence_day=task.recurrence_day,
+                recurrence_days_before=task.recurrence_days_before,
+            )
+    return redirect("task_list")
+
+
 @login_required
 def task_detail(request, pk):
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
@@ -220,6 +245,9 @@ def task_edit(request, pk):
         task.priority = int(request.POST.get("priority", task.priority))
         task.due_at = request.POST.get("due_at") or None
         task.source = request.POST.get("source", task.source)
+        task.recurrence_rule = request.POST.get("recurrence_rule", task.recurrence_rule)
+        task.recurrence_day = int(request.POST.get("recurrence_day") or 0) or None
+        task.recurrence_days_before = int(request.POST.get("recurrence_days_before") or 0)
         new_status = request.POST.get("status", task.status)
         if new_status == "completed" and task.status != "completed":
             task.completed_at = timezone.now()

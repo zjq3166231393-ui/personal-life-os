@@ -15,5 +15,10 @@
   <div class="col-md-6"><label class="form-label">截止时间</label><input type="datetime-local" name="due_at" class="form-control" value="{% if task.due_at %}{{ task.due_at|date:'Y-m-d\TH:i' }}{% endif %}"></div>
   <div class="col-md-6"><label class="form-label">来源</label><select name="source" class="form-select">{% for val, label in task.Source.choices %}<option value="{{ val }}" {% if task.source == val %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
 </div>
+<div class="row mb-3">
+  <div class="col-md-4"><label class="form-label">重复</label><select name="recurrence_rule" class="form-select"><option value="none" {% if task.recurrence_rule == 'none' %}selected{% endif %}>不重复</option><option value="daily" {% if task.recurrence_rule == 'daily' %}selected{% endif %}>每天</option><option value="weekly" {% if task.recurrence_rule == 'weekly' %}selected{% endif %}>每周</option><option value="monthly" {% if task.recurrence_rule == 'monthly' %}selected{% endif %}>每月</option><option value="yearly" {% if task.recurrence_rule == 'yearly' %}selected{% endif %}>每年</option></select></div>
+  <div class="col-md-4"><label class="form-label">每月几号</label><input type="number" name="recurrence_day" class="form-control" min="1" max="31" value="{{ task.recurrence_day|default:'' }}" placeholder="留空=当天"></div>
+  <div class="col-md-4"><label class="form-label">提前提醒(天)</label><input type="number" name="recurrence_days_before" class="form-control" min="0" value="{{ task.recurrence_days_before|default:'0' }}"></div>
+</div>
 <button type="submit" class="btn btn-dark">保存</button></form></section>
 </main></body></html>

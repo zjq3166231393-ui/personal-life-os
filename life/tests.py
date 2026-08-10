@@ -654,3 +654,73 @@ class ReminderTests(TestCase):
         self.client.login(username="bob", password="passB")
         r = self.client.get(f"/reminders/{self.r.pk}/toggle/")
         self.assertEqual(r.status_code, 404)
+
+
+class RecurrenceTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_monthly_recurrence(self):
+        t = Task.objects.create(user=self.user, title="每月会议", due_at="2026-08-15T10:00:00Z",
+                                recurrence_rule="monthly", recurrence_day=15)
+        nxt = t.next_occurrence()
+        self.assertEqual(nxt.month, 9)
+        self.assertEqual(nxt.day, 15)
+
+    def test_monthly_end_of_month(self):
+        t = Task.objects.create(user=self.user, title="月底报告", due_at="2026-01-31T10:00:00Z",
+                                recurrence_rule="monthly", recurrence_day=31)
+        nxt = t.next_occurrence()
+        self.assertEqual(nxt.month, 2)
+        self.assertEqual(nxt.day, 28)
+
+    def test_no_recurrence_returns_none(self):
+        t = Task.objects.create(user=self.user, title="一次性的", due_at="2026-08-15T10:00:00Z")
+        self.assertIsNone(t.next_occurrence())
+
+    def test_renew_creates_next_task(self):
+        t = Task.objects.create(user=self.user, title="每周回顾", due_at="2026-08-15T10:00:00Z",
+                                recurrence_rule="weekly", status="completed")
+        count_before = Task.objects.count()
+        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.assertEqual(Task.objects.count(), count_before + 1)
+        new_task = Task.objects.latest("id")
+        self.assertEqual(new_task.status, "todo")
+        self.assertEqual(new_task.recurrence_rule, "weekly")
+
+    def test_renew_does_not_duplicate(self):
+        t = Task.objects.create(user=self.user, title="日报", due_at="2026-08-15T10:00:00Z",
+                                recurrence_rule="daily", status="completed")
+        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.assertEqual(Task.objects.filter(title="日报", status="todo").count(), 1)
+
+    def test_deleting_rule_keeps_history(self):
+        t = Task.objects.create(user=self.user, title="父任务", due_at="2026-08-15T10:00:00Z",
+                                recurrence_rule="monthly", recurrence_day=15, status="completed")
+        self.client.get(f"/tasks/{t.pk}/renew/")
+        child = Task.objects.get(title="父任务", status="todo")
+        self.assertIsNotNone(child)
+        t.recurrence_rule = "none"
+        t.save()
+        self.assertTrue(Task.objects.filter(pk=child.pk).exists())
+
+    def test_completed_instance_does_not_affect_next(self):
+        t = Task.objects.create(user=self.user, title="模板任务", due_at="2026-08-15T10:00:00Z",
+                                recurrence_rule="monthly", recurrence_day=15, status="completed")
+        self.client.get(f"/tasks/{t.pk}/renew/")
+        child = Task.objects.get(title="模板任务", status="todo")
+        child.status = "completed"
+        child.save()
+        t.refresh_from_db()
+        self.assertEqual(t.recurrence_rule, "monthly")
+
+    def test_yearly_recurrence(self):
+        t = Task.objects.create(user=self.user, title="年检", due_at="2026-08-15T10:00:00Z",
+                                recurrence_rule="yearly")
+        nxt = t.next_occurrence()
+        self.assertEqual(nxt.year, 2027)

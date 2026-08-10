@@ -40,6 +40,9 @@
       {% if t.status == 'completed' or t.status == 'cancelled' %}
       <a href="{% url 'task_archive' t.pk %}" class="btn btn-outline-secondary">📦</a>
       {% endif %}
+      {% if t.recurrence_rule != 'none' and t.status == 'completed' %}
+      <a href="{% url 'task_renew' t.pk %}" class="btn btn-outline-primary">🔁</a>
+      {% endif %}
       <a href="{% url 'task_edit' t.pk %}" class="btn btn-outline-secondary">✎</a>
     </div>
   </div>
