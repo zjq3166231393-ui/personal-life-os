@@ -25,6 +25,16 @@
   </div>
 </section>
 
+<!-- prediction -->
+<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">月末预测</h2>
+<div class="row g-2">
+  <div class="col-6"><span class="text-secondary small">预测月末总支出</span><div class="stat-val expense">¥{{ predicted_total|floatformat:0 }}</div></div>
+  <div class="col-6"><span class="text-secondary small">保守估计（排除大额）</span><div class="stat-val income">¥{{ conservative_total|floatformat:0 }}</div></div>
+</div>
+<div class="mt-2"><small class="text-secondary">依据：本月已过 {{ days_passed }} 天，日均 ¥{{ daily_avg|floatformat:0 }} × 剩余 {{ days_remaining }} 天 = 预计 +¥{{ predicted_extra|floatformat:0 }}</small></div>
+{% if large_items %}<div class="mt-1"><small class="text-warning">大额支出（已排除）：{% for li in large_items %}{{ li.note }} ¥{{ li.amount }}{% if not forloop.last %}、{% endif %}{% endfor %}</small></div>{% endif %}
+</section>
+
 <!-- daily trend -->
 <section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">每日消费趋势</h2><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></section>
 

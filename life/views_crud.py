@@ -677,6 +677,23 @@ def dashboard(request):
         "recurringPct": round(float(rec_total / total_expense * 100) if total_expense > 0 else 0),
     })
 
+    # ── month-end prediction ─────────────────────────────────────
+    days_passed = today.day
+    days_remaining = last_day - today.day
+    daily_avg = total_expense / days_passed if days_passed > 0 else Decimal("0")
+    predicted_remaining = daily_avg * days_remaining
+    predicted_total = total_expense + predicted_remaining
+
+    # Identify potential one-time large expenses (> 3x daily avg)
+    large_items = []
+    threshold = daily_avg * 3 if daily_avg > 0 else Decimal("999999")
+    for e in month_qs.filter(type="expense", amount__gte=threshold).order_by("-amount")[:3]:
+        large_items.append({"note": e.note or e.merchant or "未命名", "amount": e.amount})
+    # Exclude large items for a conservative estimate
+    excluded = sum(item["amount"] for item in large_items)
+    conservative_total = predicted_total - excluded if excluded else predicted_total
+    predicted_extra = predicted_total - total_expense
+
     return render(request, "life/dashboard.html", {
         "today": today, "month_start": month_start,
         "total_expense": total_expense, "total_income": total_income,
@@ -684,6 +701,13 @@ def dashboard(request):
         "rec_total": rec_total, "upcoming": upcoming[:10],
         "budget_amount": budget_amount, "budget_pct": budget_pct,
         "chart_data": chart_data,
+        "predicted_total": predicted_total,
+        "predicted_extra": predicted_extra,
+        "daily_avg": daily_avg,
+        "days_passed": days_passed,
+        "days_remaining": days_remaining,
+        "large_items": large_items,
+        "conservative_total": conservative_total,
     })
 
 
