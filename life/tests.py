@@ -5,6 +5,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from common.models import NotificationLog
+from .ai_provider import FakeProvider, get_provider, set_provider
 from .ai_schema import validate_ai_response
 from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
 from .parser import parse_text
@@ -914,3 +915,49 @@ class AISchemaTests(SimpleTestCase):
         ok, errs = validate_ai_response({"actions": [{"intent": "create_expense", "action_id": "a1", "amount": "10", "occurred_at": "2026-08-10"}]})
         self.assertFalse(ok)
         self.assertTrue(any("category" in e for e in errs))
+
+
+class AIProviderTests(SimpleTestCase):
+    def setUp(self):
+        self.fake = FakeProvider()
+
+    def test_fake_provider_parses_expense(self):
+        result = self.fake.parse("午饭 18 元")
+        self.assertIn("actions", result)
+        self.assertEqual(result["actions"][0]["intent"], "create_expense")
+        self.assertEqual(result["actions"][0]["amount"], "18")
+
+    def test_fake_provider_parses_income(self):
+        result = self.fake.parse("收到工资 5000 元")
+        self.assertEqual(result["actions"][0]["intent"], "create_income")
+
+    def test_fake_provider_parses_task(self):
+        result = self.fake.parse("提醒我明天交话费")
+        self.assertIn(result["actions"][0]["intent"], ("create_task", "create_note"))
+
+    def test_fake_provider_increments_call_count(self):
+        self.fake.parse("a")
+        self.fake.parse("b")
+        self.assertEqual(self.fake.call_count, 2)
+        self.assertEqual(self.fake.last_text, "b")
+
+    def test_get_provider_returns_fake_when_no_key(self):
+        import os
+        old = os.environ.pop("DEEPSEEK_API_KEY", None)
+        try:
+            set_provider(None)  # reset
+            p = get_provider()
+            self.assertIsInstance(p, FakeProvider)
+        finally:
+            if old:
+                os.environ["DEEPSEEK_API_KEY"] = old
+            set_provider(None)
+
+    def test_provider_interface_has_parse(self):
+        self.assertTrue(hasattr(FakeProvider, 'parse'))
+        self.assertTrue(callable(FakeProvider.parse))
+
+    def test_fake_provider_output_passes_schema(self):
+        result = self.fake.parse("午餐 18 元，提醒我交话费")
+        ok, errs = validate_ai_response(result)
+        self.assertTrue(ok, msg=str(errs))
