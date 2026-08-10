@@ -490,3 +490,66 @@ def installment_pay(request, pk):
             )
             return redirect("installment_list")
     return render(request, "life/installment_pay.html", {"plan": plan, "error": error})
+
+
+# ── Dashboard ────────────────────────────────────────────────────────
+
+@login_required
+def dashboard(request):
+    from calendar import monthrange
+    from collections import defaultdict
+    from datetime import date, timedelta
+    from decimal import Decimal
+    from django.db.models import Q, Sum
+
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
+    _, last_day = monthrange(today.year, today.month)
+    month_end = date(today.year, today.month, last_day)
+
+    # ── monthly totals ─────────────────────────────────────────────
+    base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
+    month_qs = base.filter(occurred_at__gte=month_start, occurred_at__lte=month_end)
+
+    total_expense = month_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    total_income = month_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    balance = total_income - total_expense
+
+    # ── category breakdown ─────────────────────────────────────────
+    cat_spent = defaultdict(Decimal)
+    for row in month_qs.filter(type="expense").values("category__name", "category__icon", "category__color").annotate(s=Sum("amount")):
+        cat_spent[row["category__name"] or "未分类"] = row["s"]
+    cat_pct = []
+    for name, amt in sorted(cat_spent.items(), key=lambda x: x[1], reverse=True):
+        cat_pct.append({"name": name, "amount": amt, "pct": round(amt / total_expense * 100) if total_expense > 0 else 0})
+
+    # ── daily trend ────────────────────────────────────────────────
+    daily = []
+    for d in range(1, last_day + 1):
+        day = date(today.year, today.month, d)
+        amt = base.filter(occurred_at__date=day, type="expense").aggregate(s=Sum("amount"))["s"]
+        daily.append({"day": d, "amount": amt or Decimal("0")})
+
+    # ── recurring total ────────────────────────────────────────────
+    rec_total = RecurringExpense.objects.filter(user=request.user, is_active=True).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+
+    # ── upcoming bills (recurring + installment) ───────────────────
+    upcoming = []
+    for r in RecurringExpense.objects.filter(user=request.user, is_active=True):
+        upcoming.append({"name": r.name, "amount": r.amount, "date": date(today.year, today.month, r.due_day) if r.due_day >= today.day else date(today.year, today.month + 1 if today.month < 12 else 1, r.due_day), "type": "固定"})
+    for p in InstallmentPlan.objects.filter(user=request.user, status="active"):
+        upcoming.append({"name": p.name, "amount": p.installment_amount, "date": p.next_due_date, "type": "分期"})
+    upcoming.sort(key=lambda x: x["date"])
+
+    # ── budget rate ────────────────────────────────────────────────
+    budget_total = Budget.objects.filter(user=request.user, category__isnull=True, month=month_start).first()
+    budget_amount = budget_total.amount if budget_total else Decimal("0")
+    budget_pct = min(int(total_expense / budget_amount * 100) if budget_amount > 0 else 0, 100)
+
+    return render(request, "life/dashboard.html", {
+        "today": today, "month_start": month_start,
+        "total_expense": total_expense, "total_income": total_income,
+        "balance": balance, "cat_pct": cat_pct, "daily": daily,
+        "rec_total": rec_total, "upcoming": upcoming[:10],
+        "budget_amount": budget_amount, "budget_pct": budget_pct,
+    })

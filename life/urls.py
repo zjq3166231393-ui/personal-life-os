@@ -30,4 +30,5 @@ urlpatterns = [
     path("installments/create/", views_crud.installment_create, name="installment_create"),
     path("installments/<int:pk>/edit/", views_crud.installment_edit, name="installment_edit"),
     path("installments/<int:pk>/pay/", views_crud.installment_pay, name="installment_pay"),
+    path("dashboard/", views_crud.dashboard, name="dashboard"),
 ]
