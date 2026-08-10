@@ -48,6 +48,22 @@ def _detect_multi_intent(text: str) -> bool:
     return False
 
 
+SENSITIVE_PATTERNS = [
+    ("身份证", "身份证号"),
+    ("银行卡", "银行卡号"),
+    ("密码", "密码"),
+    ("验证码", "验证码"),
+]
+
+
+def _check_sensitive(text: str) -> list:
+    found = []
+    for kw, label in SENSITIVE_PATTERNS:
+        if kw in text:
+            found.append(label)
+    return found
+
+
 def route_parse(raw_text: str, user=None) -> dict:
     """Parse text with rule-first + AI fallback.
 
@@ -74,11 +90,50 @@ def route_parse(raw_text: str, user=None) -> dict:
         }
 
     # Step 2: try AI for medium/low or multi-intent
+    # Check AI switch and limits
+    skip_reason = None
+    if user and hasattr(user, 'profile'):
+        if not user.profile.ai_parsing_enabled:
+            skip_reason = "AI 解析已关闭，请在个人设置中开启。"
+        else:
+            limit = user.profile.daily_ai_limit
+            if limit > 0:
+                from django.utils import timezone
+                today = timezone.localdate()
+                today_count = ConversationLog.objects.filter(user=user, created_at__date=today).count()
+                if today_count >= limit:
+                    skip_reason = f"今日 AI 调用已达上限（{limit}次）。"
+
+    if skip_reason:
+        return {
+            "actions": [_draft_to_action(draft)],
+            "source": "fallback",
+            "confidence": "low",
+            "error": skip_reason,
+        }
+
+    # Check sensitive content
+    sensitive = _check_sensitive(raw_text)
+    if sensitive:
+        return {
+            "actions": [_draft_to_action(draft)],
+            "source": "fallback",
+            "confidence": "low",
+            "error": f"输入包含疑似敏感信息: {', '.join(sensitive)}，已使用本地解析。",
+            "sensitive": True,
+        }
+
     try:
         provider = get_provider()
         ai_result = provider.parse(raw_text)
         ok, errors = validate_ai_response(ai_result)
         if ok:
+            # Log conversation
+            from .models import ConversationLog
+            ConversationLog.objects.create(
+                user=user, raw_text=raw_text, input_type="text",
+                model="deepseek-chat", status="confirmed",
+            )
             return {
                 "actions": ai_result["actions"],
                 "source": "ai",
@@ -86,7 +141,6 @@ def route_parse(raw_text: str, user=None) -> dict:
                 "error": None,
             }
         else:
-            # AI response failed validation → fallback
             return {
                 "actions": [_draft_to_action(draft)],
                 "source": "fallback",
@@ -94,7 +148,6 @@ def route_parse(raw_text: str, user=None) -> dict:
                 "error": f"AI validation failed: {'; '.join(errors)}",
             }
     except Exception as e:
-        # AI unavailable → fallback
         return {
             "actions": [_draft_to_action(draft)],
             "source": "fallback",

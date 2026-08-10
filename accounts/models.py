@@ -15,6 +15,7 @@ class UserProfile(models.Model):
         max_digits=12, decimal_places=2, null=True, blank=True
     )
     ai_parsing_enabled = models.BooleanField(default=True)
+    daily_ai_limit = models.PositiveSmallIntegerField(default=20, help_text="单日 AI 调用上限，0=不限制")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

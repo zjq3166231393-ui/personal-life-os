@@ -7,3 +7,7 @@ from .models import AuditLog
 def my_audit_log(request):
     logs = AuditLog.objects.filter(user=request.user)[:100]
     return render(request, "common/audit_log.html", {"logs": logs, "title": "我的操作日志"})
+
+
+def privacy(request):
+    return render(request, "common/privacy.html")

@@ -137,7 +137,7 @@ class UserProfileTests(TestCase):
         response = self.client.post(reverse("profile"), {
             "display_name": "小明", "timezone": "Asia/Tokyo",
             "currency": "JPY", "monthly_budget": "5000.00",
-            "ai_parsing_enabled": "on",
+            "ai_parsing_enabled": "on", "daily_ai_limit": "10",
         })
         self.assertRedirects(response, reverse("profile"))
         profile = user.profile

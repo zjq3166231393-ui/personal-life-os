@@ -22,7 +22,7 @@
         <div class="col-md-6"><label for="id_currency" class="form-label">货币</label><select name="currency" id="id_currency" class="form-select"><option value="CNY" {% if form.currency.value == "CNY" %}selected{% endif %}>人民币 ¥</option><option value="USD" {% if form.currency.value == "USD" %}selected{% endif %}>美元 $</option><option value="JPY" {% if form.currency.value == "JPY" %}selected{% endif %}>日元 ¥</option></select></div>
       </div>
       <div class="mb-3"><label for="id_monthly_budget" class="form-label">月度预算</label><input type="number" name="monthly_budget" id="id_monthly_budget" class="form-control" step="0.01" min="0" value="{{ form.monthly_budget.value|default:'' }}" placeholder="留空表示不设置预算"></div>
-      <div class="mb-4 form-check form-switch"><input type="checkbox" name="ai_parsing_enabled" id="id_ai_parsing_enabled" class="form-check-input" {% if form.ai_parsing_enabled.value %}checked{% endif %}><label for="id_ai_parsing_enabled" class="form-check-label">启用 AI 解析（V0.5 生效）</label></div>
+      <div class="mb-3"><label for="id_daily_ai_limit" class="form-label">单日 AI 调用上限</label><input type="number" name="daily_ai_limit" id="id_daily_ai_limit" class="form-control" min="0" value="{{ form.daily_ai_limit.value|default:'20' }}" placeholder="0=不限制"></div><div class="mb-4 form-check form-switch"><input type="checkbox" name="ai_parsing_enabled" id="id_ai_parsing_enabled" class="form-check-input" {% if form.ai_parsing_enabled.value %}checked{% endif %}><label for="id_ai_parsing_enabled" class="form-check-label">启用 AI 解析</label></div>
       <button type="submit" class="btn btn-dark">保存设置</button>
     </form>
   </section>
