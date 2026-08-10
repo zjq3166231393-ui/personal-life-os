@@ -801,6 +801,13 @@ class ScanRemindersTests(TestCase):
         self.assertEqual(NotificationLog.objects.filter(notification_type="reminder").count(), first_count)
 
 
+class SettingsTests(SimpleTestCase):
+    def test_secret_key_is_not_hardcoded(self):
+        from django.conf import settings
+        self.assertNotEqual(settings.SECRET_KEY, "unsafe-development-key-change-before-deploy")
+        self.assertGreater(len(settings.SECRET_KEY), 50)
+
+
 class DataCheckTests(TestCase):
     @classmethod
     def setUpTestData(cls):

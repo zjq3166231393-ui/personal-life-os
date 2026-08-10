@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-deploy")
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(50)
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if os.getenv("DJANGO_ALLOWED_HOSTS") else []
 
@@ -84,6 +87,10 @@ CACHES = {
 
 # ── Production security ──────────────────────────────────────────
 ENVIRONMENT = os.getenv("DJANGO_ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production":
+    if not os.getenv("DJANGO_SECRET_KEY"):
+        raise RuntimeError("DJANGO_SECRET_KEY must be set in .env for production mode")
 
 if ENVIRONMENT == "production" or not DEBUG:
     # HTTPS / SSL

@@ -49,11 +49,11 @@ personal-life-os/     (70 Python files, 40 templates, 20 migrations)
 | Cache | `config/settings.py:78-82` | ⚠ P2 | LocMemCache 多进程不共享 |
 | `--deploy` 检查 | — | ⚠ 7 warnings | development 模式预期行为 |
 
-### P1: SECRET_KEY 默认值不安全
+### ✅ P1 (已修复): SECRET_KEY 默认值不安全
 
 - **文件**: `config/settings.py:9`
-- **风险**: 生产环境忘记设 `.env` 时使用可预测密钥
-- **建议**: 将默认值改为空或 `__import__("secrets").token_urlsafe(50)`，为空时拒绝启动
+- **修复**: 默认值改为 `secrets.token_urlsafe(50)` 随机生成；生产环境未设 `.env` 时 `RuntimeError` 拒绝启动
+- **测试**: `SettingsTests.test_secret_key_is_not_hardcoded`
 
 ### P2: LocMemCache 多进程不共享
 
@@ -259,7 +259,7 @@ personal-life-os/     (70 Python files, 40 templates, 20 migrations)
 | 级别 | 数量 | 关键项 |
 |------|------|--------|
 | **P0** | 0 | 无阻塞性问题 |
-| **P1** | 1 | SECRET_KEY 默认值不安全 |
+| **P1** | 0 | —（已全部修复）|
 | **P2** | 10 | 模型集中、Entry 遗留、Admin IP、Cache、README 过时、索引缺失等 |
 
 ---
