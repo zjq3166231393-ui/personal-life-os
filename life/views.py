@@ -129,3 +129,99 @@ def save_entry(request):
 
     return JsonResponse({"ok": True})
 
+
+@login_required
+@require_POST
+def confirm_actions(request):
+    """Batch-confirm multiple AI-parsed actions in a single transaction.
+
+    Accepts: {"actions": [{"intent": "create_expense", "title": ..., "amount": ..., ...}, ...], "raw_text": "..."}
+    On partial failure, rolls back ALL changes.
+    """
+    from django.db import transaction
+    try:
+        payload = json.loads(request.body)
+        actions = payload["actions"]
+        raw_text = payload.get("raw_text", "")
+    except (json.JSONDecodeError, KeyError):
+        return HttpResponseBadRequest("请求格式无效。")
+
+    if not isinstance(actions, list) or len(actions) == 0:
+        return HttpResponseBadRequest("至少需要一条操作。")
+
+    saved = []
+    try:
+        with transaction.atomic():
+            for action in actions:
+                intent = action.get("intent", "")
+                title = str(action.get("title", ""))[:200]
+                category_name = action.get("category", "")
+                amount_str = action.get("amount")
+
+                # Parse amount
+                amount = None
+                if amount_str not in (None, ""):
+                    try:
+                        amount = Decimal(str(amount_str))
+                    except InvalidOperation:
+                        raise ValueError(f"金额格式无效: {amount_str}")
+
+                # Parse datetime
+                occurred_at = None
+                if action.get("occurred_at"):
+                    try:
+                        occurred_at = datetime.fromisoformat(str(action["occurred_at"]).replace("Z", "+00:00"))
+                    except ValueError:
+                        occurred_at = timezone.now()
+
+                due_at = None
+                if action.get("due_at"):
+                    try:
+                        due_at = datetime.fromisoformat(str(action["due_at"]).replace("Z", "+00:00"))
+                    except ValueError:
+                        pass
+
+                # Save based on intent
+                if intent in ("create_expense", "create_income"):
+                    if amount is None:
+                        raise ValueError(f"支出/收入必须提供金额: {title}")
+                    cat = None
+                    if category_name:
+                        from django.db.models import Q
+                        cat = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), name=category_name, is_active=True).first()
+                    Expense.objects.create(
+                        user=request.user, type="income" if intent == "create_income" else "expense",
+                        category=cat, amount=amount,
+                        occurred_at=occurred_at or timezone.now(),
+                        note=title, raw_text=raw_text, source="ai",
+                    )
+                    Entry.objects.create(user=request.user, kind="expense", title=title, raw_text=raw_text, category=category_name, amount=amount, occurred_on=occurred_at.date() if occurred_at else None)
+
+                elif intent == "create_task":
+                    Task.objects.create(
+                        user=request.user, title=title, description="",
+                        due_at=due_at, source="ai", raw_text=raw_text,
+                    )
+                    Entry.objects.create(user=request.user, kind="task", title=title, raw_text=raw_text)
+
+                elif intent == "create_reminder":
+                    event = occurred_at or due_at or timezone.now()
+                    Reminder.objects.create(
+                        user=request.user, title=title, reminder_type="custom",
+                        event_at=event, remind_at=event,
+                    )
+
+                elif intent == "create_note":
+                    Note.objects.create(user=request.user, title=title, raw_text=raw_text)
+                    Entry.objects.create(user=request.user, kind="note", title=title, raw_text=raw_text)
+
+                saved.append({"intent": intent, "title": title, "ok": True})
+
+    except Exception as e:
+        # Transaction rolled back automatically
+        return JsonResponse({"ok": False, "error": str(e)[:300], "saved": saved}, status=400)
+
+    record(request.user, "ai.save", None, f"批量确认 {len(saved)} 条记录")
+    return JsonResponse({"ok": True, "count": len(saved)})
+
+

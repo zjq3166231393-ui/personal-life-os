@@ -9,6 +9,7 @@ from .ai_provider import FakeProvider, get_provider, set_provider
 from .ai_router import route_parse, _rule_confidence, _detect_multi_intent
 from .ai_schema import validate_ai_response
 from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
+from django.urls import reverse
 from .parser import parse_text
 
 
@@ -962,6 +963,54 @@ class AIProviderTests(SimpleTestCase):
         result = self.fake.parse("午餐 18 元，提醒我交话费")
         ok, errs = validate_ai_response(result)
         self.assertTrue(ok, msg=str(errs))
+
+
+class ConfirmActionsTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_batch_confirm_creates_multiple_records(self):
+        r = self.client.post(reverse("confirm_actions"), {
+            "actions": [
+                {"intent": "create_expense", "title": "午餐", "amount": "18", "category": "餐饮", "occurred_at": "2026-08-10T12:00:00"},
+                {"intent": "create_task", "title": "交话费"},
+            ],
+            "raw_text": "午饭 18 元，提醒交话费",
+        }, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["count"], 2)
+        self.assertTrue(Expense.objects.filter(note="午餐").exists())
+        self.assertTrue(Task.objects.filter(title="交话费").exists())
+
+    def test_transaction_rollback_on_error(self):
+        count_before = Expense.objects.count()
+        r = self.client.post(reverse("confirm_actions"), {
+            "actions": [
+                {"intent": "create_expense", "title": "好的", "amount": "10", "category": "餐饮", "occurred_at": "2026-08-10T12:00:00"},
+                {"intent": "create_expense", "title": "坏的"},  # missing amount
+            ],
+            "raw_text": "test",
+        }, content_type="application/json")
+        self.assertNotEqual(r.status_code, 200)
+        data = r.json()
+        self.assertFalse(data["ok"])
+        self.assertEqual(Expense.objects.count(), count_before)
+
+    def test_confirm_consistency(self):
+        r = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_expense", "title": "测试", "amount": "99.99", "category": "购物", "occurred_at": "2026-08-10T12:00:00"}],
+            "raw_text": "测试",
+        }, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        exp = Expense.objects.filter(note="测试").first()
+        self.assertIsNotNone(exp)
+        self.assertEqual(exp.amount, Decimal("99.99"))
 
 
 class AIRouterTests(SimpleTestCase):

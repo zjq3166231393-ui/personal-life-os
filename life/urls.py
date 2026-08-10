@@ -5,6 +5,7 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("api/parse/", views.parse_entry, name="parse_entry"),
     path("api/save/", views.save_entry, name="save_entry"),
+    path("api/confirm-actions/", views.confirm_actions, name="confirm_actions"),
     path("expenses/", views_crud.expense_list, name="expense_list"),
     path("expenses/<int:pk>/", views_crud.expense_detail, name="expense_detail"),
     path("expenses/<int:pk>/edit/", views_crud.expense_edit, name="expense_edit"),
