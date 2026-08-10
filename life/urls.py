@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views, views_crud
+from . import views, views_crud, views_pwa
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -37,6 +37,10 @@ urlpatterns = [
     path("installments/<int:pk>/edit/", views_crud.installment_edit, name="installment_edit"),
     path("installments/<int:pk>/pay/", views_crud.installment_pay, name="installment_pay"),
     path("dashboard/", views_crud.dashboard, name="dashboard"),
+    # PWA
+    path("manifest.json", views_pwa.manifest, name="manifest"),
+    path("sw.js", views_pwa.service_worker, name="service_worker"),
+    path("pwa-icon/<int:size>/", views_pwa.pwa_icon, name="pwa_icon"),
     path("reminders/", views_crud.reminder_list, name="reminder_list"),
     path("reminders/create/", views_crud.reminder_create, name="reminder_create"),
     path("reminders/<int:pk>/edit/", views_crud.reminder_edit, name="reminder_edit"),
