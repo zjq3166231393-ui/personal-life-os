@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from common.models import NotificationLog
 from .ai_provider import FakeProvider, get_provider, set_provider
+from .ai_router import route_parse, _rule_confidence, _detect_multi_intent
 from .ai_schema import validate_ai_response
 from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
 from .parser import parse_text
@@ -961,3 +962,33 @@ class AIProviderTests(SimpleTestCase):
         result = self.fake.parse("午餐 18 元，提醒我交话费")
         ok, errs = validate_ai_response(result)
         self.assertTrue(ok, msg=str(errs))
+
+
+class AIRouterTests(SimpleTestCase):
+    def test_simple_expense_uses_rule(self):
+        result = route_parse("午饭 18 元")
+        self.assertEqual(result["source"], "rule")
+        self.assertEqual(result["confidence"], "high")
+
+    def test_multi_intent_triggers_ai(self):
+        result = route_parse("午饭 18 元，提醒我明天交话费")
+        self.assertIn(result["source"], ("ai", "fallback"))
+
+    def test_source_is_present(self):
+        result = route_parse("测试")
+        self.assertIn(result["source"], ("rule", "ai", "fallback"))
+
+    def test_error_field_present(self):
+        result = route_parse("测试")
+        self.assertTrue(result["error"] is None or isinstance(result["error"], str))
+
+    def test_detect_multi_intent(self):
+        self.assertTrue(_detect_multi_intent("午饭 18 元，打车 20 元"))
+        self.assertTrue(_detect_multi_intent("午饭 18 元，提醒我交话费"))
+        self.assertFalse(_detect_multi_intent("午饭 18 元"))
+
+    def test_rule_confidence_high(self):
+        self.assertEqual(_rule_confidence({"kind": "expense", "amount": "18", "category": "餐饮"}), "high")
+
+    def test_rule_confidence_low(self):
+        self.assertEqual(_rule_confidence({"kind": "note"}), "medium")

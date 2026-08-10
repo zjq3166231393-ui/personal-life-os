@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 
 from common.audit import record
+from .ai_router import route_parse
 from .models import Budget, Category, Entry, Expense, InstallmentPlan, RecurringExpense, Reminder, Task
 from .parser import parse_text
 
@@ -80,7 +81,13 @@ def parse_entry(request):
         return HttpResponseBadRequest("请输入需要记录的内容。")
     if not isinstance(text, str) or not text.strip():
         return HttpResponseBadRequest("请输入需要记录的内容。")
-    return JsonResponse({"draft": parse_text(text), "raw_text": text.strip()})
+
+    result = route_parse(text, user=request.user)
+    return JsonResponse({
+        "result": result,
+        "raw_text": text.strip(),
+        "source": result["source"],
+    })
 
 
 @login_required
