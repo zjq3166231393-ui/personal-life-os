@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from common.audit import record
-from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Task
+from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Review, Task
 
 
 def _user_queryset(model, request):
@@ -782,6 +782,83 @@ def dashboard(request):
         "top_task": top_task, "top_done": top_done,
         "week_completed": week_completed,
     })
+
+
+# ── Review ─────────────────────────────────────────────────────────
+
+@login_required
+def review(request):
+    from calendar import monthrange
+    from datetime import date, timedelta
+    from decimal import Decimal
+    from django.db.models import Q, Sum
+
+    today = date.today()
+    period = request.GET.get("period", "weekly")
+
+    if period == "weekly":
+        start = today - timedelta(days=today.weekday())  # Monday
+        end = start + timedelta(days=6)
+    else:
+        start = date(today.year, today.month, 1)
+        _, ld = monthrange(today.year, today.month)
+        end = date(today.year, today.month, ld)
+
+    # Save confirmed review
+    if request.method == "POST" and request.POST.get("content"):
+        Review.objects.update_or_create(
+            user=request.user, period=period, period_start=start,
+            defaults={"content": request.POST["content"], "is_confirmed": True, "period_end": end},
+        )
+        return redirect(f"/review/?period={period}")
+
+    # Existing saved review
+    existing = Review.objects.filter(user=request.user, period=period, period_start=start, is_confirmed=True).first()
+
+    # Generate draft
+    base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
+    period_qs = base.filter(occurred_at__gte=start, occurred_at__lte=end)
+    total_exp = period_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    total_inc = period_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+
+    tasks_done = Task.objects.filter(user=request.user, is_deleted=False, status="completed", completed_at__date__gte=start, completed_at__date__lte=end)
+    tasks_undone = Task.objects.filter(user=request.user, is_deleted=False, status__in=["todo", "in_progress"], created_at__date__lte=end)
+    overdue = tasks_undone.filter(due_at__date__lt=today)
+
+    upcoming = Task.objects.filter(user=request.user, is_deleted=False, status__in=["todo", "in_progress"], due_at__date__gte=today).order_by("due_at")[:3]
+
+    budget = Budget.objects.filter(user=request.user, category__isnull=True, month=date(today.year, today.month, 1)).first()
+
+    draft = f"""## {start} ~ {end} {period_label(period)}复盘
+
+### 完成了什么
+{chr(10).join(f'- ✅ {t.title}' for t in tasks_done[:10]) if tasks_done else '- 本周暂无已完成任务'}
+
+### 未完成
+{chr(10).join(f'- ⏳ {t.title}' for t in tasks_undone[:5]) if tasks_undone else '- 没有未完成任务'}
+
+### {period_label(period)}消费
+- 支出: ¥{total_exp:.2f}
+- 收入: ¥{total_inc:.2f}
+- 结余: ¥{total_inc - total_exp:.2f}
+- 预算: {'¥' + str(budget.amount) if budget else '未设置'}
+
+### 异常提醒
+{chr(10).join(f'- ⚠ {t.title} (逾期)' for t in overdue[:5]) if overdue else '- 无异常'}
+
+### 下周期待
+{chr(10).join(f'- 📌 {t.title}' for t in upcoming) if upcoming else '- 暂无'}
+"""
+
+    return render(request, "life/review.html", {
+        "period": period, "start": start, "end": end,
+        "draft": draft if not existing else existing.content,
+        "is_confirmed": existing is not None,
+    })
+
+
+def period_label(p):
+    return "本周" if p == "weekly" else "本月"
 
 
 # ── Reminder CRUD ─────────────────────────────────────────────────────

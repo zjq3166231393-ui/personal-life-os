@@ -45,4 +45,5 @@ urlpatterns = [
     path("reminders/create/", views_crud.reminder_create, name="reminder_create"),
     path("reminders/<int:pk>/edit/", views_crud.reminder_edit, name="reminder_edit"),
     path("reminders/<int:pk>/toggle/", views_crud.reminder_toggle, name="reminder_toggle"),
+    path("review/", views_crud.review, name="review"),
 ]

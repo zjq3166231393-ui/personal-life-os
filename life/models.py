@@ -379,3 +379,28 @@ class ProposedAction(models.Model):
 
     def __str__(self):
         return f"{self.get_action_type_display()}：{self.title}"
+
+
+class Review(models.Model):
+    """Weekly or monthly review — draft generated, user confirms."""
+
+    class Period(models.TextChoices):
+        WEEKLY = "weekly", "每周"
+        MONTHLY = "monthly", "每月"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews")
+    period = models.CharField(max_length=20, choices=Period.choices)
+    period_start = models.DateField()
+    period_end = models.DateField()
+    content = models.TextField(help_text="Markdown content of the review")
+    is_confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-period_start"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "period", "period_start"], name="unique_review_per_user_period"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_period_display()}复盘 {self.period_start}"
