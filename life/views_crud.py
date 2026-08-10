@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from common.audit import record
-from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Review, Task
+from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Review, Suggestion, Task
 
 
 def _user_queryset(model, request):
@@ -762,6 +762,26 @@ def dashboard(request):
     top_task = tasks_all.filter(status__in=["todo", "in_progress"]).order_by("-priority", "due_at").first()
     top_done = top_task is None  # no tasks = all done
 
+    # ── suggestions generation ───────────────────────────────────
+    suggest_display = Suggestion.objects.filter(user=request.user, generated_at=today).exclude(feedback__in=["not_useful", "dismissed"])[:5]
+    if not suggest_display.exists() and today.day % 3 == 0:  # Generate every 3 days
+        # Budget warning
+        if budget_amount > 0 and total_expense > budget_amount * Decimal("0.8"):
+            Suggestion.objects.create(user=request.user, title="预算即将超支", evidence=f"本月已花 ¥{total_expense:.0f}，预算 ¥{budget_amount}，执行率 {budget_pct}%", category="budget")
+        # Category spike vs 3-month average
+        for c in categories:
+            cat_month = float(month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or 0)
+            if cat_month > 0:
+                three_mo = base.filter(type="expense", category=c, occurred_at__gte=today - timedelta(days=90)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+                three_avg = float(three_mo) / 3
+                if three_avg > 0 and cat_month > three_avg * 1.3:
+                    pct = round((cat_month - three_avg) / three_avg * 100)
+                    Suggestion.objects.create(user=request.user, title=f"{c.name}支出偏高", evidence=f"本月 ¥{cat_month:.0f}，比近3月月均 ¥{three_avg:.0f} 高 {pct}%", category="spending")
+        # Overdue tasks
+        if overdue_count > 2:
+            Suggestion.objects.create(user=request.user, title=f"有 {overdue_count} 个逾期任务", evidence=f"逾期任务数: {overdue_count}，建议今日优先处理最高优先级任务", category="task")
+        suggest_display = Suggestion.objects.filter(user=request.user, generated_at=today)[:5]
+
     return render(request, "life/dashboard.html", {
         "today": today, "month_start": month_start,
         "total_expense": total_expense, "total_income": total_income,
@@ -781,6 +801,7 @@ def dashboard(request):
         "overdue_count": overdue_count, "streak": streak,
         "top_task": top_task, "top_done": top_done,
         "week_completed": week_completed,
+        "suggestions": suggest_display,
     })
 
 
@@ -859,6 +880,14 @@ def review(request):
 
 def period_label(p):
     return "本周" if p == "weekly" else "本月"
+
+
+@login_required
+def suggestion_feedback(request, pk, fb):
+    s = get_object_or_404(Suggestion, pk=pk, user=request.user)
+    s.feedback = fb
+    s.save()
+    return redirect("dashboard")
 
 
 # ── Reminder CRUD ─────────────────────────────────────────────────────

@@ -404,3 +404,20 @@ class Review(models.Model):
 
     def __str__(self):
         return f"{self.get_period_display()}复盘 {self.period_start}"
+
+
+class Suggestion(models.Model):
+    """Data-backed suggestion — every suggestion must cite evidence."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="suggestions")
+    title = models.CharField(max_length=300)
+    evidence = models.TextField(help_text="Data basis for this suggestion, e.g. '餐饮本月 ¥820，比过去3月均值 ¥670 高 22%'")
+    category = models.CharField(max_length=40, blank=True, help_text="e.g. spending/task/reminder/budget")
+    feedback = models.CharField(max_length=20, blank=True, help_text="useful/not_useful/dismissed")
+    generated_at = models.DateField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-generated_at"]
+
+    def __str__(self):
+        return f"💡 {self.title}"

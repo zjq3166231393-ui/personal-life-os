@@ -38,6 +38,13 @@
 <!-- daily trend -->
 <section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">每日消费趋势</h2><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></section>
 
+<!-- suggestions -->
+{% if suggestions %}
+<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">💡 建议</h2>
+{% for s in suggestions %}<div class="d-flex justify-content-between align-items-start border-bottom py-1"><div><strong>{{ s.title }}</strong><p class="text-secondary small mb-0">{{ s.evidence }}</p></div><div class="text-nowrap ms-2"><a href="{% url 'suggestion_feedback' s.pk 'useful' %}" class="btn btn-sm btn-outline-success">👍</a><a href="{% url 'suggestion_feedback' s.pk 'not_useful' %}" class="btn btn-sm btn-outline-danger ms-1">👎</a><a href="{% url 'suggestion_feedback' s.pk 'dismissed' %}" class="btn btn-sm btn-outline-secondary ms-1">✕</a></div></div>{% endfor %}
+</section>
+{% endif %}
+
 <!-- anomaly detection -->
 {% if anomalies %}
 <section class="card shadow-sm p-3 p-md-4 mb-3" style="border-left:4px solid #ef4444"><h2 class="h6 fw-bold mb-2 text-danger">异常提醒</h2>

@@ -46,4 +46,5 @@ urlpatterns = [
     path("reminders/<int:pk>/edit/", views_crud.reminder_edit, name="reminder_edit"),
     path("reminders/<int:pk>/toggle/", views_crud.reminder_toggle, name="reminder_toggle"),
     path("review/", views_crud.review, name="review"),
+    path("suggestion/<int:pk>/<str:fb>/", views_crud.suggestion_feedback, name="suggestion_feedback"),
 ]
