@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from common.audit import record
-from .models import Budget, Category, Expense, Note, Task
+from .models import Budget, Category, Expense, Note, RecurringExpense, Task
 
 
 def _user_queryset(model, request):
@@ -352,3 +352,65 @@ def budget(request):
         "over_total": total_amount > 0 and spent_total > total_amount,
         "cat_rows": cat_rows,
     })
+
+
+# ── Recurring Expense CRUD ───────────────────────────────────────────
+
+@login_required
+def recurring_list(request):
+    from django.db.models import Q
+    items = RecurringExpense.objects.filter(user=request.user).select_related("category")
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    return render(request, "life/recurring_list.html", {"items": items, "categories": categories})
+
+
+@login_required
+def recurring_create(request):
+    from datetime import date
+    if request.method == "POST":
+        RecurringExpense.objects.create(
+            user=request.user,
+            name=request.POST.get("name", "")[:200],
+            category_id=int(request.POST.get("category")) if request.POST.get("category") else None,
+            amount=request.POST.get("amount", "0"),
+            frequency=request.POST.get("frequency", "monthly"),
+            due_day=int(request.POST.get("due_day", "1")),
+            start_date=request.POST.get("start_date", date.today().isoformat()),
+            remind_days_before=int(request.POST.get("remind_days_before", "3")),
+        )
+        return redirect("recurring_list")
+    from django.db.models import Q
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    return render(request, "life/recurring_edit.html", {"item": None, "categories": categories})
+
+
+@login_required
+def recurring_edit(request, pk):
+    item = get_object_or_404(RecurringExpense, pk=pk)
+    _check_owner(item, request)
+    if request.method == "POST":
+        item.name = request.POST.get("name", item.name)[:200]
+        item.amount = request.POST.get("amount", item.amount)
+        item.frequency = request.POST.get("frequency", item.frequency)
+        item.due_day = int(request.POST.get("due_day", item.due_day))
+        item.start_date = request.POST.get("start_date", item.start_date)
+        item.end_date = request.POST.get("end_date") or None
+        item.remind_days_before = int(request.POST.get("remind_days_before", item.remind_days_before))
+        cat_id = request.POST.get("category")
+        item.category_id = int(cat_id) if cat_id else None
+        item.save()
+        return redirect("recurring_list")
+    from django.db.models import Q
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    return render(request, "life/recurring_edit.html", {"item": item, "categories": categories})
+
+
+@login_required
+def recurring_deactivate(request, pk):
+    item = get_object_or_404(RecurringExpense, pk=pk)
+    _check_owner(item, request)
+    if request.method == "POST":
+        item.is_active = False
+        item.save()
+        return redirect("recurring_list")
+    return render(request, "life/recurring_delete.html", {"item": item})

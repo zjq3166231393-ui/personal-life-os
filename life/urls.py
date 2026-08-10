@@ -22,4 +22,8 @@ urlpatterns = [
     path("categories/<int:pk>/edit/", views_crud.category_edit, name="category_edit"),
     path("categories/<int:pk>/deactivate/", views_crud.category_deactivate, name="category_deactivate"),
     path("budget/", views_crud.budget, name="budget"),
+    path("recurring/", views_crud.recurring_list, name="recurring_list"),
+    path("recurring/create/", views_crud.recurring_create, name="recurring_create"),
+    path("recurring/<int:pk>/edit/", views_crud.recurring_edit, name="recurring_edit"),
+    path("recurring/<int:pk>/deactivate/", views_crud.recurring_deactivate, name="recurring_deactivate"),
 ]

@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 
-from .models import Budget, Category, Entry, Expense, Note, Task
+from .models import Budget, Category, Entry, Expense, Note, RecurringExpense, Task
 from .parser import parse_text
 
 
@@ -374,3 +374,71 @@ class BudgetTests(TestCase):
         r = self.client.get("/budget/")
         self.assertContains(r, "1000")
         self.assertNotContains(r, "9999")
+
+
+class RecurringExpenseTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.cat = Category.objects.create(name="住房", type="expense")
+        cls.recurring = RecurringExpense.objects.create(
+            user=cls.user, name="房租", category=cls.cat, amount=Decimal("3000"),
+            frequency="monthly", due_day=5, start_date="2026-01-01",
+        )
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_create_recurring(self):
+        r = RecurringExpense.objects.get(name="房租")
+        self.assertEqual(r.frequency, "monthly")
+        self.assertEqual(r.due_day, 5)
+        self.assertIsInstance(r.amount, Decimal)
+        self.assertTrue(r.is_active)
+
+    def test_list_shows_own_recurring(self):
+        r = self.client.get("/recurring/")
+        self.assertContains(r, "房租")
+        self.assertContains(r, "3000")
+
+    def test_create_via_form(self):
+        self.client.post("/recurring/create/", {
+            "name": "话费", "amount": "59", "frequency": "monthly",
+            "due_day": "15", "start_date": "2026-08-01",
+            "category": str(self.cat.pk), "remind_days_before": "2",
+        })
+        item = RecurringExpense.objects.get(user=self.user, name="话费")
+        self.assertEqual(item.amount, Decimal("59"))
+        self.assertEqual(item.remind_days_before, 2)
+
+    def test_edit_recurring(self):
+        self.client.post(f"/recurring/{self.recurring.pk}/edit/", {
+            "name": "房租+水电", "amount": "3200", "frequency": "monthly",
+            "due_day": "1", "start_date": "2026-01-01", "remind_days_before": "3",
+            "category": str(self.cat.pk),
+        })
+        self.recurring.refresh_from_db()
+        self.assertEqual(self.recurring.name, "房租+水电")
+        self.assertEqual(self.recurring.amount, Decimal("3200"))
+
+    def test_deactivate(self):
+        self.client.post(f"/recurring/{self.recurring.pk}/deactivate/")
+        self.recurring.refresh_from_db()
+        self.assertFalse(self.recurring.is_active)
+
+    def test_other_user_cannot_edit(self):
+        User.objects.create_user("bob", password="passB")
+        self.client.login(username="bob", password="passB")
+        r = self.client.get(f"/recurring/{self.recurring.pk}/edit/")
+        self.assertEqual(r.status_code, 404)
+
+    def test_other_user_list_excludes(self):
+        other = User.objects.create_user("bob", password="passB")
+        RecurringExpense.objects.create(user=other, name="Bob 的账单", amount=Decimal("100"), frequency="monthly", due_day=1, start_date="2026-01-01")
+        self.client.login(username="alice", password="passA")
+        r = self.client.get("/recurring/")
+        self.assertNotContains(r, "Bob 的账单")
+
+    def test_remind_days_before_default(self):
+        item = RecurringExpense.objects.create(user=self.user, name="保险", amount=Decimal("500"), frequency="yearly", due_day=1, start_date="2026-01-01")
+        self.assertEqual(item.remind_days_before, 3)

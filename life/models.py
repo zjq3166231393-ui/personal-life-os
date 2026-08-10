@@ -156,3 +156,34 @@ class Budget(models.Model):
     def __str__(self):
         scope = self.category.name if self.category else "总预算"
         return f"{self.month:%Y-%m} {scope} ¥{self.amount}"
+
+
+class RecurringExpense(models.Model):
+    """Recurring bill: rent, phone, subscriptions, insurance, etc."""
+
+    class Frequency(models.TextChoices):
+        WEEKLY = "weekly", "每周"
+        MONTHLY = "monthly", "每月"
+        QUARTERLY = "quarterly", "每季度"
+        YEARLY = "yearly", "每年"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="recurring_expenses")
+    name = models.CharField(max_length=200)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="recurring_expenses")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    frequency = models.CharField(max_length=20, choices=Frequency.choices, default="monthly")
+    due_day = models.PositiveSmallIntegerField(help_text="Day of month (1-31)")
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True, help_text="留空表示无截止日期")
+    remind_days_before = models.PositiveSmallIntegerField(default=3)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["is_active", "due_day"]
+
+    def __str__(self):
+        freq = dict(self.Frequency.choices).get(self.frequency, self.frequency)
+        status = "" if self.is_active else " (已停用)"
+        return f"{freq}{self.due_day}日 {self.name} ¥{self.amount}{status}"
