@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 
 from .models import Budget, Category, Entry, Expense, InstallmentPlan, Note, RecurringExpense, Task
 from .parser import parse_text
@@ -257,10 +258,33 @@ class TaskTests(TestCase):
     def setUpTestData(cls):
         cls.user = User.objects.create_user("test", password="pass")
 
-    def test_create_task(self):
+    def test_create_task_defaults(self):
         task = Task.objects.create(user=self.user, title="交话费", priority=1)
-        self.assertFalse(task.completed)
+        self.assertEqual(task.status, "todo")
+        self.assertEqual(task.source, "manual")
         self.assertIsNone(task.completed_at)
+        self.assertIsNone(task.parent_task)
+
+    def test_task_status_flow(self):
+        task = Task.objects.create(user=self.user, title="任务")
+        task.status = "in_progress"
+        task.save()
+        self.assertEqual(task.status, "in_progress")
+        task.status = "completed"
+        task.completed_at = timezone.now()
+        task.save()
+        self.assertEqual(task.status, "completed")
+        self.assertIsNotNone(task.completed_at)
+
+    def test_task_with_parent(self):
+        parent = Task.objects.create(user=self.user, title="大任务")
+        child = Task.objects.create(user=self.user, title="子任务", parent_task=parent)
+        self.assertEqual(child.parent_task, parent)
+        self.assertIn(child, parent.subtasks.all())
+
+    def test_task_with_description(self):
+        task = Task.objects.create(user=self.user, title="描述任务", description="详细描述")
+        self.assertEqual(task.description, "详细描述")
 
     def test_task_belongs_to_user(self):
         Task.objects.create(user=self.user, title="user")

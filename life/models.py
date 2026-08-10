@@ -101,23 +101,39 @@ class Expense(models.Model):
 
 
 class Task(models.Model):
+    class Status(models.TextChoices):
+        TODO = "todo", "待办"
+        IN_PROGRESS = "in_progress", "进行中"
+        COMPLETED = "completed", "已完成"
+        CANCELLED = "cancelled", "已取消"
+        ARCHIVED = "archived", "已归档"
+
+    class Source(models.TextChoices):
+        VOICE = "voice", "语音"
+        TEXT = "text", "文本"
+        MANUAL = "manual", "手动"
+        AI = "ai", "AI"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tasks")
     title = models.CharField(max_length=200)
-    raw_text = models.TextField(blank=True)
-    due_at = models.DateTimeField(null=True, blank=True)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default="todo")
     priority = models.PositiveSmallIntegerField(default=2, help_text="1 高，2 中，3 低")
-    completed = models.BooleanField(default=False)
+    due_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    source = models.CharField(max_length=20, choices=Source.choices, default="manual")
+    parent_task = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="subtasks")
+    raw_text = models.TextField(blank=True)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["completed", "-priority", "due_at"]
+        ordering = ["status", "-priority", "due_at"]
 
     def __str__(self):
-        return f"待办：{self.title}"
+        return f"[{self.get_status_display()}] {self.title}"
 
 
 class Note(models.Model):

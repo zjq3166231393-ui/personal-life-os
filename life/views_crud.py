@@ -145,17 +145,19 @@ def task_edit(request, pk):
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
     _check_owner(task, request)
     if request.method == "POST":
-        task.title = request.POST.get("title", task.title)
+        task.title = request.POST.get("title", task.title)[:200]
+        task.description = request.POST.get("description", "")[:5000]
         task.priority = int(request.POST.get("priority", task.priority))
         task.due_at = request.POST.get("due_at") or None
-        completed = request.POST.get("completed") == "on"
-        if completed and not task.completed:
+        task.source = request.POST.get("source", task.source)
+        new_status = request.POST.get("status", task.status)
+        if new_status == "completed" and task.status != "completed":
             task.completed_at = timezone.now()
-        elif not completed:
+        elif new_status != "completed":
             task.completed_at = None
-        task.completed = completed
+        task.status = new_status
         task.save()
-        if completed:
+        if new_status == "completed":
             record(request.user, "task.complete", task.pk, f"完成任务: {task.title}")
         else:
             record(request.user, "task.update", task.pk, f"修改任务: {task.title}")
