@@ -303,3 +303,77 @@ class Reminder(models.Model):
 
     def __str__(self):
         return f"🔔 {self.title} ({self.get_reminder_type_display()})"
+
+
+# ── AI Conversation models ──────────────────────────────────────────
+
+
+class ConversationLog(models.Model):
+    """Raw AI input — never stores API keys."""
+
+    class InputType(models.TextChoices):
+        VOICE = "voice", "语音"
+        TEXT = "text", "文本"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "待处理"
+        CONFIRMED = "confirmed", "已确认"
+        CANCELLED = "cancelled", "已取消"
+        ERROR = "error", "解析失败"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="conversations")
+    raw_text = models.TextField()
+    input_type = models.CharField(max_length=20, choices=InputType.choices, default="text")
+    model = models.CharField(max_length=100, blank=True, help_text="AI model name, e.g. deepseek-v3")
+    status = models.CharField(max_length=20, choices=Status.choices, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        snippet = self.raw_text[:60] + "…" if len(self.raw_text) > 60 else self.raw_text
+        return f"[{self.get_status_display()}] {snippet}"
+
+
+class ParseResult(models.Model):
+    """AI parse output — draft only, never auto-saved to business tables."""
+
+    conversation = models.ForeignKey(ConversationLog, on_delete=models.CASCADE, related_name="parse_results")
+    confidence = models.FloatField(default=0.0, help_text="0.0–1.0")
+    draft_json = models.JSONField(default=dict, help_text="Raw AI output as JSON")
+    is_confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"ParseResult(confidence={self.confidence:.2f}, confirmed={self.is_confirmed})"
+
+
+class ProposedAction(models.Model):
+    """One pending action from AI parse — user confirms before saving to real models."""
+
+    class ActionType(models.TextChoices):
+        CREATE_EXPENSE = "create_expense", "新建支出"
+        CREATE_TASK = "create_task", "新建任务"
+        CREATE_REMINDER = "create_reminder", "新建提醒"
+        CREATE_NOTE = "create_note", "新建记事"
+
+    parse_result = models.ForeignKey(ParseResult, on_delete=models.CASCADE, related_name="proposed_actions")
+    action_type = models.CharField(max_length=30, choices=ActionType.choices)
+    title = models.CharField(max_length=200)
+    category = models.CharField(max_length=50, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    due_at = models.DateTimeField(null=True, blank=True)
+    event_at = models.DateTimeField(null=True, blank=True)
+    is_confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.get_action_type_display()}：{self.title}"

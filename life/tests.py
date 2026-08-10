@@ -5,7 +5,7 @@ from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
 from common.models import NotificationLog
-from .models import Budget, Category, Entry, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Task
+from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
 from .parser import parse_text
 
 
@@ -770,3 +770,58 @@ class ScanRemindersTests(TestCase):
         log = NotificationLog.objects.first()
         self.assertEqual(log.notification_type, "reminder")
         self.assertFalse(log.is_read)
+
+
+class AIParseModelTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+
+    def test_one_conversation_many_actions(self):
+        conv = ConversationLog.objects.create(user=self.user, raw_text="午饭 18 元，提醒我明天交话费", input_type="text", model="deepseek-v3")
+        result = ParseResult.objects.create(conversation=conv, confidence=0.95, draft_json={"intents": 2})
+        a1 = ProposedAction.objects.create(parse_result=result, action_type="create_expense", title="午饭", amount=Decimal("18"))
+        a2 = ProposedAction.objects.create(parse_result=result, action_type="create_task", title="交话费", due_at="2026-08-11T09:00:00Z")
+        self.assertEqual(result.proposed_actions.count(), 2)
+        self.assertEqual(conv.parse_results.count(), 1)
+
+    def test_no_api_key_field(self):
+        field_names = [f.name for f in ConversationLog._meta.get_fields()]
+        self.assertNotIn("api_key", field_names)
+        self.assertNotIn("secret", field_names)
+        self.assertNotIn("password", field_names)
+
+    def test_proposed_action_does_not_create_expense(self):
+        """ProposedAction is a draft — never auto-creates real Expense records."""
+        conv = ConversationLog.objects.create(user=self.user, raw_text="午餐 20 元")
+        result = ParseResult.objects.create(conversation=conv, confidence=0.9)
+        ProposedAction.objects.create(parse_result=result, action_type="create_expense", title="午餐", amount=Decimal("20"))
+        # No Expense should be created
+        self.assertEqual(Expense.objects.count(), 0)
+
+    def test_proposed_action_no_user_field(self):
+        """ProposedAction gets user via ParseResult → ConversationLog chain."""
+        conv = ConversationLog.objects.create(user=self.user, raw_text="test")
+        result = ParseResult.objects.create(conversation=conv, confidence=0.8)
+        action = ProposedAction.objects.create(parse_result=result, action_type="create_note", title="备忘")
+        # Access user through the chain
+        self.assertEqual(action.parse_result.conversation.user, self.user)
+
+    def test_conversation_status_flow(self):
+        conv = ConversationLog.objects.create(user=self.user, raw_text="test")
+        self.assertEqual(conv.status, "pending")
+        conv.status = "confirmed"
+        conv.save()
+        self.assertEqual(conv.status, "confirmed")
+
+    def test_raw_text_preserved(self):
+        original = "今天中午吃饭花了 18 元，顺便提醒我明天 9 点开会"
+        conv = ConversationLog.objects.create(user=self.user, raw_text=original)
+        self.assertEqual(conv.raw_text, original)
+
+    def test_draft_json_stored(self):
+        draft = {"expenses": [{"title": "午餐", "amount": 18}], "tasks": []}
+        conv = ConversationLog.objects.create(user=self.user, raw_text="午餐 18 元")
+        result = ParseResult.objects.create(conversation=conv, confidence=0.92, draft_json=draft)
+        result.refresh_from_db()
+        self.assertEqual(result.draft_json["expenses"][0]["amount"], 18)
