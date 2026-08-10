@@ -1,0 +1,18 @@
+[Unit]
+Description=Personal Life OS
+After=network.target mysql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/lifeos
+EnvironmentFile=/opt/lifeos/.env
+ExecStart=/opt/lifeos/.venv/bin/gunicorn config.wsgi:application -c deploy/gunicorn.conf.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/lifeos/logs/systemd-out.log
+StandardError=append:/opt/lifeos/logs/systemd-err.log
+
+[Install]
+WantedBy=multi-user.target
