@@ -543,3 +543,62 @@ class InstallmentPlanTests(TestCase):
     def test_amount_is_decimal(self):
         self.assertIsInstance(self.plan.total_amount, Decimal)
         self.assertIsInstance(self.plan.installment_amount, Decimal)
+
+
+class TaskViewTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.t1 = Task.objects.create(user=cls.user, title="今天的任务", priority=1, due_at=timezone.now().replace(hour=12, minute=0, second=0, microsecond=0))
+        cls.t2 = Task.objects.create(user=cls.user, title="下周的任务", priority=2, due_at=timezone.now().replace(hour=12, minute=0, second=0, microsecond=0) + timezone.timedelta(days=8))
+        cls.t3 = Task.objects.create(user=cls.user, title="已完成任务", priority=3, status="completed", completed_at=timezone.now())
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_filter_all_shows_active(self):
+        r = self.client.get("/tasks/?filter=all")
+        self.assertContains(r, "今天的任务")
+        self.assertContains(r, "下周的任务")
+        self.assertNotContains(r, "已完成任务")
+
+    def test_filter_today(self):
+        r = self.client.get("/tasks/?filter=today")
+        self.assertContains(r, "今天的任务")
+
+    def test_filter_week(self):
+        r = self.client.get("/tasks/?filter=week")
+        self.assertContains(r, "今天的任务")
+        self.assertNotContains(r, "下周的任务")  # 8 days out, not in week
+
+    def test_filter_completed(self):
+        r = self.client.get("/tasks/?filter=completed")
+        self.assertContains(r, "已完成任务")
+        self.assertNotContains(r, "今天的任务")
+
+    def test_filter_by_priority(self):
+        r = self.client.get("/tasks/?filter=all&priority=1")
+        self.assertContains(r, "今天的任务")
+        self.assertNotContains(r, "下周的任务")
+
+    def test_complete_action(self):
+        self.client.get(f"/tasks/{self.t1.pk}/complete/")
+        self.t1.refresh_from_db()
+        self.assertEqual(self.t1.status, "completed")
+        self.assertIsNotNone(self.t1.completed_at)
+
+    def test_postpone_action(self):
+        old = self.t1.due_at
+        self.client.get(f"/tasks/{self.t1.pk}/postpone/")
+        self.t1.refresh_from_db()
+        self.assertTrue(self.t1.due_at > old)
+
+    def test_cancel_action(self):
+        self.client.get(f"/tasks/{self.t1.pk}/cancel/")
+        self.t1.refresh_from_db()
+        self.assertEqual(self.t1.status, "cancelled")
+
+    def test_archive_action(self):
+        self.client.get(f"/tasks/{self.t3.pk}/archive/")
+        self.t3.refresh_from_db()
+        self.assertEqual(self.t3.status, "archived")

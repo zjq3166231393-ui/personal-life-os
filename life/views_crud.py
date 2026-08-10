@@ -131,8 +131,78 @@ def expense_delete(request, pk):
 
 @login_required
 def task_list(request):
-    tasks = _user_queryset(Task, request).order_by("completed", "-priority", "due_at")
-    return render(request, "life/task_list.html", {"tasks": tasks})
+    from datetime import date, timedelta
+    today = timezone.localdate()
+    qs = _user_queryset(Task, request)
+
+    filt = request.GET.get("filter", "all")
+    prio = request.GET.get("priority", "")
+
+    if filt == "today":
+        qs = qs.filter(status__in=["todo", "in_progress"], due_at__date=today)
+    elif filt == "week":
+        qs = qs.filter(status__in=["todo", "in_progress"], due_at__date__gte=today, due_at__date__lte=today + timedelta(days=7))
+    elif filt == "overdue":
+        qs = qs.filter(status__in=["todo", "in_progress"], due_at__date__lt=today)
+    elif filt == "completed":
+        qs = qs.filter(status="completed")
+    elif filt == "all":
+        qs = qs.filter(status__in=["todo", "in_progress"])
+    else:
+        qs = qs.filter(status__in=["todo", "in_progress"])
+
+    if prio and prio.isdigit():
+        qs = qs.filter(priority=int(prio))
+
+    tasks = qs.order_by("-priority", "due_at")
+    filters = [
+        ("all", "全部"), ("today", "今日"), ("week", "7天内"),
+        ("overdue", "已逾期"), ("completed", "已完成"),
+    ]
+    return render(request, "life/task_list.html", {
+        "tasks": tasks, "filter": filt, "priority": prio,
+        "filters": filters, "today": today,
+    })
+
+
+@login_required
+def task_complete(request, pk):
+    task = get_object_or_404(Task, pk=pk, is_deleted=False)
+    _check_owner(task, request)
+    task.status = "completed"
+    task.completed_at = timezone.now()
+    task.save()
+    record(request.user, "task.complete", task.pk, f"完成任务: {task.title}")
+    return redirect("task_list")
+
+
+@login_required
+def task_postpone(request, pk):
+    from datetime import timedelta
+    task = get_object_or_404(Task, pk=pk, is_deleted=False)
+    _check_owner(task, request)
+    if task.due_at:
+        task.due_at = task.due_at + timedelta(days=1)
+        task.save()
+    return redirect("task_list")
+
+
+@login_required
+def task_cancel(request, pk):
+    task = get_object_or_404(Task, pk=pk, is_deleted=False)
+    _check_owner(task, request)
+    task.status = "cancelled"
+    task.save()
+    return redirect("task_list")
+
+
+@login_required
+def task_archive(request, pk):
+    task = get_object_or_404(Task, pk=pk, is_deleted=False)
+    _check_owner(task, request)
+    task.status = "archived"
+    task.save()
+    return redirect("task_list")
 
 @login_required
 def task_detail(request, pk):
