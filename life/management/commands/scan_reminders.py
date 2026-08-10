@@ -3,8 +3,7 @@
 Usage:
     python manage.py scan_reminders
 
-No duplicates: if a notification for the same (user, reference_id, notification_type)
-exists from today, it is skipped.
+Idempotent: uses idempotency_key to prevent duplicate notifications.
 """
 from datetime import date, timedelta
 
@@ -21,6 +20,7 @@ class Command(BaseCommand):
     def handle(self, **options):
         today = timezone.localdate()
         tomorrow = today + timedelta(days=1)
+        now = timezone.now()
         created = 0
 
         reminders = Reminder.objects.filter(
@@ -30,14 +30,8 @@ class Command(BaseCommand):
         ).select_related("user")
 
         for r in reminders:
-            # Prevent duplicate: same user + same reference + same type today
-            already = NotificationLog.objects.filter(
-                user=r.user,
-                reference_id=r.pk,
-                notification_type="reminder",
-                created_at__date=today,
-            ).exists()
-            if already:
+            key = f"reminder-{r.pk}-{today.isoformat()}"
+            if NotificationLog.objects.filter(idempotency_key=key).exists():
                 continue
 
             NotificationLog.objects.create(
@@ -45,10 +39,13 @@ class Command(BaseCommand):
                 title=r.title,
                 body=f"提醒类型: {r.get_reminder_type_display()} · 事件日期: {r.event_at.date()}",
                 notification_type="reminder",
-                reference_id=r.pk,
+                source_type="Reminder",
+                source_id=r.pk,
+                scheduled_at=now,
+                status="pending",
+                idempotency_key=key,
             )
             created += 1
-            # Update last_triggered_at
-            Reminder.objects.filter(pk=r.pk).update(last_triggered_at=timezone.now())
+            Reminder.objects.filter(pk=r.pk).update(last_triggered_at=now)
 
         self.stdout.write(f"Scan complete. {created} new notification(s) created.")

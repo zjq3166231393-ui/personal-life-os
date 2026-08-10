@@ -773,7 +773,8 @@ class ScanRemindersTests(TestCase):
         call_command("scan_reminders")
         log = NotificationLog.objects.first()
         self.assertEqual(log.notification_type, "reminder")
-        self.assertFalse(log.is_read)
+        self.assertIsNone(log.read_at)
+        self.assertEqual(log.status, "pending")
 
 
 class AIParseModelTests(TestCase):
