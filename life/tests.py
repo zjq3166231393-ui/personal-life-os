@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
+from common.models import NotificationLog
 from .models import Budget, Category, Entry, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Task
 from .parser import parse_text
 
@@ -724,3 +725,48 @@ class RecurrenceTests(TestCase):
                                 recurrence_rule="yearly")
         nxt = t.next_occurrence()
         self.assertEqual(nxt.year, 2027)
+
+
+class ScanRemindersTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        today = timezone.now()
+        cls.reminder = Reminder.objects.create(
+            user=cls.user, title="今日提醒", reminder_type="custom",
+            event_at=today, remind_at=today,
+        )
+
+    def test_command_creates_notification(self):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command("scan_reminders", stdout=out)
+        self.assertIn("new notification", out.getvalue())
+        log = NotificationLog.objects.filter(user=self.user, title="今日提醒").first()
+        self.assertIsNotNone(log)
+
+    def test_command_no_duplicate(self):
+        from io import StringIO
+        from django.core.management import call_command
+        call_command("scan_reminders")
+        first_count = NotificationLog.objects.count()
+        call_command("scan_reminders")
+        self.assertEqual(NotificationLog.objects.count(), first_count)
+
+    def test_command_skips_disabled_reminder(self):
+        self.reminder.is_enabled = False
+        self.reminder.save()
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command("scan_reminders", stdout=out)
+        self.assertIn("0 new notification", out.getvalue())
+
+    def test_notification_fields(self):
+        from io import StringIO
+        from django.core.management import call_command
+        call_command("scan_reminders")
+        log = NotificationLog.objects.first()
+        self.assertEqual(log.notification_type, "reminder")
+        self.assertFalse(log.is_read)
