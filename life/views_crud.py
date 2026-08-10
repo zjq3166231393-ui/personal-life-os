@@ -701,6 +701,7 @@ def dashboard(request):
 
     # ── anomaly detection ─────────────────────────────────────────
     anomalies = []
+    categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
     # 1. Single transaction > 3x category average this month
     for c in categories:
         cat_expenses = month_qs.filter(type="expense", category=c).exclude(amount=0)
