@@ -8,16 +8,87 @@ from .parser import parse_text
 
 
 class ParserTests(SimpleTestCase):
-    def test_food_expense(self):
+    # ── 6 canonical examples ─────────────────────────────────────
+
+    def test_lunch_18_yuan(self):
         draft = parse_text("今天中午吃饭花了18元")
         self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["type"], "expense")
         self.assertEqual(draft["category"], "餐饮")
         self.assertEqual(draft["amount"], "18")
+        self.assertIn("吃饭", draft["title"])
 
-    def test_reminder(self):
+    def test_grocery_42_kuai(self):
+        draft = parse_text("晚上买菜 42 块")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["category"], "餐饮")
+        self.assertEqual(draft["amount"], "42")
+
+    def test_charge_3_yuan(self):
+        draft = parse_text("电瓶车充电 3 元")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["category"], "交通")
+        self.assertEqual(draft["amount"], "3")
+
+    def test_phone_bill_100(self):
+        draft = parse_text("交话费 100 元")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["category"], "生活缴费")
+        self.assertEqual(draft["amount"], "100")
+
+    def test_salary_5000(self):
+        draft = parse_text("收到工资 5000 元")
+        self.assertEqual(draft["kind"], "income")
+        self.assertEqual(draft["type"], "income")
+        self.assertEqual(draft["category"], "其他")
+        self.assertEqual(draft["amount"], "5000")
+        self.assertIn("工资", draft["title"])
+
+    def test_taxi_16_5(self):
+        draft = parse_text("打车 16.5 元")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["category"], "交通")
+        self.assertEqual(draft["amount"], "16.5")
+
+    # ── edge cases ───────────────────────────────────────────────
+
+    def test_no_amount_goes_to_note(self):
+        draft = parse_text("今天天气不错")
+        self.assertEqual(draft["kind"], "note")
+
+    def test_reminder_is_task(self):
         draft = parse_text("明天晚上8点提醒我交话费")
         self.assertEqual(draft["kind"], "task")
         self.assertIsNotNone(draft["due_at"])
+
+    def test_empty_text_still_parses(self):
+        draft = parse_text(".")
+        self.assertEqual(draft["kind"], "note")
+
+    def test_decimal_amount(self):
+        draft = parse_text("超市买水果 23.80 元")
+        self.assertEqual(draft["amount"], "23.80")
+        self.assertEqual(draft["category"], "餐饮")
+
+    def test_income_refund(self):
+        draft = parse_text("退款 199 元")
+        self.assertEqual(draft["kind"], "income")
+        self.assertEqual(draft["amount"], "199")
+
+    def test_yesterday_expense(self):
+        from datetime import date, timedelta
+        draft = parse_text("昨天加油 200 元")
+        self.assertEqual(draft["category"], "交通")
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        self.assertEqual(draft["occurred_on"], yesterday)
+
+    def test_shopping_category(self):
+        draft = parse_text("淘宝买衣服 299 元")
+        self.assertEqual(draft["category"], "购物")
+
+    def test_rent_expense(self):
+        draft = parse_text("交房租 3000 元")
+        self.assertEqual(draft["category"], "住房")
 
 
 class CategoryTests(TestCase):

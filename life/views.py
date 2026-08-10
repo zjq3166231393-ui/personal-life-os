@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 
 from common.audit import record
-from .models import Entry
+from .models import Category, Entry, Expense
 from .parser import parse_text
 
 
@@ -59,5 +59,21 @@ def save_entry(request):
     due_at = datetime.fromisoformat(draft["due_at"]) if draft.get("due_at") else None
     entry = Entry.objects.create(user=request.user, kind=draft["kind"], title=str(draft["title"])[:200], raw_text=raw_text, category=draft.get("category", ""), amount=amount, occurred_on=occurred_on, due_at=due_at, priority=int(draft.get("priority", 2)))
     record(request.user, "ai.save", entry.pk, f"保存记录: {entry.title}")
+
+    # Also create Expense record for income/expense entries with amount
+    if amount is not None and draft["kind"] in ("expense", "income"):
+        cat = None
+        cat_name = draft.get("category", "")
+        if cat_name:
+            from django.db.models import Q
+            cat = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), name=cat_name, is_active=True).first()
+        exp_type = draft.get("type", "expense")
+        occurred_at = timezone.make_aware(datetime(occurred_on.year, occurred_on.month, occurred_on.day, 12, 0)) if occurred_on else timezone.now()
+        Expense.objects.create(
+            user=request.user, type=exp_type, category=cat,
+            amount=amount, occurred_at=occurred_at, note=str(draft["title"])[:500],
+            raw_text=raw_text, source="text",
+        )
+
     return JsonResponse({"ok": True})
 
