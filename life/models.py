@@ -236,3 +236,38 @@ class InstallmentPlan(models.Model):
 
     def __str__(self):
         return f"{self.name} — {self.paid_periods}/{self.total_periods}期 ¥{self.installment_amount}/期"
+
+
+class Reminder(models.Model):
+    """Reminders: birthdays, bills, anniversaries, custom events."""
+
+    class Type(models.TextChoices):
+        BIRTHDAY = "birthday", "生日"
+        BILL = "bill", "账单"
+        CUSTOM = "custom", "自定义"
+        TASK = "task", "任务"
+
+    class Recurrence(models.TextChoices):
+        NONE = "none", "不重复"
+        DAILY = "daily", "每天"
+        WEEKLY = "weekly", "每周"
+        MONTHLY = "monthly", "每月"
+        YEARLY = "yearly", "每年"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reminders")
+    title = models.CharField(max_length=200)
+    reminder_type = models.CharField(max_length=20, choices=Type.choices, default="custom")
+    event_at = models.DateTimeField(help_text="事件发生的日期时间")
+    remind_at = models.DateTimeField(help_text="提醒触发时间 = event_at - remind_days")
+    remind_days_before = models.CharField(max_length=50, default="1", help_text="Comma-separated days, e.g. 1,7,15")
+    recurrence_rule = models.CharField(max_length=20, choices=Recurrence.choices, default="none")
+    is_enabled = models.BooleanField(default=True)
+    last_triggered_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["remind_at"]
+
+    def __str__(self):
+        return f"🔔 {self.title} ({self.get_reminder_type_display()})"

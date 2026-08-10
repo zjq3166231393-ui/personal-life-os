@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from common.audit import record
-from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Task
+from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Task
 
 
 def _user_queryset(model, request):
@@ -625,3 +625,68 @@ def dashboard(request):
         "rec_total": rec_total, "upcoming": upcoming[:10],
         "budget_amount": budget_amount, "budget_pct": budget_pct,
     })
+
+
+# ── Reminder CRUD ─────────────────────────────────────────────────────
+
+@login_required
+def reminder_list(request):
+    items = Reminder.objects.filter(user=request.user)
+    return render(request, "life/reminder_list.html", {"reminders": items})
+
+
+@login_required
+def reminder_create(request):
+    from datetime import date, timedelta
+    if request.method == "POST":
+        event_at = request.POST.get("event_at", "")
+        days = request.POST.get("remind_days_before", "1")
+        # Calculate remind_at from event_at - days
+        try:
+            et = timezone.datetime.fromisoformat(event_at)
+            if timezone.is_naive(et):
+                et = timezone.make_aware(et)
+            rt = et - timedelta(days=int(days.split(",")[0]))
+        except (ValueError, TypeError):
+            et = timezone.now()
+            rt = et
+        Reminder.objects.create(
+            user=request.user,
+            title=request.POST.get("title", "")[:200],
+            reminder_type=request.POST.get("reminder_type", "custom"),
+            event_at=et,
+            remind_at=rt,
+            remind_days_before=days,
+            recurrence_rule=request.POST.get("recurrence_rule", "none"),
+        )
+        return redirect("reminder_list")
+    return render(request, "life/reminder_edit.html", {"reminder": None})
+
+
+@login_required
+def reminder_edit(request, pk):
+    item = get_object_or_404(Reminder, pk=pk)
+    _check_owner(item, request)
+    if request.method == "POST":
+        item.title = request.POST.get("title", item.title)[:200]
+        item.reminder_type = request.POST.get("reminder_type", item.reminder_type)
+        item.recurrence_rule = request.POST.get("recurrence_rule", item.recurrence_rule)
+        item.is_enabled = request.POST.get("is_enabled") == "on"
+        event_at = request.POST.get("event_at", "")
+        if event_at:
+            et = timezone.datetime.fromisoformat(event_at)
+            if timezone.is_naive(et):
+                et = timezone.make_aware(et)
+            item.event_at = et
+        item.save()
+        return redirect("reminder_list")
+    return render(request, "life/reminder_edit.html", {"reminder": item})
+
+
+@login_required
+def reminder_toggle(request, pk):
+    item = get_object_or_404(Reminder, pk=pk)
+    _check_owner(item, request)
+    item.is_enabled = not item.is_enabled
+    item.save()
+    return redirect("reminder_list")

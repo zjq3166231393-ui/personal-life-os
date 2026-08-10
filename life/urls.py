@@ -35,4 +35,8 @@ urlpatterns = [
     path("installments/<int:pk>/edit/", views_crud.installment_edit, name="installment_edit"),
     path("installments/<int:pk>/pay/", views_crud.installment_pay, name="installment_pay"),
     path("dashboard/", views_crud.dashboard, name="dashboard"),
+    path("reminders/", views_crud.reminder_list, name="reminder_list"),
+    path("reminders/create/", views_crud.reminder_create, name="reminder_create"),
+    path("reminders/<int:pk>/edit/", views_crud.reminder_edit, name="reminder_edit"),
+    path("reminders/<int:pk>/toggle/", views_crud.reminder_toggle, name="reminder_toggle"),
 ]

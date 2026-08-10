@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
-from .models import Budget, Category, Entry, Expense, InstallmentPlan, Note, RecurringExpense, Task
+from .models import Budget, Category, Entry, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Task
 from .parser import parse_text
 
 
@@ -602,3 +602,55 @@ class TaskViewTests(TestCase):
         self.client.get(f"/tasks/{self.t3.pk}/archive/")
         self.t3.refresh_from_db()
         self.assertEqual(self.t3.status, "archived")
+
+
+class ReminderTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.r = Reminder.objects.create(
+            user=cls.user, title="姐姐生日", reminder_type="birthday",
+            event_at="2026-12-25T00:00:00Z", remind_at="2026-12-24T00:00:00Z",
+            recurrence_rule="yearly",
+        )
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_create_reminder(self):
+        r = self.r
+        self.assertEqual(r.title, "姐姐生日")
+        self.assertEqual(r.reminder_type, "birthday")
+        self.assertEqual(r.recurrence_rule, "yearly")
+        self.assertTrue(r.is_enabled)
+
+    def test_list_shows_reminder(self):
+        r = self.client.get("/reminders/")
+        self.assertContains(r, "姐姐生日")
+
+    def test_create_via_form(self):
+        self.client.post("/reminders/create/", {
+            "title": "交话费", "reminder_type": "bill",
+            "event_at": "2026-09-15T00:00", "remind_days_before": "1,7",
+            "recurrence_rule": "monthly",
+        })
+        item = Reminder.objects.get(user=self.user, title="交话费")
+        self.assertEqual(item.remind_days_before, "1,7")
+
+    def test_toggle_disables(self):
+        self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.r.refresh_from_db()
+        self.assertFalse(self.r.is_enabled)
+
+    def test_toggle_reenables(self):
+        self.r.is_enabled = False
+        self.r.save()
+        self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.r.refresh_from_db()
+        self.assertTrue(self.r.is_enabled)
+
+    def test_other_user_cannot_toggle(self):
+        User.objects.create_user("bob", password="passB")
+        self.client.login(username="bob", password="passB")
+        r = self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.assertEqual(r.status_code, 404)
