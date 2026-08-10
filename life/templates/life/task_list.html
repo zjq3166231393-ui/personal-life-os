@@ -33,15 +33,15 @@
     </div>
     <div class="actions mt-1 mt-md-0">
       {% if t.status == 'todo' or t.status == 'in_progress' %}
-      <a href="{% url 'task_complete' t.pk %}" class="btn btn-outline-success" title="完成" aria-label="完成任务">✓</a>
-      <a href="{% url 'task_postpone' t.pk %}" class="btn btn-outline-secondary" title="延期一天" aria-label="延期">⏰</a>
-      <a href="{% url 'task_cancel' t.pk %}" class="btn btn-outline-danger" title="取消" aria-label="取消任务">✕</a>
+      <a href="#" onclick="postAction('{% url 'task_complete' t.pk %}');return false" class="btn btn-outline-success" title="完成" aria-label="完成任务">✓</a>
+      <a href="#" onclick="postAction('{% url 'task_postpone' t.pk %}');return false" class="btn btn-outline-secondary" title="延期一天" aria-label="延期">⏰</a>
+      <a href="#" onclick="postAction('{% url 'task_cancel' t.pk %}');return false" class="btn btn-outline-danger" title="取消" aria-label="取消任务">✕</a>
       {% endif %}
       {% if t.status == 'completed' or t.status == 'cancelled' %}
-      <a href="{% url 'task_archive' t.pk %}" class="btn btn-outline-secondary" title="归档" aria-label="归档任务">📦</a>
+      <a href="#" onclick="postAction('{% url 'task_archive' t.pk %}');return false" class="btn btn-outline-secondary" title="归档" aria-label="归档任务">📦</a>
       {% endif %}
       {% if t.recurrence_rule != 'none' and t.status == 'completed' %}
-      <a href="{% url 'task_renew' t.pk %}" class="btn btn-outline-primary" title="生成下一次" aria-label="生成下次重复任务">🔁</a>
+      <a href="#" onclick="postAction('{% url 'task_renew' t.pk %}');return false" class="btn btn-outline-primary" title="生成下一次" aria-label="生成下次重复任务">🔁</a>
       {% endif %}
       <a href="{% url 'task_edit' t.pk %}" class="btn btn-outline-secondary" title="编辑" aria-label="编辑任务">✎</a>
     </div>
@@ -49,4 +49,6 @@
 </div>
 {% empty %}<div class="px-3 py-4 text-center text-secondary">还没有任务。试试在首页说"提醒我明天交话费"。</div>{% endfor %}
 </section>
+<form id="postForm" method="post" class="d-none">{% csrf_token %}</form>
+<script>function postAction(url){var f=document.getElementById('postForm');f.action=url;f.submit()}</script>
 {% include 'life/_bottom_nav.html' %}</main></body></html>

@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from common.audit import record
 from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Review, Suggestion, Task
@@ -166,6 +167,7 @@ def task_list(request):
 
 
 @login_required
+@require_POST
 def task_complete(request, pk):
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
     _check_owner(task, request)
@@ -177,6 +179,7 @@ def task_complete(request, pk):
 
 
 @login_required
+@require_POST
 def task_postpone(request, pk):
     from datetime import timedelta
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
@@ -188,6 +191,7 @@ def task_postpone(request, pk):
 
 
 @login_required
+@require_POST
 def task_cancel(request, pk):
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
     _check_owner(task, request)
@@ -197,6 +201,7 @@ def task_cancel(request, pk):
 
 
 @login_required
+@require_POST
 def task_archive(request, pk):
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
     _check_owner(task, request)
@@ -206,11 +211,11 @@ def task_archive(request, pk):
 
 
 @login_required
+@require_POST
 def task_renew(request, pk):
     """Generate the next occurrence of a recurring task. Skips if already generated."""
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
     _check_owner(task, request)
-    # Prevent duplicate: if a todo/in_progress task with same title already exists, skip
     existing = Task.objects.filter(
         user=request.user, title=task.title, is_deleted=False,
         status__in=["todo", "in_progress"],
@@ -883,6 +888,7 @@ def period_label(p):
 
 
 @login_required
+@require_POST
 def suggestion_feedback(request, pk, fb):
     s = get_object_or_404(Suggestion, pk=pk, user=request.user)
     s.feedback = fb
@@ -947,6 +953,7 @@ def reminder_edit(request, pk):
 
 
 @login_required
+@require_POST
 def reminder_toggle(request, pk):
     item = get_object_or_404(Reminder, pk=pk)
     _check_owner(item, request)

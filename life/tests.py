@@ -550,6 +550,33 @@ class InstallmentPlanTests(TestCase):
         self.assertIsInstance(self.plan.installment_amount, Decimal)
 
 
+class GetMutateTests(TestCase):
+    """Verify GET requests to state-mutating views return 405."""
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.task = Task.objects.create(user=cls.user, title="测试任务")
+        cls.reminder = Reminder.objects.create(user=cls.user, title="测试提醒", event_at=timezone.now(), remind_at=timezone.now())
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_task_complete_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/complete/").status_code, 405)
+
+    def test_task_postpone_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/postpone/").status_code, 405)
+
+    def test_task_cancel_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/cancel/").status_code, 405)
+
+    def test_task_archive_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/archive/").status_code, 405)
+
+    def test_task_renew_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/renew/").status_code, 405)
+
+
 class TaskViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -588,24 +615,24 @@ class TaskViewTests(TestCase):
         self.assertNotContains(r, "下周的任务")
 
     def test_complete_action(self):
-        self.client.get(f"/tasks/{self.t1.pk}/complete/")
+        self.client.post(f"/tasks/{self.t1.pk}/complete/")
         self.t1.refresh_from_db()
         self.assertEqual(self.t1.status, "completed")
         self.assertIsNotNone(self.t1.completed_at)
 
     def test_postpone_action(self):
         old = self.t1.due_at
-        self.client.get(f"/tasks/{self.t1.pk}/postpone/")
+        self.client.post(f"/tasks/{self.t1.pk}/postpone/")
         self.t1.refresh_from_db()
         self.assertTrue(self.t1.due_at > old)
 
     def test_cancel_action(self):
-        self.client.get(f"/tasks/{self.t1.pk}/cancel/")
+        self.client.post(f"/tasks/{self.t1.pk}/cancel/")
         self.t1.refresh_from_db()
         self.assertEqual(self.t1.status, "cancelled")
 
     def test_archive_action(self):
-        self.client.get(f"/tasks/{self.t3.pk}/archive/")
+        self.client.post(f"/tasks/{self.t3.pk}/archive/")
         self.t3.refresh_from_db()
         self.assertEqual(self.t3.status, "archived")
 
@@ -644,21 +671,21 @@ class ReminderTests(TestCase):
         self.assertEqual(item.remind_days_before, "1,7")
 
     def test_toggle_disables(self):
-        self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.client.post(f"/reminders/{self.r.pk}/toggle/")
         self.r.refresh_from_db()
         self.assertFalse(self.r.is_enabled)
 
     def test_toggle_reenables(self):
         self.r.is_enabled = False
         self.r.save()
-        self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.client.post(f"/reminders/{self.r.pk}/toggle/")
         self.r.refresh_from_db()
         self.assertTrue(self.r.is_enabled)
 
     def test_other_user_cannot_toggle(self):
         User.objects.create_user("bob", password="passB")
         self.client.login(username="bob", password="passB")
-        r = self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        r = self.client.post(f"/reminders/{self.r.pk}/toggle/")
         self.assertEqual(r.status_code, 404)
 
 
@@ -692,7 +719,7 @@ class RecurrenceTests(TestCase):
         t = Task.objects.create(user=self.user, title="每周回顾", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="weekly", status="completed")
         count_before = Task.objects.count()
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         self.assertEqual(Task.objects.count(), count_before + 1)
         new_task = Task.objects.latest("id")
         self.assertEqual(new_task.status, "todo")
@@ -701,14 +728,14 @@ class RecurrenceTests(TestCase):
     def test_renew_does_not_duplicate(self):
         t = Task.objects.create(user=self.user, title="日报", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="daily", status="completed")
-        self.client.get(f"/tasks/{t.pk}/renew/")
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         self.assertEqual(Task.objects.filter(title="日报", status="todo").count(), 1)
 
     def test_deleting_rule_keeps_history(self):
         t = Task.objects.create(user=self.user, title="父任务", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="monthly", recurrence_day=15, status="completed")
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         child = Task.objects.get(title="父任务", status="todo")
         self.assertIsNotNone(child)
         t.recurrence_rule = "none"
@@ -718,7 +745,7 @@ class RecurrenceTests(TestCase):
     def test_completed_instance_does_not_affect_next(self):
         t = Task.objects.create(user=self.user, title="模板任务", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="monthly", recurrence_day=15, status="completed")
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         child = Task.objects.get(title="模板任务", status="todo")
         child.status = "completed"
         child.save()

@@ -15,9 +15,12 @@ Browser ──→ Nginx(:443) ──→ Gunicorn(:8000) ──→ Django ──�
 # Ubuntu/Debian
 sudo apt update && sudo apt install -y nginx mysql-server python3.12-venv
 
-# 创建目录
+# 创建目录并设置权限（www-data 是 systemd 运行用户）
 sudo mkdir -p /opt/lifeos
-sudo chown $USER:$USER /opt/lifeos
+sudo chown -R www-data:www-data /opt/lifeos
+sudo mkdir -p /opt/lifeos/logs /opt/lifeos/backups
+sudo chown www-data:www-data /opt/lifeos/logs /opt/lifeos/backups
+sudo chmod 755 /opt/lifeos/logs /opt/lifeos/backups
 ```
 
 ## 2. 部署代码
