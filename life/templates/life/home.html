@@ -4,73 +4,43 @@
 <style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.hero{background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;border-radius:22px}.card{border:0;border-radius:16px}.section-title{font-size:.85rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.5px}.pill{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.75rem;font-weight:600}.mic-btn{width:52px;height:52px;border-radius:50%;font-size:1.3rem}.recording{animation:pulse .8s infinite}@keyframes pulse{50%{transform:scale(1.1);background:#dc3545!important}}.badge-overdue{background:#fef2f2;color:#dc2626}</style></head>
 <body>
 <main class="container py-3" style="max-width:640px">
-
-<!-- hero: date + budget -->
 <section class="hero p-4 mb-3">
-  <div class="d-flex justify-content-between align-items-start">
-    <div><p class="mb-0 opacity-75" style="font-size:.8rem">{{ today|date:'l'|lower }}</p><h1 class="h3 fw-bold mb-0">{{ today|date:'n月j日' }}</h1></div>
-    <div class="text-end"><div style="font-size:.75rem" class="opacity-75">本月已花</div><div class="fw-bold">¥{{ spent|floatformat:0 }}</div>{% if budget_amount > 0 %}<div class="small opacity-75">预算 ¥{{ budget_amount|floatformat:0 }}</div>{% endif %}</div>
-  </div>
+  <div class="d-flex justify-content-between align-items-start"><div><p class="mb-0 opacity-75" style="font-size:.8rem">{{ today|date:'l'|lower }}</p><h1 class="h3 fw-bold mb-0">{{ today|date:'n月j日' }}</h1></div><div class="text-end"><div style="font-size:.75rem" class="opacity-75">本月已花</div><div class="fw-bold">{{ spent|floatformat:0 }}</div>{% if budget_amount > 0 %}<div class="small opacity-75">预算 {{ budget_amount|floatformat:0 }}</div>{% endif %}</div></div>
   {% if budget_amount > 0 %}<div class="mt-2" style="height:4px;background:rgba(255,255,255,.2);border-radius:2px"><div style="height:4px;background:#fff;border-radius:2px;width:{{ budget_pct }}%"></div></div>{% endif %}
   <div class="mt-2 d-flex justify-content-between" style="font-size:.75rem"><span>{{ user.username }}</span><a href="{% url 'logout' %}" class="text-white opacity-75 text-decoration-none">登出</a></div>
 </section>
-
-<!-- quick input -->
 <section class="card shadow-sm p-3 mb-3">
   <form class="d-none">{% csrf_token %}</form>
   <div class="input-group"><input id="command" class="form-control" placeholder="午饭 18 元 · 提醒我明天交话费" autocomplete="off"><button id="mic" class="btn btn-primary mic-btn" title="语音">🎙</button><button id="parse" class="btn btn-dark px-3">解析</button></div>
   <p id="voiceHint" class="text-secondary small mt-1 mb-0">语音或文字输入，确认后保存。</p>
   <div id="draft" class="mt-2 d-none"></div>
 </section>
-
-<!-- top 3 most important -->
-{% if top_tasks %}
-<section class="card shadow-sm p-3 mb-3">
-  <div class="section-title mb-2">今日要事</div>
-  {% for t in top_tasks %}<div class="d-flex align-items-center py-1 border-bottom"><span class="pill {% if t.priority == 1 %}bg-danger bg-opacity-10 text-danger{% elif t.priority == 2 %}bg-warning bg-opacity-10 text-warning{% endif %} me-2">{% if t.priority == 1 %}重要{% elif t.priority == 2 %}待办{% endif %}</span><a href="{% url 'task_detail' t.pk %}" class="text-decoration-none text-dark flex-grow-1">{{ t.title }}</a>{% if t.due_at %}<small class="text-secondary">{{ t.due_at|date:'H:i' }}</small>{% endif %}<a href="{% url 'task_complete' t.pk %}" class="btn btn-sm text-success ms-1">✓</a></div>{% endfor %}
-</section>
-{% endif %}
-
-<!-- due today -->
-{% if due_today %}
-<section class="card shadow-sm p-3 mb-3">
-  <div class="section-title mb-2">今天到期</div>
-  {% for t in due_today %}<div class="d-flex align-items-center py-1 border-bottom"><span class="badge text-bg-light me-2">{{ t.get_status_display }}</span><span>{{ t.title }}</span>{% if t.due_at %}<small class="text-secondary ms-auto">{{ t.due_at|date:'H:i' }}</small>{% endif %}<a href="{% url 'task_complete' t.pk %}" class="btn btn-sm text-success ms-1">✓</a></div>{% endfor %}
-</section>
-{% endif %}
-
-<!-- reminders next 7 days -->
-{% if reminders %}
-<section class="card shadow-sm p-3 mb-3">
-  <div class="section-title mb-2">未来 7 天提醒</div>
-  {% for r in reminders %}<div class="d-flex align-items-center py-1 border-bottom"><span class="badge text-bg-light me-2">{{ r.get_reminder_type_display }}</span><span>{{ r.title }}</span><small class="text-secondary ms-auto">{{ r.event_at|date:'n/j' }}</small></div>{% endfor %}
-</section>
-{% endif %}
-
-<!-- upcoming bills -->
-{% if bills %}
-<section class="card shadow-sm p-3 mb-3">
-  <div class="section-title mb-2">即将到期账单</div>
-  {% for b in bills %}<div class="d-flex justify-content-between py-1 border-bottom"><span><span class="badge text-bg-light me-1">{{ b.type }}</span>{{ b.name }}</span><span><strong>¥{{ b.amount }}</strong><small class="text-secondary ms-1">{{ b.date|date:'n/j' }}</small></span></div>{% endfor %}
-</section>
-{% endif %}
-
-<!-- nav -->
-<section class="row g-2 mb-3">
-  <div class="col-3"><a href="{% url 'expense_list' %}" class="btn btn-outline-secondary w-100 py-2 small">💰<br>账目</a></div>
-  <div class="col-3"><a href="{% url 'task_list' %}" class="btn btn-outline-secondary w-100 py-2 small">✅<br>任务</a></div>
-  <div class="col-3"><a href="{% url 'budget' %}" class="btn btn-outline-secondary w-100 py-2 small">💵<br>预算</a></div>
-  <div class="col-3"><a href="{% url 'dashboard' %}" class="btn btn-outline-secondary w-100 py-2 small">📊<br>看板</a></div>
-</section>
-
+{% if top_tasks %}<section class="card shadow-sm p-3 mb-3"><div class="section-title mb-2">今日要事</div>{% for t in top_tasks %}<div class="d-flex align-items-center py-1 border-bottom"><span class="pill {% if t.priority == 1 %}bg-danger bg-opacity-10 text-danger{% elif t.priority == 2 %}bg-warning bg-opacity-10 text-warning{% endif %} me-2">{% if t.priority == 1 %}重要{% elif t.priority == 2 %}待办{% endif %}</span><a href="{% url 'task_detail' t.pk %}" class="text-decoration-none text-dark flex-grow-1">{{ t.title }}</a>{% if t.due_at %}<small class="text-secondary">{{ t.due_at|date:'H:i' }}</small>{% endif %}<a href="{% url 'task_complete' t.pk %}" class="btn btn-sm text-success ms-1">✓</a></div>{% endfor %}</section>{% endif %}
+{% if due_today %}<section class="card shadow-sm p-3 mb-3"><div class="section-title mb-2">今天到期</div>{% for t in due_today %}<div class="d-flex align-items-center py-1 border-bottom"><span class="badge text-bg-light me-2">{{ t.get_status_display }}</span><span>{{ t.title }}</span>{% if t.due_at %}<small class="text-secondary ms-auto">{{ t.due_at|date:'H:i' }}</small>{% endif %}<a href="{% url 'task_complete' t.pk %}" class="btn btn-sm text-success ms-1">✓</a></div>{% endfor %}</section>{% endif %}
+{% if reminders %}<section class="card shadow-sm p-3 mb-3"><div class="section-title mb-2">未来 7 天提醒</div>{% for r in reminders %}<div class="d-flex align-items-center py-1 border-bottom"><span class="badge text-bg-light me-2">{{ r.get_reminder_type_display }}</span><span>{{ r.title }}</span><small class="text-secondary ms-auto">{{ r.event_at|date:'n/j' }}</small></div>{% endfor %}</section>{% endif %}
+{% if bills %}<section class="card shadow-sm p-3 mb-3"><div class="section-title mb-2">即将到期账单</div>{% for b in bills %}<div class="d-flex justify-content-between py-1 border-bottom"><span><span class="badge text-bg-light me-1">{{ b.type }}</span>{{ b.name }}</span><span><strong>{{ b.amount }}</strong><small class="text-secondary ms-1">{{ b.date|date:'n/j' }}</small></span></div>{% endfor %}</section>{% endif %}
+<section class="row g-2 mb-3"><div class="col-3"><a href="{% url 'expense_list' %}" class="btn btn-outline-secondary w-100 py-2 small">💰<br>账目</a></div><div class="col-3"><a href="{% url 'task_list' %}" class="btn btn-outline-secondary w-100 py-2 small">✅<br>任务</a></div><div class="col-3"><a href="{% url 'budget' %}" class="btn btn-outline-secondary w-100 py-2 small">💵<br>预算</a></div><div class="col-3"><a href="{% url 'dashboard' %}" class="btn btn-outline-secondary w-100 py-2 small">📊<br>看板</a></div></section>
 </main>
-
 <script>
-const command=document.getElementById('command'),draftBox=document.getElementById('draft'),mic=document.getElementById('mic');let rawText='',currentDraft=null;
+const command=document.getElementById('command'),draftBox=document.getElementById('draft'),mic=document.getElementById('mic');let rawText='',currentActions=[];
 function csrf(){return document.cookie.split('; ').find(x=>x.startsWith('csrftoken='))?.split('=')[1]||''}
-function showDraft(d){currentDraft=d;const today=new Date().toISOString().split('T')[0];const cats=['餐饮','交通','住房','生活缴费','购物','其他'];let catOpts=cats.map(c=>`<option value="${c}" ${d.category===c?'selected':''}>${c}</option>`).join('');let html=`<div class="alert alert-primary mb-0"><strong>识别结果</strong><div class="row g-2 mt-2"><div class="col-12"><input id="editTitle" class="form-control form-control-sm" value="${d.title}"></div><div class="col-6"><input id="editAmount" class="form-control form-control-sm" type="number" step="0.01" value="${d.amount||''}" placeholder="金额"></div><div class="col-6"><input id="editDate" class="form-control form-control-sm" type="date" value="${d.occurred_on||today}"></div><div class="col-6"><select id="editCategory" class="form-select form-select-sm">${catOpts}</select></div><div class="col-6"><button class="btn btn-primary btn-sm w-100" onclick="save()">确认</button><button class="btn btn-outline-secondary btn-sm w-100 mt-1" onclick="draftBox.classList.add('d-none')">取消</button></div></div></div>`;draftBox.innerHTML=html;draftBox.classList.remove('d-none')}
-async function parse(){rawText=command.value.trim();if(!rawText)return;const r=await fetch('/api/parse/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({text:rawText})});if(!r.ok){alert(await r.text());return}const data=await r.json();showDraft(data.draft)}
-async function save(){const titleEl=document.getElementById('editTitle');const amountEl=document.getElementById('editAmount');const dateEl=document.getElementById('editDate');const catEl=document.getElementById('editCategory');if(titleEl)currentDraft.title=titleEl.value;if(amountEl)currentDraft.amount=amountEl.value;if(dateEl)currentDraft.occurred_on=dateEl.value;if(catEl)currentDraft.category=catEl.value;const r=await fetch('/api/save/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({draft:currentDraft,raw_text:rawText})});if(!r.ok){alert(await r.text());return}location.reload()}
-document.getElementById('parse').onclick=parse;command.addEventListener('keydown',e=>{if(e.key==='Enter')parse()});
-const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(R){const rec=new R();rec.lang='zh-CN';rec.interimResults=false;rec.onresult=e=>{command.value=e.results[0][0].transcript;document.getElementById('voiceHint').textContent='已识别：'+command.value;mic.classList.remove('recording');parse()};rec.onerror=()=>{mic.classList.remove('recording')};rec.onend=()=>mic.classList.remove('recording');mic.onclick=()=>{mic.classList.add('recording');rec.start()}}else{mic.disabled=true;document.getElementById('voiceHint').textContent='当前浏览器不支持语音识别。'}</script>
+const today=new Date().toISOString().split('T')[0];
+const cats=['餐饮','交通','住房','生活缴费','购物','其他'];
+
+function renderAction(a,idx){const labels={create_expense:'💰支出',create_income:'💰收入',create_task:'✅任务',create_reminder:'🔔提醒',create_note:'📝笔记'};let catOpts=cats.map(c=>'<option value="'+c+'"'+(a.category===c?' selected':'')+'>'+c+'</option>').join('');return'<div class="border-top pt-2 mt-2" data-idx="'+idx+'"><div class="row g-2"><div class="col-12"><span class="badge text-bg-light me-1">'+(labels[a.intent]||a.intent)+'</span><input class="form-control form-control-sm d-inline-block w-75 edit-title" value="'+(a.title||'')+'" placeholder="标题"></div><div class="col-6"><input class="form-control form-control-sm edit-amount" type="number" step="0.01" value="'+(a.amount||'')+'" placeholder="金额"></div><div class="col-6"><input class="form-control form-control-sm edit-date" type="date" value="'+(a.occurred_at?a.occurred_at.split('T')[0]:today)+'"></div><div class="col-6"><select class="form-select form-select-sm edit-cat">'+catOpts+'</select></div><div class="col-6"><button class="btn btn-primary btn-sm w-100" onclick="confirmAction('+idx+')">确认</button></div></div></div>'}
+
+function showDraft(data){const actions=data.result?data.result.actions:(data.actions||[]);if(actions.length===0){draftBox.innerHTML='<div class="alert alert-warning mb-0">未能识别到操作。</div>';draftBox.classList.remove('d-none');return}currentActions=actions;let html='<div class="alert alert-primary mb-0"><div class="d-flex justify-content-between"><strong>识别结果 '+actions.length+' 条</strong><small class="text-secondary">来源: '+(data.source||'rule')+'</small></div>';actions.forEach((a,i)=>{html+=renderAction(a,i)});html+='<div class="mt-2"><button class="btn btn-primary btn-sm" onclick="confirmAll()">全部确认</button><button class="btn btn-outline-secondary btn-sm ms-1" onclick="draftBox.classList.add(\'d-none\')">取消</button></div></div>';draftBox.innerHTML=html;draftBox.classList.remove('d-none')}
+
+async function parse(){rawText=command.value.trim();if(!rawText)return;const r=await fetch('/api/parse/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({text:rawText})});if(!r.ok){alert(await r.text());return}const data=await r.json();showDraft(data)}
+
+function collectAction(idx){const row=document.querySelector('[data-idx="'+idx+'"]');const a={...currentActions[idx]};const t=row?row.querySelector('.edit-title'):null;const m=row?row.querySelector('.edit-amount'):null;const d=row?row.querySelector('.edit-date'):null;const c=row?row.querySelector('.edit-cat'):null;if(t)a.title=t.value;if(m)a.amount=m.value;if(d)a.occurred_at=d.value+'T12:00:00';if(c)a.category=c.value;return a}
+
+async function saveAction(a){const draft={kind:a.intent==='create_income'?'income':a.intent==='create_task'?'task':a.intent==='create_note'?'note':'expense',title:a.title||'',category:a.category||'',amount:a.amount||null,occurred_on:(a.occurred_at||'').split('T')[0],type:a.intent==='create_income'?'income':'expense'};const r=await fetch('/api/save/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({draft:draft,raw_text:rawText})});return r.ok}
+
+async function confirmAction(idx){const a=collectAction(idx);if(await saveAction(a)){const row=document.querySelector('[data-idx="'+idx+'"]');if(row)row.style.opacity='0.4';if(currentActions.every((x,i)=>i===idx||x._done)){setTimeout(function(){location.reload()},500)}}currentActions[idx]._done=true}
+
+async function confirmAll(){for(let i=0;i<currentActions.length;i++){const a=collectAction(i);await saveAction(a);currentActions[i]._done=true}location.reload()}
+document.getElementById('parse').onclick=parse;command.addEventListener('keydown',function(e){if(e.key==='Enter')parse()});
+const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(R){const rec=new R();rec.lang='zh-CN';rec.interimResults=false;rec.onresult=function(e){command.value=e.results[0][0].transcript;document.getElementById('voiceHint').textContent='已识别：'+command.value;mic.classList.remove('recording');parse()};rec.onerror=function(){mic.classList.remove('recording')};rec.onend=function(){mic.classList.remove('recording')};mic.onclick=function(){mic.classList.add('recording');rec.start()}}else{mic.disabled=true;document.getElementById('voiceHint').textContent='当前浏览器不支持语音识别。'}
+</script>
 </body></html>

@@ -992,3 +992,25 @@ class AIRouterTests(SimpleTestCase):
 
     def test_rule_confidence_low(self):
         self.assertEqual(_rule_confidence({"kind": "note"}), "medium")
+
+
+class MultiIntentTests(SimpleTestCase):
+    def setUp(self):
+        self.fake = FakeProvider()
+
+    def test_two_expenses_one_task(self):
+        result = self.fake.parse("今天中午吃饭 18，晚上买菜 42，明天下午提醒我给姐姐买礼物")
+        self.assertGreaterEqual(len(result["actions"]), 3, msg=f"Expected 3+ actions, got {result['actions']}")
+        intents = [a["intent"] for a in result["actions"]]
+        self.assertIn("create_expense", intents)
+        self.assertIn("create_task", intents)
+
+    def test_each_action_has_unique_id(self):
+        result = self.fake.parse("午饭 18 元，打车 20 元")
+        ids = [a["action_id"] for a in result["actions"]]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_actions_pass_schema_validation(self):
+        result = self.fake.parse("今天中午吃饭 18，晚上买菜 42，提醒我给姐姐买礼物")
+        ok, errs = validate_ai_response(result)
+        self.assertTrue(ok, msg=str(errs))
