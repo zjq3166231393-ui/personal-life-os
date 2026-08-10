@@ -808,6 +808,33 @@ class SettingsTests(SimpleTestCase):
         self.assertGreater(len(settings.SECRET_KEY), 50)
 
 
+class SeedDemoTests(TestCase):
+    def test_seed_creates_demo_user(self):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command("seed_demo", "--clean", stdout=out)
+        call_command("seed_demo", stdout=out)
+        self.assertTrue(User.objects.filter(username="demo").exists())
+
+    def test_seed_creates_expenses(self):
+        from io import StringIO
+        from django.core.management import call_command
+        call_command("seed_demo", "--clean")
+        call_command("seed_demo")
+        user = User.objects.get(username="demo")
+        self.assertGreater(Expense.objects.filter(user=user).count(), 5)
+
+    def test_seed_does_not_overwrite_real_user(self):
+        from io import StringIO
+        from django.core.management import call_command
+        real = User.objects.create_user("realuser", password="pass")
+        Expense.objects.create(user=real, type="expense", amount=Decimal("10"), occurred_at=timezone.now())
+        out = StringIO()
+        call_command("seed_demo", "--username=realuser", stdout=out)
+        self.assertIn("already has data", out.getvalue())
+
+
 class DataCheckTests(TestCase):
     @classmethod
     def setUpTestData(cls):
