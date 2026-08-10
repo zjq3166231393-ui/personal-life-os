@@ -92,6 +92,10 @@ if ENVIRONMENT == "production":
     if not os.getenv("DJANGO_SECRET_KEY"):
         raise RuntimeError("DJANGO_SECRET_KEY must be set in .env for production mode")
 
+# Trust Nginx X-Forwarded-Proto. Safe to always set: the actual redirect
+# is controlled by SECURE_SSL_REDIRECT inside the production block below.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 if ENVIRONMENT == "production" or not DEBUG:
     # HTTPS / SSL
     SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() == "true"

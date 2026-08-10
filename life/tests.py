@@ -837,6 +837,16 @@ class PWACacheTests(SimpleTestCase):
         self.assertIn('navigate', sw)
 
 
+class ProductionSettingsTests(SimpleTestCase):
+    def test_proxy_ssl_header_configured(self):
+        """SECURE_PROXY_SSL_HEADER must be set for Nginx reverse proxy."""
+        from django.conf import settings
+        header = getattr(settings, 'SECURE_PROXY_SSL_HEADER', None)
+        self.assertIsNotNone(header, "SECURE_PROXY_SSL_HEADER must be configured")
+        self.assertEqual(header[0], 'HTTP_X_FORWARDED_PROTO')
+        self.assertEqual(header[1], 'https')
+
+
 class SettingsTests(SimpleTestCase):
     def test_secret_key_is_not_hardcoded(self):
         from django.conf import settings

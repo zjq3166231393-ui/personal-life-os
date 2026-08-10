@@ -63,6 +63,11 @@ sudo systemctl start lifeos
 sudo systemctl status lifeos
 ```
 
+### 反向代理配置
+
+Nginx 传递 `X-Forwarded-Proto` header，Django 通过 `SECURE_PROXY_SSL_HEADER` 信任该头。
+生产环境 `ENVIRONMENT=production` 时自动启用，避免 HTTPS 重定向循环。
+
 ## 6. Nginx + HTTPS
 
 ```bash
