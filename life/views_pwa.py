@@ -57,56 +57,67 @@ def pwa_icon(request, size):
 @cache_page(86400)
 def service_worker(request):
     sw = """
-const CACHE = 'lifeos-v1';
-const URLS = [
-  '/',
-  '/static/offline.html',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-  'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap',
-];
+const CACHE = 'lifeos-v2';
+	// Only cache static assets — never user-data pages
+	const STATIC_URLS = [
+	  '/static/offline.html',
+	  '/manifest.json',
+	  '/pwa-icon/192/',
+	  '/pwa-icon/512/',
+	  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+	  'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap',
+	];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)));
-  self.skipWaiting();
-});
+	const NO_CACHE = ['/api/', '/accounts/', '/expenses/', '/tasks/',
+	                  '/notes/', '/reminders/', '/budget/', '/dashboard/',
+	                  '/common/', '/recurring/', '/installments/', '/categories/',
+	                  '/review/', '/admin/'];
 
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
-  self.clients.claim();
-});
+	function isNoCache(url) { return NO_CACHE.some(function(p) { return url.includes(p); }); }
+	function isStatic(url) { return STATIC_URLS.some(function(u) { return url.endsWith(u) || url === u; }) || url.includes('cdn.jsdelivr.net') || url.includes('fonts.googleapis.com'); }
 
-self.addEventListener('push', e => {
-  const data = e.data ? e.data.json() : {};
-  const title = data.title || 'Personal Life OS';
-  const opts = { body: data.body || '', icon: '/pwa-icon/192/', badge: '/pwa-icon/192/' };
-  e.waitUntil(self.registration.showNotification(title, opts));
-});
+	self.addEventListener('install', function(e) {
+	  e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(STATIC_URLS); }));
+	  self.skipWaiting();
+	});
 
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(clients.openWindow('/'));
-});
+	self.addEventListener('activate', function(e) {
+	  e.waitUntil(caches.keys().then(function(keys) {
+	    return Promise.all(keys.filter(function(k) { return k !== CACHE; }).map(function(k) { return caches.delete(k); }));
+	  }));
+	  self.clients.claim();
+	});
 
-self.addEventListener('fetch', e => {
-  // Never cache API calls or dynamic data
-  if (e.request.url.includes('/api/') || e.request.url.includes('/accounts/')) {
-    return;
-  }
-  e.respondWith(
-    caches.match(e.request).then(cached =>
-      cached || fetch(e.request).then(resp => {
-        if (resp.ok && e.request.method === 'GET') {
-          const clone = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return resp;
-      }).catch(() => {
-        if (e.request.mode === 'navigate') {
-          return caches.match('/static/offline.html');
-        }
-      })
-    )
-  );
-});
-"""
+	self.addEventListener('push', function(e) {
+	  var data = e.data ? e.data.json() : {};
+	  var title = data.title || 'Personal Life OS';
+	  var opts = { body: data.body || '', icon: '/pwa-icon/192/', badge: '/pwa-icon/192/' };
+	  e.waitUntil(self.registration.showNotification(title, opts));
+	});
+
+	self.addEventListener('notificationclick', function(e) {
+	  e.notification.close();
+	  e.waitUntil(clients.openWindow('/'));
+	});
+
+	self.addEventListener('fetch', function(e) {
+	  var url = e.request.url;
+	  if (isNoCache(url)) { return; }
+	  e.respondWith(
+	    caches.match(e.request).then(function(cached) {
+	      if (cached) { return cached; }
+	      return fetch(e.request).then(function(resp) {
+	        if (resp.ok && e.request.method === 'GET' && isStatic(url)) {
+	          var clone = resp.clone();
+	          caches.open(CACHE).then(function(c) { return c.put(e.request, clone); });
+	        }
+	        return resp;
+	      }).catch(function() {
+	        if (e.request.mode === 'navigate') {
+	          return caches.match('/static/offline.html');
+	        }
+	      });
+	    })
+	  );
+	});"""
     return HttpResponse(sw, content_type="application/javascript")

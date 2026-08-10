@@ -817,6 +817,26 @@ class CSRFTests(TestCase):
         self.assertIn('django.middleware.csrf.CsrfViewMiddleware', settings.MIDDLEWARE)
 
 
+class PWACacheTests(SimpleTestCase):
+    def test_sw_never_caches_user_pages(self):
+        from django.test import RequestFactory
+        from life.views_pwa import service_worker
+        sw = service_worker(RequestFactory().get('/sw.js')).content.decode()
+        self.assertIn('/expenses/', sw)
+        self.assertIn('/tasks/', sw)
+        self.assertIn('/dashboard/', sw)
+        self.assertIn('isNoCache', sw)
+        self.assertIn('lifeos-v2', sw)
+        self.assertNotIn("'/',", sw)  # '/' as STATIC_URL list item
+
+    def test_sw_has_offline_fallback(self):
+        from django.test import RequestFactory
+        from life.views_pwa import service_worker
+        sw = service_worker(RequestFactory().get('/sw.js')).content.decode()
+        self.assertIn('offline.html', sw)
+        self.assertIn('navigate', sw)
+
+
 class SettingsTests(SimpleTestCase):
     def test_secret_key_is_not_hardcoded(self):
         from django.conf import settings
