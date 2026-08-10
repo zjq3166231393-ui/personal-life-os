@@ -49,10 +49,10 @@ def home(request):
 
     # ── upcoming bills (recurring + installment) ────────────────
     bills = []
-    for r in RecurringExpense.objects.filter(user=request.user, is_active=True):
+    for r in RecurringExpense.objects.filter(user=request.user, is_active=True).select_related("category"):
         bill_date = date(today.year, today.month, r.due_day) if r.due_day >= today.day else date(today.year, today.month + 1 if today.month < 12 else today.year + 1, r.due_day) if today.month < 12 else date(today.year + 1, 1, r.due_day)
         bills.append({"name": r.name, "amount": r.amount, "date": bill_date, "type": "固定"})
-    for p in InstallmentPlan.objects.filter(user=request.user, status="active"):
+    for p in InstallmentPlan.objects.filter(user=request.user, status="active").select_related("category"):
         bills.append({"name": p.name, "amount": p.installment_amount, "date": p.next_due_date, "type": "分期"})
     bills.sort(key=lambda x: x["date"])
     bills = bills[:5]
