@@ -801,6 +801,22 @@ class ScanRemindersTests(TestCase):
         self.assertEqual(NotificationLog.objects.filter(notification_type="reminder").count(), first_count)
 
 
+class CSRFTests(TestCase):
+    def test_home_template_has_csrf_input(self):
+        """CSRF token must be in hidden input, not just cookie, for HttpOnly compatibility."""
+        User.objects.create_user("test", password="pass")
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/")
+        self.assertContains(r, 'csrfmiddlewaretoken')
+        self.assertContains(r, 'type="hidden"')
+        # Verify JS reads from input, not cookie
+        self.assertContains(r, "querySelector('input[name=csrfmiddlewaretoken]')")
+
+    def test_csrf_middleware_enabled(self):
+        from django.conf import settings
+        self.assertIn('django.middleware.csrf.CsrfViewMiddleware', settings.MIDDLEWARE)
+
+
 class SettingsTests(SimpleTestCase):
     def test_secret_key_is_not_hardcoded(self):
         from django.conf import settings

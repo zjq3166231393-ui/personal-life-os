@@ -20,7 +20,7 @@
 <script>
 var command=document.getElementById('command'),draftBox=document.getElementById('draft'),mic=document.getElementById('mic');
 var rawText='',currentActions=[];
-function csrf(){return document.cookie.split('; ').find(function(x){return x.startsWith('csrftoken=')}).split('=')[1]||''}
+function csrf(){var el=document.querySelector('input[name=csrfmiddlewaretoken]');return el?el.value:''}
 var today=(new Date()).toISOString().split('T')[0];
 var cats=['餐饮','交通','住房','生活缴费','购物','其他'];
 var labels={create_expense:'💰支出',create_income:'💰收入',create_task:'✅任务',create_reminder:'🔔提醒',create_note:'📝笔记'};
