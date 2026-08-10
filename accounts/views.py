@@ -101,17 +101,16 @@ def export_data(request):
 @login_required
 def delete_account(request):
     from common.audit import record
+    from django.contrib.auth import logout
+    from django.shortcuts import render
     if request.method == "POST" and request.POST.get("confirm") == "DELETE":
         user = request.user
         record(user, "login.failed", None, f"账户删除申请: {user.username}")
-        # Soft anonymize: deactivate + rename
         user.is_active = False
         user.email = f"deleted_{user.pk}@archived"
         user.set_unusable_password()
         user.save()
-        from django.contrib.auth import logout
         logout(request)
-        from django.shortcuts import render
         return render(request, "accounts/delete_done.html")
     return render(request, "accounts/delete_confirm.html")
 

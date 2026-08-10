@@ -808,6 +808,73 @@ class SettingsTests(SimpleTestCase):
         self.assertGreater(len(settings.SECRET_KEY), 50)
 
 
+class ExportPermissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+
+    def test_export_requires_login(self):
+        r = self.client.get("/accounts/export/")
+        self.assertEqual(r.status_code, 302)
+
+    def test_export_json_returns_own_data(self):
+        self.client.login(username="alice", password="passA")
+        Expense.objects.create(user=self.user, type="expense", amount=Decimal("50"), occurred_at=timezone.now(), note="导出测试")
+        r = self.client.get("/accounts/export/?format=json")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("导出测试", r.content.decode())
+
+    def test_export_csv_returns_own_data(self):
+        self.client.login(username="alice", password="passA")
+        Expense.objects.create(user=self.user, type="expense", amount=Decimal("100"), occurred_at=timezone.now(), note="CSV测试")
+        r = self.client.get("/accounts/export/?format=csv")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("CSV测试", r.content.decode())
+
+    def test_export_excludes_other_users(self):
+        self.client.login(username="alice", password="passA")
+        other = User.objects.create_user("bob", password="passB")
+        Expense.objects.create(user=other, type="expense", amount=Decimal("999"), occurred_at=timezone.now(), note="Bob的秘密")
+        r = self.client.get("/accounts/export/?format=json")
+        self.assertNotIn("Bob的秘密", r.content.decode())
+
+
+class DeleteAccountTests(TestCase):
+    def test_delete_page_requires_login(self):
+        r = self.client.get("/accounts/delete-account/")
+        self.assertEqual(r.status_code, 302)
+
+    def test_delete_requires_confirm_word(self):
+        user = User.objects.create_user("alice", password="passA")
+        self.client.login(username="alice", password="passA")
+        r = self.client.post("/accounts/delete-account/", {"confirm": "WRONG"})
+        self.assertEqual(r.status_code, 200)  # Re-renders form
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)  # Not deactivated
+
+    def test_delete_deactivates_user(self):
+        user = User.objects.create_user("alice", password="passA")
+        self.client.login(username="alice", password="passA")
+        r = self.client.post("/accounts/delete-account/", {"confirm": "DELETE"})
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+
+
+class ReminderDedupTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.reminder = Reminder.objects.create(user=cls.user, title="去重测试", event_at=timezone.now(), remind_at=timezone.now(), reminder_type="custom")
+
+    def test_scan_twice_does_not_duplicate(self):
+        from io import StringIO
+        from django.core.management import call_command
+        call_command("scan_reminders")
+        first = NotificationLog.objects.filter(user=self.user).count()
+        call_command("scan_reminders")
+        self.assertEqual(NotificationLog.objects.filter(user=self.user).count(), first)
+
+
 class SeedDemoTests(TestCase):
     def test_seed_creates_demo_user(self):
         from io import StringIO
