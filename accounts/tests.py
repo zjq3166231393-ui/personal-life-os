@@ -164,15 +164,15 @@ class DataIsolationTests(TestCase):
     def setUpTestData(cls):
         cls.user_a = User.objects.create_user("alice", password="passA")
         cls.user_b = User.objects.create_user("bob", password="passB")
-        from life.models import Entry
-        Entry.objects.create(user=cls.user_a, kind="expense", title="Alice 午餐", amount=Decimal("20"), occurred_on="2026-08-09")
-        Entry.objects.create(user=cls.user_b, kind="expense", title="Bob 咖啡", amount=Decimal("15"), occurred_on="2026-08-09")
+        from life.models import Task
+        Task.objects.create(user=cls.user_a, title="Alice 的任务", priority=1, due_at="2026-08-10T12:00:00Z")
+        Task.objects.create(user=cls.user_b, title="Bob 的任务", priority=1, due_at="2026-08-10T12:00:00Z")
 
     def test_home_shows_only_own_data(self):
         self.client.login(username="alice", password="passA")
         response = self.client.get(reverse("home"))
-        self.assertContains(response, "Alice 午餐")
-        self.assertNotContains(response, "Bob 咖啡")
+        self.assertContains(response, "Alice 的任务")
+        self.assertNotContains(response, "Bob 的任务")
 
     def test_new_entry_bound_to_current_user(self):
         self.client.login(username="alice", password="passA")
@@ -188,8 +188,8 @@ class DataIsolationTests(TestCase):
     def test_user_b_cannot_see_user_a_data(self):
         self.client.login(username="bob", password="passB")
         response = self.client.get(reverse("home"))
-        self.assertContains(response, "Bob 咖啡")
-        self.assertNotContains(response, "Alice 午餐")
+        self.assertContains(response, "Bob 的任务")
+        self.assertNotContains(response, "Alice 的任务")
 
     def test_unauthenticated_cannot_create_entry(self):
         response = self.client.post(reverse("save_entry"), {
