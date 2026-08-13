@@ -10,6 +10,7 @@ Strategy:
 from .parser import parse_text
 from .ai_provider import get_provider
 from .ai_schema import validate_ai_response
+from .models import ConversationLog
 
 
 def _rule_confidence(draft: dict) -> str:
@@ -129,7 +130,6 @@ def route_parse(raw_text: str, user=None) -> dict:
         ok, errors = validate_ai_response(ai_result)
         if ok:
             # Log conversation
-            from .models import ConversationLog
             ConversationLog.objects.create(
                 user=user, raw_text=raw_text, input_type="text",
                 model="deepseek-chat", status="confirmed",

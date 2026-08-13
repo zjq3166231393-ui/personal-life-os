@@ -1,9 +1,11 @@
 """Gunicorn config for Personal Life OS."""
-import multiprocessing
 import os
 
 bind = "127.0.0.1:8000"
-workers = int(os.getenv("GUNICORN_WORKERS", min(4, multiprocessing.cpu_count() * 2 + 1)))
+# Single worker: login rate-limiting uses LocMemCache, which is per-process.
+# A single-user app gains nothing from multiple sync workers, and one worker
+# keeps the cache (and thus rate limiting) correct. Override GUNICORN_WORKERS if needed.
+workers = int(os.getenv("GUNICORN_WORKERS", "1"))
 worker_class = "sync"
 timeout = 60
 keepalive = 5

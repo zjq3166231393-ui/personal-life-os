@@ -22,10 +22,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "life",
     "accounts",
-    "finance",
-    "planning",
-    "notes",
-    "capture",
     "common",
 ]
 
@@ -53,11 +49,6 @@ TEMPLATES = [{
 }]
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
-
-if os.getenv("MYSQL_DATABASE") and os.getenv("MYSQL_USER"):
-    DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": os.getenv("MYSQL_DATABASE"), "USER": os.getenv("MYSQL_USER"), "PASSWORD": os.getenv("MYSQL_PASSWORD"), "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"), "PORT": os.getenv("MYSQL_PORT", "3306"), "OPTIONS": {"charset": "utf8mb4"}}}
-else:
-    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
 AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = "zh-hans"
