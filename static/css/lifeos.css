@@ -81,7 +81,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 body.lf-has-bottom-nav { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0) + 24px); }
-@media (min-width: 768px) { body.lf-has-bottom-nav { padding-bottom: 0; } }
+@media (min-width: 1024px) { body.lf-has-bottom-nav { padding-bottom: 0; } }
 
 img, svg { display: block; max-width: 100%; }
 a { color: var(--brand); text-decoration: none; transition: color var(--t-base) var(--ease); }
@@ -353,28 +353,9 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-list-item:last-child { border-bottom: 0; }
 .lf-list-item--hover:hover { background: var(--surface-2); }
 
-/* Bottom nav */
-.lf-bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
-  background: rgba(255,255,255,.85);
-  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-  border-top: 1px solid var(--border-soft);
-  display: flex; justify-content: space-around;
-  padding: 8px 0 calc(env(safe-area-inset-bottom, 0) + 8px);
-}
-.lf-nav-item {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  text-decoration: none; color: var(--text-3);
-  font-size: 11px; font-weight: 500;
-  padding: 6px 12px; border-radius: var(--r-md);
-  transition: color var(--t-base) var(--ease), background var(--t-base) var(--ease);
-  min-width: 56px;
-}
-.lf-nav-item svg { width: 22px; height: 22px; }
-.lf-nav-item--active { color: var(--brand); }
-.lf-nav-item:hover { color: var(--text-1); }
-.lf-nav-item:active { background: var(--surface-3); }
-@media (min-width: 768px) { .lf-bottom-nav { display: none; } }
+/* Bottom nav dead block removed (2026-08-25): the real .lf-bottom-nav
+   definition lives further down (~line 678) and the old .lf-nav-item class
+   was never referenced by any template. Keep this area clean. */
 
 /* Page header (inner pages) */
 .lf-page-header {
@@ -709,6 +690,119 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   width: 22px; height: 22px;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ============================================================
+   Desktop sidebar navigation (≥1024px); bottom nav hidden there
+   ============================================================ */
+.lf-sidebar { display: none; }            /* hidden on mobile/tablet by default */
+.lf-bottom-nav-spacer { display: block; } /* mobile bottom-nav spacer */
+
+@media (min-width: 1024px) {
+  .lf-bottom-nav { display: none; }
+  .lf-bottom-nav-spacer { display: none; }
+
+  .lf-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 248px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 22px 14px;
+    z-index: 200;
+    overflow-y: auto;
+  }
+  body.lf-has-bottom-nav {
+    padding-left: 248px;
+    padding-bottom: 0;
+  }
+  .lf-sidebar__brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 10px 16px;
+    font-size: 16px; font-weight: 700; color: var(--text-1);
+  }
+  .lf-sidebar__brand-dot {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--brand); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700;
+  }
+  .lf-sidebar__section {
+    font-size: 11px; color: var(--text-3);
+    padding: 16px 10px 6px; letter-spacing: .04em;
+  }
+  .lf-sidebar__item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 12px; border-radius: var(--r-md);
+    text-decoration: none; color: var(--text-2);
+    font-size: 14px; font-weight: 500;
+    transition: background .18s, color .18s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .lf-sidebar__item:hover { background: var(--surface-2); color: var(--text-1); }
+  .lf-sidebar__item.is-active { background: var(--brand-soft); color: var(--brand); }
+  .lf-sidebar__icon {
+    width: 22px; height: 22px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lf-sidebar__spacer { flex: 1; }
+  .lf-sidebar__foot { padding: 12px 10px 4px; font-size: 12px; color: var(--text-3); }
+}
+
+/* ============================================================
+   Modal (global — date-confirm + onboarding). home.html also
+   defines .lf-modal inline; rules are identical, no conflict.
+   ============================================================ */
+.lf-modal {
+  position: fixed; inset: 0; z-index: 10000;
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.lf-modal.is-open { display: flex; }
+.lf-modal__mask {
+  position: absolute; inset: 0;
+  background: rgba(15,23,42,.45);
+  backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+}
+.lf-modal__panel {
+  position: relative; width: 100%; max-width: 460px;
+  background: var(--surface); border-radius: var(--r-lg);
+  box-shadow: 0 20px 60px rgba(15,23,42,.25);
+  padding: 24px; max-height: 88vh; overflow: auto;
+  animation: modalIn .25s cubic-bezier(0.32,0.72,0.24,1);
+}
+.lf-modal__head { display: flex; align-items: center; justify-content: space-between; }
+.lf-modal__title { font-size: 18px; margin: 0; font-weight: 700; color: var(--text-1); }
+.lf-modal__x { background: none; border: none; font-size: 22px; line-height: 1; color: var(--text-3); cursor: pointer; }
+.lf-modal__sub { font-size: 13px; color: var(--text-3); margin: 8px 0 16px; line-height: 1.6; }
+.lf-modal__foot { display: flex; gap: 10px; margin-top: 20px; }
+.lf-modal__foot .lf-btn { flex: 1; }
+
+/* Onboarding-specific */
+.lf-onboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lf-onboard-card {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px; border: 1px solid var(--border);
+  border-radius: var(--r-md); background: var(--surface-2);
+}
+.lf-onboard-card__icon {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--brand-soft); color: var(--brand);
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+.lf-onboard-card__title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+.lf-onboard-card__desc { font-size: 11px; color: var(--text-3); margin-top: 2px; line-height: 1.5; }
+.lf-onboard-tip {
+  margin-top: 14px; padding: 12px 14px; border-radius: var(--r-md);
+  background: var(--brand-soft); color: var(--brand);
+  font-size: 12.5px; line-height: 1.6;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(10px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 420px) { .lf-onboard-grid { grid-template-columns: 1fr; } }
+
 
 /* ============================================================
    Lunar date pill (home hero)
