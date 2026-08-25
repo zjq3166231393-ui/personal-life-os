@@ -370,6 +370,23 @@
   </div>
 
 </main>
+
+  {# ── 日期确认弹窗（解析含明确日期时的二次确认 / 反问） ── #}
+  <div id="dateConfirmModal" class="lf-modal" aria-hidden="true">
+    <div class="lf-modal__mask" data-close></div>
+    <div class="lf-modal__panel" role="dialog" aria-modal="true" aria-labelledby="dcmTitle">
+      <div class="lf-modal__head">
+        <h3 id="dcmTitle" class="lf-modal__title">📅 请确认日期</h3>
+        <button type="button" class="lf-modal__x" data-close aria-label="关闭">×</button>
+      </div>
+      <p class="lf-modal__sub">以下日期是根据你的输入识别的，保存前请核对。如有误，直接在框里改。</p>
+      <div id="dcmList" class="lf-modal__list"></div>
+      <div class="lf-modal__foot">
+        <button type="button" class="lf-btn lf-btn--primary" id="dcmConfirm">确认以上日期</button>
+        <button type="button" class="lf-btn lf-btn--ghost" data-close>稍后在草稿改</button>
+      </div>
+    </div>
+  </div>
 {% endblock %}
 
 {% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
@@ -388,6 +405,23 @@
 .draft-row .full { grid-column: 1 / -1; }
 .lf-toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: var(--brand-strong); color: #fff; padding: 12px 22px; border-radius: 999px; font-size: 14px; z-index: 9999; box-shadow: 0 8px 24px rgba(15,23,42,.18); animation: toastIn .3s cubic-bezier(0.32,0.72,0.24,1); }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* 日期确认弹窗 */
+.lf-modal { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; padding: 20px; }
+.lf-modal.is-open { display: flex; }
+.lf-modal__mask { position: absolute; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(2px); }
+.lf-modal__panel { position: relative; width: 100%; max-width: 420px; background: var(--surface); border-radius: var(--r-lg); box-shadow: 0 20px 60px rgba(15,23,42,.25); padding: 20px; max-height: 86vh; overflow: auto; animation: modalIn .25s cubic-bezier(0.32,0.72,0.24,1); }
+@keyframes modalIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.lf-modal__head { display: flex; align-items: center; justify-content: space-between; }
+.lf-modal__title { font-size: 16px; margin: 0; font-weight: 700; }
+.lf-modal__x { background: none; border: none; font-size: 22px; line-height: 1; color: var(--text-3); cursor: pointer; }
+.lf-modal__sub { font-size: 13px; color: var(--text-3); margin: 8px 0 14px; }
+.lf-modal__list { display: flex; flex-direction: column; gap: 12px; }
+.lf-modal__row { display: flex; flex-direction: column; gap: 6px; }
+.lf-modal__rowlabel { display: flex; align-items: center; gap: 6px; }
+.lf-modal__foot { display: flex; gap: 10px; margin-top: 18px; }
+.lf-modal__foot .lf-btn { flex: 1; }
+.lf-text-warn { color: var(--warning, #b45309); }
 </style>
 
 <script>
@@ -443,12 +477,13 @@ function renderAction(a,idx){
       +'</div>';
   }
   if (ph && taskLike) html+='<div class="lf-text-xs lf-text-danger lf-mt-1">标题不能是「任务/提醒/待办」这种占位词，请改成具体的事情。</div>';
+  if (a.clarify) html+='<div class="lf-text-xs lf-text-warn lf-mt-1">💡 '+a.clarify+'</div>';
   var showAmount=(a.intent==='create_expense'||a.intent==='create_income'||isRecurring);
   var showCat=(a.intent==='create_expense'||isRecurring);
   var showDate=(a.intent!=='create_note');
   if(showDate){
     var rd=fmtDateCn(dateVal);
-    if(rd) html+='<div class="lf-text-xs lf-text-faint lf-mt-1">📅 将记录在 <strong style="color:var(--text-2);">'+rd+'</strong>（如不符可在下方修改）</div>';
+    if(rd) html+='<div class="lf-text-xs lf-text-faint lf-mt-1 lf-date-hint">📅 将记录在 <strong style="color:var(--text-2);">'+rd+'</strong>（如不符可在下方修改）</div>';
   }
   html+='<div class="draft-row">';
   if(showAmount) html+='<input class="lf-input edit-amount" type="number" step="0.01" value="'+(a.amount||'')+'" placeholder="金额">';
@@ -469,6 +504,7 @@ function showDraft(data){
   for(var i=0;i<actions.length;i++) html+=renderAction(actions[i],i);
   html+='<div class="lf-row lf-mt-3" style="gap:8px;"><button type="button" class="lf-btn lf-btn--primary" onclick="confirmAll()">全部确认</button><button type="button" class="lf-btn lf-btn--ghost" onclick="draftBox.classList.add(\'lf-hidden\')">取消</button></div>';
   draftBox.innerHTML=html; draftBox.classList.remove('lf-hidden');
+  openDateConfirm();
   var ins=document.querySelectorAll('#draft .edit-title');
   for(var k=0;k<ins.length;k++) ins[k].addEventListener('input',function(){
     var row=this.closest('[data-idx]'); var ph=isPlaceholderTitle(this.value);
@@ -477,6 +513,59 @@ function showDraft(data){
   });
 }
 function showToast(msg,dur){var t=document.createElement('div');t.className='lf-toast';t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.style.opacity='0';t.style.transition='opacity 200ms';setTimeout(function(){t.remove()},200)},dur||2200)}
+
+// ── 日期确认弹窗（解析含明确日期时的二次确认） ──
+var dateConfirmList=[];
+function openDateConfirm(){
+  dateConfirmList=[];
+  var html='';
+  for(var i=0;i<currentActions.length;i++){
+    var a=currentActions[i];
+    if(!a.needs_date_confirm) continue;
+    var field=(a.intent==='create_task'||a.intent==='create_reminder')?'due_at':'occurred_at';
+    var d=a.detected_date||((a[field]||'').toString().slice(0,10));
+    dateConfirmList.push({idx:i,field:field,date:d});
+    var li=dateConfirmList.length-1;
+    html+='<div class="lf-modal__row">'
+      +'<div class="lf-modal__rowlabel"><span class="lf-badge lf-badge--brand">'+(labels[a.intent]||a.intent)+'</span>'
+      +'<span class="lf-text-sm lf-text-bold">'+((a.title&&a.title.trim())?a.title.replace(/"/g,'&quot;'):'(待填写)')+'</span></div>'
+      +'<input type="date" class="lf-input dcm-date" data-i="'+li+'" value="'+d+'">'
+      +'</div>';
+  }
+  if(!dateConfirmList.length) return;
+  document.getElementById('dcmList').innerHTML=html;
+  var m=document.getElementById('dateConfirmModal');
+  m.classList.add('is-open'); m.setAttribute('aria-hidden','false');
+}
+function closeDateConfirm(){
+  var m=document.getElementById('dateConfirmModal');
+  m.classList.remove('is-open'); m.setAttribute('aria-hidden','true');
+}
+function applyDateConfirm(){
+  var inputs=document.querySelectorAll('#dcmList .dcm-date');
+  inputs.forEach(function(inp){
+    var i=parseInt(inp.getAttribute('data-i'),10);
+    var item=dateConfirmList[i]; if(!item) return;
+    var v=inp.value; if(!v) return;
+    item.date=v;
+    var existing=currentActions[item.idx][item.field]||'';
+    var timePart=(''+existing).slice(11)||'10:00:00';
+    currentActions[item.idx][item.field]=v+'T'+timePart;
+    var row=document.querySelector('[data-idx="'+item.idx+'"]');
+    if(row){
+      var di=row.querySelector('.edit-date'); if(di) di.value=v;
+      var hint=row.querySelector('.lf-date-hint');
+      if(hint){ var rd2=fmtDateCn(v); if(rd2) hint.innerHTML='📅 将记录在 <strong style="color:var(--text-2);">'+rd2+'</strong>（如不符可在下方修改）'; }
+    }
+  });
+  showToast('日期已确认 ✓');
+  closeDateConfirm();
+}
+document.getElementById('dcmConfirm').addEventListener('click',applyDateConfirm);
+document.getElementById('dateConfirmModal').addEventListener('click',function(e){
+  if(e.target&&e.target.getAttribute&&e.target.getAttribute('data-close')!==null) closeDateConfirm();
+});
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeDateConfirm(); });
 
 function collectAction(idx){
   var row=document.querySelector('[data-idx="'+idx+'"]');if(!row)return null;

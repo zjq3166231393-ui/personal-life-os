@@ -103,7 +103,7 @@ class FakeProvider(AIProvider):
                 if kw in text:
                     cat = c
                     break
-            actions.append({"intent": "create_expense", "action_id": f"a{idx}", "amount": amount, "category": cat, "occurred_at": occurred_default})
+            actions.append({"intent": "create_expense", "action_id": f"a{idx}", "amount": amount, "category": cat, "title": cat, "occurred_at": occurred_default})
 
         # Match "number + unit" not caught above (digits only)
         for m in re.finditer(r"(\d+(?:\.\d{1,2})?)\s*(?:元|块|块钱)", text):
@@ -117,7 +117,7 @@ class FakeProvider(AIProvider):
                 if kw in text:
                     cat = c
                     break
-            actions.append({"intent": "create_expense", "action_id": f"a{idx}", "amount": amount, "category": cat, "occurred_at": occurred_default})
+            actions.append({"intent": "create_expense", "action_id": f"a{idx}", "amount": amount, "category": cat, "title": cat, "occurred_at": occurred_default})
 
         if any(w in text for w in ("收到", "工资", "退款", "报销", "收入")):
             for a in actions:
@@ -201,11 +201,16 @@ class FakeProvider(AIProvider):
 
         if is_task_input:
             idx += 1
-            # 1. 先剥前缀引导词（"提醒我，" / "我要" / "记得" 等），避免空段传给 split
-            full = re.sub(
-                r"^(?:麻烦你|请你|请|麻烦)?\s*(?:提醒我|我要|我要记得|记得|要做|帮我|帮我安排|待办|别忘了)\s*[，。,;；.::\s]*",
-                "", text,
-            ).strip()
+            # 1. 取「第一个任务触发词」之后的片段作为任务内容，避免把前面的
+            #    消费信息（如「午饭18元」）混进任务标题； cue 在句首时也等价。
+            _cue_order = ("提醒我", "提醒", "记得", "要做", "待办", "帮我安排", "别忘了", "帮我")
+            _seg = text
+            for _cue in _cue_order:
+                _pos = _seg.find(_cue)
+                if _pos != -1:
+                    _seg = _seg[_pos + len(_cue):]
+                    break
+            full = re.sub(r"^[，。,;；.::\s]+", "", _seg).strip()
             # 2. 按句末标点切分，取最后一个非空段作为标题主体
             #    修复 bug：之前用 split(sep)[-1] 当句号在末尾时返回 ''，导致所有任务都 fallback 成"任务"
             for sep in ("。", "，", ",", ";", "；"):
@@ -228,6 +233,8 @@ class FakeProvider(AIProvider):
             # 4. 兜底：截断到 12 字；如果净化后为空，用 full 原值兜底；再空才回 "任务"（后续后端会拒）
             if not title:
                 title = re.sub(r"[，。,;；、\s]+", "", full).strip()[:12] or "任务"
+            # 剥掉「再记一笔 / 记一笔 / 添加 / 加个」等记账引导词，避免任务标题残留（"再记一笔打车"→"打车"）
+            title = re.sub(r"^(?:再记一笔|记一笔|添加一笔|加一笔|再记|添加|加个|添加个|又记一笔)", "", title)
             if len(title) > 12:
                 title = title[:12]
             actions.append({"intent": "create_task", "action_id": f"a{idx}", "title": title})
