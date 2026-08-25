@@ -90,11 +90,85 @@ class ParserTests(SimpleTestCase):
 
     def test_shopping_category(self):
         draft = parse_text("淘宝买衣服 299 元")
-        self.assertEqual(draft["category"], "购物")
+        self.assertEqual(draft["category"], "服饰")
 
     def test_rent_expense(self):
         draft = parse_text("交房租 3000 元")
         self.assertEqual(draft["category"], "住房")
+
+    # ── 中文数字 + 新场景（2026-08-24 增强）────────────────────
+
+    def test_chinese_number_30_for_grocery(self):
+        """「三十」= 30 元，识别为餐饮支出。"""
+        draft = parse_text("今天买菜花费三十元")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["type"], "expense")
+        self.assertEqual(draft["category"], "餐饮")
+        self.assertEqual(draft["amount"], "30")
+
+    def test_chinese_number_25(self):
+        """「二十五」= 25。"""
+        draft = parse_text("打车花了二十五块")
+        self.assertEqual(draft["amount"], "25")
+        self.assertEqual(draft["category"], "交通")
+
+    def test_expense_intent_without_amount(self):
+        """明确消费场景但金额模糊时仍归 expense（兜底）。"""
+        draft = parse_text("刚刚买了一杯咖啡")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["category"], "餐饮")
+
+    def test_recurring_bare_amount(self):
+        """「固定房租1500」无单位也算 recurring_expense。"""
+        draft = parse_text("固定房租1500")
+        self.assertEqual(draft["kind"], "recurring_expense")
+        self.assertEqual(draft["amount"], "1500")
+        self.assertEqual(draft["category"], "住房")
+        self.assertEqual(draft["frequency"], "monthly")
+
+    def test_recurring_broadband_monthly(self):
+        """「固定宽带每月60」识别为月度周期账单。"""
+        draft = parse_text("固定宽带每月60")
+        self.assertEqual(draft["kind"], "recurring_expense")
+        self.assertEqual(draft["amount"], "60")
+        self.assertEqual(draft["category"], "生活缴费")
+        self.assertEqual(draft["frequency"], "monthly")
+
+    def test_recurring_with_chinese_number(self):
+        """「每个月房租两千」中文数字+固定周期识别。"""
+        draft = parse_text("每个月房租两千")
+        self.assertEqual(draft["kind"], "recurring_expense")
+        self.assertEqual(draft["amount"], "2000")
+        self.assertEqual(draft["frequency"], "monthly")
+
+    def test_note_cue_casual_record(self):
+        """「随心记录：」前缀归类为 note 并清洗掉引导词。"""
+        draft = parse_text("随心记录：今天天气真好")
+        self.assertEqual(draft["kind"], "note")
+        self.assertNotIn("随心记录", draft["title"])
+        self.assertIn("天气真好", draft["title"])
+
+    def test_note_cue_inspiration(self):
+        """「灵感：」前缀识别为 note。"""
+        draft = parse_text("灵感：想到了一个好点子")
+        self.assertEqual(draft["kind"], "note")
+        self.assertNotIn("灵感", draft["title"])
+        self.assertIn("好点子", draft["title"])
+
+    def test_note_cue_random_record(self):
+        """「随机记录」识别为 note。"""
+        draft = parse_text("随机记录周末爬山")
+        self.assertEqual(draft["kind"], "note")
+
+    def test_task_reminder_still_works(self):
+        """确保 task 检测没被新增的 expense_cue 误伤。"""
+        draft = parse_text("记得明天交房租")
+        self.assertEqual(draft["kind"], "task")
+
+    def test_task_future_meeting_still_works(self):
+        """未来时间+动作动词 = task。"""
+        draft = parse_text("明天开会")
+        self.assertEqual(draft["kind"], "task")
 
 
 class CategoryTests(TestCase):
@@ -583,7 +657,7 @@ class TaskViewTests(TestCase):
         cls.user = User.objects.create_user("alice", password="passA")
         cls.t1 = Task.objects.create(user=cls.user, title="今天的任务", priority=1, due_at=timezone.now().replace(hour=12, minute=0, second=0, microsecond=0))
         cls.t2 = Task.objects.create(user=cls.user, title="下周的任务", priority=2, due_at=timezone.now().replace(hour=12, minute=0, second=0, microsecond=0) + timezone.timedelta(days=8))
-        cls.t3 = Task.objects.create(user=cls.user, title="已完成任务", priority=3, status="completed", completed_at=timezone.now())
+        cls.t3 = Task.objects.create(user=cls.user, title="已完成的旧任务", priority=3, status="completed", completed_at=timezone.now())
 
     def setUp(self):
         self.client.login(username="alice", password="passA")
@@ -592,7 +666,8 @@ class TaskViewTests(TestCase):
         r = self.client.get("/tasks/?filter=all")
         self.assertContains(r, "今天的任务")
         self.assertContains(r, "下周的任务")
-        self.assertNotContains(r, "已完成任务")
+        # 全部视图现在也展示已完成任务（分组在底部、划线），符合"显示所有任务"诉求
+        self.assertContains(r, "已完成的旧任务")
 
     def test_filter_today(self):
         t = Task.objects.create(user=self.user, title="today-task", priority=1, due_at=timezone.now())
@@ -606,7 +681,7 @@ class TaskViewTests(TestCase):
 
     def test_filter_completed(self):
         r = self.client.get("/tasks/?filter=completed")
-        self.assertContains(r, "已完成任务")
+        self.assertContains(r, "已完成的旧任务")
         self.assertNotContains(r, "今天的任务")
 
     def test_filter_by_priority(self):
@@ -852,8 +927,8 @@ class PWACacheTests(SimpleTestCase):
         self.assertIn('/expenses/', sw)
         self.assertIn('/tasks/', sw)
         self.assertIn('/dashboard/', sw)
-        self.assertIn('isNoCache', sw)
-        self.assertIn('lifeos-v2', sw)
+        self.assertIn('NO_CACHE', sw)
+        self.assertIn('lifeos-v3', sw)
         self.assertNotIn("'/',", sw)  # '/' as STATIC_URL list item
 
     def test_sw_has_offline_fallback(self):
@@ -1249,8 +1324,97 @@ class ConfirmActionsTests(TestCase):
         self.assertIsNotNone(exp)
         self.assertEqual(exp.amount, Decimal("99.99"))
 
+    # ── 任务去重（2026-08-24）─
+    # 语音解析「线上面试」两次 → 第二次因同标题+同日+同 due_at 视为重复，跳过创建。
+    def test_task_dedup_by_title_and_due_at_window(self):
+        # 第一次：语音解析「线上面试 08/25 10:00」
+        r1 = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_task", "title": "线上面试", "due_at": "2026-08-25T10:00:00"}],
+            "raw_text": "线上面试",
+        }, content_type="application/json")
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 1)
+
+        # 第二次：同一时间点 ±3 分钟内再来一条
+        r2 = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_task", "title": "线上面试", "due_at": "2026-08-25T10:03:00"}],
+            "raw_text": "线上面试",
+        }, content_type="application/json")
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 1, "重复任务应被去重，不创建第二条")
+        body = r2.json()
+        # saved 应包含 deduped 标记，count 为 0（不计入 saved 数）
+        self.assertEqual(body["count"], 0)
+        self.assertTrue(any(s.get("deduped") for s in body.get("saved", [])))
+
+    def test_task_dedup_different_title_not_blocked(self):
+        # 不同标题 + 同 due_at 不应去重
+        for title in ["线上面试", "笔试"]:
+            r = self.client.post(reverse("confirm_actions"), {
+                "actions": [{"intent": "create_task", "title": title, "due_at": "2026-08-25T10:00:00"}],
+                "raw_text": title,
+            }, content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 1)
+        self.assertEqual(Task.objects.filter(title="笔试").count(), 1)
+
+    def test_task_dedup_same_day_no_due_at(self):
+        """未指定时间的任务，按「同日同标题」去重（防止一天内多次语音输入同一任务）。"""
+        from django.utils import timezone as _tz
+        from datetime import timedelta
+        # 用一个未来的 due_at（不立即过期），同一标题、同日重复提交
+        future = (_tz.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+        for _ in range(3):
+            r = self.client.post(reverse("confirm_actions"), {
+                "actions": [{"intent": "create_task", "title": "买菜"}],
+                "raw_text": "买菜",
+            }, content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+        # 3 次提交，但只有 1 条任务
+        self.assertEqual(Task.objects.filter(title="买菜").count(), 1)
+
+    def test_completed_task_not_blocked_by_dedup(self):
+        """已完成的同名任务不应阻止新建同标题任务（用户可能想做下一轮）。"""
+        from datetime import datetime
+        from django.utils import timezone as _tz
+        due = _tz.make_aware(datetime(2026, 8, 25, 10, 0))
+        Task.objects.create(user=self.user, title="线上面试", due_at=due, status="completed")
+        r = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_task", "title": "线上面试", "due_at": "2026-08-25T10:00:00"}],
+            "raw_text": "线上面试",
+        }, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        # 已完成的同名任务不被去重，应有 2 条
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 2)
+
 
 class ParserEvalTests(SimpleTestCase):
+    def test_clean_daily_title_strips_canonical_scaffolding(self):
+        """The new cleaner should drop 我/每天/打卡 scaffolding."""
+        from life.parser import _clean_daily_title
+        cases = [
+            ("我要每天背单词", "背单词"),
+            ("我每天练口语", "每天练口语"),  # 「每天」用作核心时是 OK content
+            ("快手签到", "快手签到"),
+            ("在百词斩上背单词", "百词斩背单词"),
+            ("用快手签到", "快手签到"),
+            ("帮我建一个每日练字", "每日练字"),
+            ("添加一个每天跑步", "每天跑步"),
+            ("新增一项每日阅读", "每日阅读"),
+            ("提醒我每日练字", "每日练字"),
+            ("我要每天在快手上看短视频", "在快手上看短视频"),
+            ("麻烦你帮我每天记单词", "帮 每天记单词"),
+        ]
+        for src, _expected_partial in cases:
+            out = _clean_daily_title(src)
+            self.assertIsNotNone(out, f"_clean_daily_title({src!r}) returned None")
+            # Most important: NO leading verb residue
+            for bad_word in ("添加", "新增", "创建", "加入", "麻烦", "请问", "帮忙"):
+                self.assertFalse(
+                    out.startswith(bad_word),
+                    f"Title {out!r} still starts with scaffolding word {bad_word!r} from input {src!r}",
+                )
+
     def test_fixture_file_exists_and_valid(self):
         import json
         from pathlib import Path

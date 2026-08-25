@@ -24,6 +24,8 @@ VALID_INTENTS = frozenset({
     "create_task",
     "create_reminder",
     "create_note",
+    "create_recurring_expense",
+    "create_daily_reminder",
     "update_draft",
     "unknown",
 })
@@ -106,6 +108,14 @@ def validate_ai_response(response):
             if not isinstance(title, str) or not title.strip():
                 errors.append(f"{prefix}.title: required, must be a non-empty string.")
 
+        if intent == "create_recurring_expense":
+            title = action.get("title", "")
+            if not isinstance(title, str) or not title.strip():
+                errors.append(f"{prefix}.title: required, must be a non-empty string.")
+            amount = action.get("amount", "")
+            if not _validate_decimal_str(amount):
+                errors.append(f"{prefix}.amount: required, must be a positive decimal string, got '{amount}'.")
+
         if intent == "create_reminder":
             title = action.get("title", "")
             if not isinstance(title, str) or not title.strip():
@@ -114,6 +124,14 @@ def validate_ai_response(response):
             has_remind = _validate_iso8601(action.get("remind_at", ""))
             if not has_event and not has_remind:
                 errors.append(f"{prefix}: must have event_at or remind_at in ISO 8601.")
+
+        if intent == "create_daily_reminder":
+            title = action.get("title", "")
+            if not isinstance(title, str) or not title.strip():
+                errors.append(f"{prefix}.title: required, must be a non-empty string.")
+            icon = action.get("icon", "")
+            if icon and (not isinstance(icon, str) or len(icon) > 4):
+                errors.append(f"{prefix}.icon: optional, must be a string ≤4 chars if provided.")
 
         if intent == "update_draft":
             aid = action.get("action_id", "")

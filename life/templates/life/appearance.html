@@ -1,0 +1,119 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}外观设置 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+
+{% block body %}
+<main class="lf-container">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">外观设置</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <section class="lf-card lf-mb-4">
+    <div class="lf-appearance-hero">
+      <div class="lf-appearance-hero__avatar" id="previewAvatar">{{ display_name|first|upper }}</div>
+      <div class="lf-text-bold lf-text-lg" id="previewName">{{ display_name }}</div>
+      <div class="lf-text-xs lf-text-faint lf-mt-1">这些都是只属于你的小习惯</div>
+    </div>
+  </section>
+
+  <section class="lf-card lf-mb-4">
+    <div class="lf-setting-row" style="display:block;">
+      <div class="lf-setting-row__label">显示名</div>
+      <div class="lf-setting-row__hint">首页与头像会显示这个名字，仅保存在本机浏览器</div>
+      <input id="displayName" class="lf-input lf-mt-3" maxlength="20" placeholder="给自己起个名字" value="{{ display_name }}">
+    </div>
+
+    <div class="lf-setting-row" style="display:block;">
+      <div class="lf-setting-row__label">主题</div>
+      <div class="lf-setting-row__hint">深色更护眼，跟随系统会随手机/电脑自动切换</div>
+      <div class="lf-seg lf-mt-3" id="themeSeg">
+        <button class="lf-seg__btn" data-theme="light">☀️ 浅色</button>
+        <button class="lf-seg__btn" data-theme="dark">🌙 深色</button>
+        <button class="lf-seg__btn" data-theme="auto">💡 跟随系统</button>
+      </div>
+    </div>
+
+    <div class="lf-setting-row" style="display:block;">
+      <div class="lf-setting-row__label">主题色</div>
+      <div class="lf-setting-row__hint">挑一个你顺眼的主色调，全站按钮/图标会跟着变</div>
+      <div class="lf-swatches lf-mt-3" id="accentSwatches">
+        <span class="lf-swatch" data-accent="blue" style="background:#2b56d8;" title="经典蓝"></span>
+        <span class="lf-swatch" data-accent="teal" style="background:#0d9488;" title="青柠"></span>
+        <span class="lf-swatch" data-accent="violet" style="background:#7c3aed;" title="薰衣紫"></span>
+        <span class="lf-swatch" data-accent="rose" style="background:#e11d48;" title="玫红"></span>
+        <span class="lf-swatch" data-accent="amber" style="background:#d97706;" title="暖琥珀"></span>
+        <span class="lf-swatch" data-accent="green" style="background:#16a34a;" title="森野绿"></span>
+      </div>
+    </div>
+  </section>
+
+  <p class="lf-text-xs lf-text-faint lf-text-center lf-mt-2" style="text-align:center;">
+    设置会自动保存到本浏览器，下次打开依然是这个样子。
+  </p>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var lifeos = window.__lifeos || {
+    themePref: function(){ return localStorage.getItem('lifeos-theme') || 'auto'; },
+    setTheme: function(p){ localStorage.setItem('lifeos-theme', p); document.documentElement.setAttribute('data-theme', (p==='dark'?'dark':'light')); },
+    accent: function(){ return localStorage.getItem('lifeos-accent') || 'blue'; },
+    setAccent: function(n){ localStorage.setItem('lifeos-accent', n); document.documentElement.setAttribute('data-accent', n); }
+  };
+
+  // 主题分段
+  var themeSeg = document.getElementById('themeSeg');
+  var curTheme = lifeos.themePref();
+  function paintTheme(p){
+    themeSeg.querySelectorAll('.lf-seg__btn').forEach(function(b){
+      b.classList.toggle('is-active', b.dataset.theme === p);
+    });
+  }
+  paintTheme(curTheme);
+  themeSeg.addEventListener('click', function(e){
+    var btn = e.target.closest('.lf-seg__btn'); if(!btn) return;
+    lifeos.setTheme(btn.dataset.theme); paintTheme(btn.dataset.theme);
+  });
+
+  // 主题色
+  var sw = document.getElementById('accentSwatches');
+  var curAccent = lifeos.accent();
+  function paintAccent(n){
+    sw.querySelectorAll('.lf-swatch').forEach(function(s){
+      s.classList.toggle('is-active', s.dataset.accent === n);
+    });
+  }
+  paintAccent(curAccent);
+  sw.addEventListener('click', function(e){
+    var s = e.target.closest('.lf-swatch'); if(!s) return;
+    lifeos.setAccent(s.dataset.accent); paintAccent(s.dataset.accent);
+  });
+
+  // 显示名
+  var nameInput = document.getElementById('displayName');
+  var avatar = document.getElementById('previewAvatar');
+  var previewName = document.getElementById('previewName');
+  function applyName(v){
+    v = (v || '').trim();
+    previewName.textContent = v || '我';
+    avatar.textContent = (v || '我').slice(0, 1).toUpperCase();
+    localStorage.setItem('lifeos-name', v);
+  }
+  nameInput.addEventListener('input', function(){ applyName(this.value); });
+  // 若本机已存过名字，优先用它（覆盖后端默认）
+  var stored = localStorage.getItem('lifeos-name');
+  if(stored !== null){ nameInput.value = stored; applyName(stored); }
+})();
+</script>
+{% endblock %}

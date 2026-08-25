@@ -16,10 +16,13 @@
 | ✅ 任务管理 | 5 种状态、优先级、重复任务、父子任务 |
 | 🔔 提醒 | 生日、账单、纪念日、自定义事件、提前多天提醒 |
 | 📝 笔记 | 随心记、周/月复盘草稿 |
+| 🌅 每日打卡 | 习惯/每日提醒（背单词、签到、练口语），首页可见 + 连续天数 |
+| 📅 农历 & 日历提醒 | 首页显示农历，生日/纪念日提前 N 天提醒（设置一次年年有效） |
+| 🔔 提醒 | 生日、账单、纪念日、自定义事件、提前多天提醒 |
 | 🤖 AI 解析 | 自然语言输入 → 多意图识别 → 确认卡 → 保存 |
 | 📊 看板 | Chart.js 图表、月末预测、异常检测、行动力分析 |
 | 📱 PWA | 可添加到手机桌面、离线页面、底部导航 |
-| 🔒 安全 | 登录限流、数据隔离、审计日志、威胁模型 |
+| 🔒 安全 | 登录限流、API 限流、数据隔离、审计日志、多用户单测 |
 
 ## 技术栈
 
@@ -29,6 +32,7 @@
 | 数据库 | SQLite (开发) / MySQL (生产) |
 | 前端 | Django Templates + Bootstrap 5.3 + Chart.js 4 |
 | AI | DeepSeek API (可选，规则优先) |
+| 农历 | zhdate（农历/生肖转换，已在 requirements.txt） |
 | 部署 | Gunicorn + Nginx + systemd + Let's Encrypt |
 | CI | GitHub Actions (push/PR → test) |
 
@@ -135,7 +139,7 @@ python manage.py runserver
 ## 测试
 
 ```powershell
-python manage.py test                 # 194 tests
+python manage.py test                 # 200+ tests
 python manage.py check                # 系统检查
 python manage.py check --deploy       # 部署检查
 python manage.py run_eval             # AI 解析评测
@@ -186,7 +190,7 @@ personal-life-os/
 | 单用户设计 | 个人使用，非 SaaS |
 | 无 2FA | 密码 + 限流，无两步验证 |
 | SQLite 锁 | 生产建议 MySQL |
-| 无 Redis | 限流计数器进程不共享 |
+| Redis 可选 | 设置 `REDIS_URL` 后限流/缓存跨进程共享，不设置则回退本地内存 |
 | 无 OAuth | 仅用户名密码注册 |
 
 详见 `docs/v1-release-audit.md`。
@@ -204,6 +208,7 @@ personal-life-os/
 | v0.7 | 190 | 8 | 看板/建议 |
 | v0.8 | 190 | 7 | 安全/部署 |
 | v0.9 | 194 | 12 | 工程质量/打磨 |
+| v1.0 | 200+ | — | 每日打卡/农历/日历提醒/随心记/Toast/底部导航 + 稳定性安全加固 |
 
 ## 许可
 

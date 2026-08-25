@@ -1,11 +1,77 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><title>{% if category %}编辑{% else %}新增{% endif %}分类</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}</style></head>
-<body><main class="container py-4" style="max-width:540px">
-<section class="hero p-4 shadow-sm mb-4 d-flex justify-content-between"><h1 class="h5 fw-bold mb-0">{% if category %}编辑{% else %}新增{% endif %}分类</h1><a href="{% url 'category_list' %}" class="text-white text-decoration-none small">← 返回</a></section>
-<section class="card shadow-sm p-4"><form method="post">{% csrf_token %}
-<div class="mb-3"><label class="form-label">名称</label><input type="text" name="name" class="form-control" value="{{ category.name|default:'' }}" maxlength="50" required></div>
-<div class="row mb-3"><div class="col-md-6"><label class="form-label">类型</label><select name="type" class="form-select">{% if not category %}<option value="expense">支出</option><option value="income">收入</option>{% else %}<option value="{{ category.type }}" selected>{% if category.type == 'expense' %}支出{% else %}收入{% endif %}</option>{% endif %}</select></div><div class="col-md-6"><label class="form-label">图标 emoji</label><input type="text" name="icon" class="form-control" value="{{ category.icon|default:'' }}" placeholder="如 🐱"></div></div>
-<div class="mb-4"><label class="form-label">颜色</label><input type="color" name="color" class="form-control form-control-color" value="{{ category.color|default:'#6b7280' }}" style="width:60px;height:38px"></div>
-<button type="submit" class="btn btn-dark">保存</button></form></section>
-</main></body></html>
+{% extends "_base.html" %}
+{% block title %}{% if category %}编辑分类{% else %}新增分类{% endif %} · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{% if category %}编辑分类{% else %}新增分类{% endif %}</h1>
+    <a href="{% url 'category_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--padded">
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="lf-field">
+        <label class="lf-label">名称</label>
+        <input type="text" name="name" class="lf-input" value="{{ category.name|default:'' }}" maxlength="50" required>
+      </div>
+      <div class="lf-row" style="gap:12px;">
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">类型</label>
+          <select name="type" class="lf-select">{% if not category %}<option value="expense" {% if next_type != 'income' %}selected{% endif %}>支出</option><option value="income" {% if next_type == 'income' %}selected{% endif %}>收入</option>{% else %}<option value="{{ category.type }}" selected>{% if category.type == 'expense' %}支出{% else %}收入{% endif %}</option>{% endif %}</select>
+        </div>
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">颜色</label>
+          <input type="color" name="color" class="lf-input" style="height:42px;padding:4px;width:80px;" value="{{ category.color|default:'#6b7280' }}">
+        </div>
+      </div>
+      <div class="lf-field">
+        <label class="lf-label">图标 emoji</label>
+        <input type="text" name="icon" id="iconInput" class="lf-input" value="{{ category.icon|default:'' }}" placeholder="点击下方选择，或直接输入" maxlength="4">
+        {# 常用 emoji 选择器（2026-08-24）— 一键点击填入 #}
+        <div class="lf-emoji-picker" id="emojiPicker">
+          {% for emo in "🍔🚗🛍️💊📚🎮🐱🏠⚡🎁✈️💼🏃💧🎬📌☕🍕🚌🚇🏖️🏥🎓📷🎵🚲🌹"|make_list %}
+          <button type="button" class="lf-emoji-picker__opt" data-emoji="{{ emo }}">{{ emo }}</button>
+          {% endfor %}
+        </div>
+        <p class="lf-help">点击下方 emoji 即可填入；也支持直接输入任意 4 字以内字符。</p>
+      </div>
+      <div class="lf-row lf-mt-6" style="gap:8px;">
+        <button type="submit" class="lf-btn lf-btn--primary">保存</button>
+        <a href="{% url 'category_list' %}" class="lf-btn lf-btn--ghost">取消</a>
+      </div>
+    </form>
+  </section>
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var input = document.getElementById('iconInput');
+  var picker = document.getElementById('emojiPicker');
+  if (!input || !picker) return;
+  // 当前值高亮
+  function paintActive(){
+    var v = (input.value || '').trim();
+    picker.querySelectorAll('.lf-emoji-picker__opt').forEach(function(b){
+      b.classList.toggle('is-active', b.dataset.emoji === v);
+    });
+  }
+  paintActive();
+  picker.addEventListener('click', function(e){
+    var btn = e.target.closest('.lf-emoji-picker__opt');
+    if (!btn) return;
+    input.value = btn.dataset.emoji;
+    paintActive();
+  });
+  input.addEventListener('input', paintActive);
+})();
+</script>
+{% endblock %}

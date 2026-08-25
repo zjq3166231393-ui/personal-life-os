@@ -34,6 +34,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "life.middleware.LoginRateLimitMiddleware",
+    "life.middleware.ApiRateLimitMiddleware",
+    "life.middleware.NoBrowserCacheMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -56,6 +58,9 @@ TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
+# 头像等用户上传文件（2026-08-24）
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "/accounts/login/"
@@ -63,18 +68,31 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 DEFAULT_FROM_EMAIL = "lifeos@localhost"
 
-# Session: auto-expire after 2 hours idle, 24 hours max
-SESSION_COOKIE_AGE = 7200  # 2 hours
+# Session: 持久化登录，避免 iOS Safari / PWA 关闭后会话丢失导致首页打不开。
+# 关闭浏览器不再登出；最长 14 天无活动才过期（SESSION_SAVE_EVERY_REQUEST 每次请求刷新过期时间）。
+SESSION_COOKIE_AGE = 1209600  # 14 天
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
-# Cache for rate limiting (use local memory cache in dev, Redis in production)
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "lifeos",
+# Cache for rate limiting.
+# In production set REDIS_URL (e.g. redis://127.0.0.1:6379/1) to share the
+# cache across workers; otherwise fall back to process-local memory (fine for
+# single-process dev servers, but each worker keeps its own counters).
+REDIS_URL = os.getenv("REDIS_URL")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "lifeos",
+        }
+    }
 
 # ── Production security ──────────────────────────────────────────
 ENVIRONMENT = os.getenv("DJANGO_ENVIRONMENT", "development")

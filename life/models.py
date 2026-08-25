@@ -113,6 +113,7 @@ class Task(models.Model):
         TEXT = "text", "文本"
         MANUAL = "manual", "手动"
         AI = "ai", "AI"
+        RULE = "rule", "规则"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tasks")
     title = models.CharField(max_length=200)
@@ -305,6 +306,115 @@ class Reminder(models.Model):
         return f"🔔 {self.title} ({self.get_reminder_type_display()})"
 
 
+class Countdown(models.Model):
+    """倒计时 / 纪念日 — iOS Day Matters 风格模块。
+
+    关键差异（vs Reminder）：
+    - 用户视角：「生日还有 86 天」「考研还有 213 天」——主要是 **距离** 时间
+    - 可选自动同步到 Reminder（提前 N 天在首页高亮）
+    - 隐私：默认每个用户独立，没参与日历通用事件共享
+    """
+
+    class Direction(models.TextChoices):
+        DOWN = "down", "倒计时（向目标日期倒数）"
+        UP = "up", "纪念日（从过去日期数已经多少天）"
+
+    class Recurrence(models.TextChoices):
+        NONE = "none", "不重复"
+        YEARLY = "yearly", "每年"
+        MONTHLY = "monthly", "每月"
+        WEEKLY = "weekly", "每周"
+        DAILY = "daily", "每天"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="countdowns")
+    title = models.CharField(max_length=80)
+    target_date = models.DateField(help_text="目标日期")
+    direction = models.CharField(max_length=8, choices=Direction.choices, default=Direction.DOWN)
+    recurrence = models.CharField(max_length=10, choices=Recurrence.choices, default=Recurrence.NONE)
+
+    # 显示 / 个性化
+    emoji = models.CharField(max_length=8, blank=True, default="", help_text="1-4 chars 可含 emoji")
+    color = models.CharField(max_length=16, blank=True, default="", help_text="Hex color e.g. #5b8def")
+    note = models.TextField(blank=True, max_length=500)
+    show_on_home = models.BooleanField(default=True, help_text="是否在首页小板块显示")
+
+    # 联动日历提醒（可选）
+    sync_to_reminder = models.BooleanField(default=False, help_text="同步为日历提醒，提前 N 天提醒")
+    reminder = models.OneToOneField(
+        "Reminder", on_delete=models.SET_NULL, null=True, blank=True, related_name="countdown",
+        help_text="已同步的日历提醒（删除 Countdown 时不会级联删除 Reminder）",
+    )
+
+    pinned = models.BooleanField(default=False, help_text="首页置顶")
+    is_active = models.BooleanField(default=True, help_text="软删除开关")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["pinned", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active", "target_date"]),
+        ]
+
+    def __str__(self):
+        arrow = "⏳" if self.direction == self.Direction.DOWN else "🎉"
+        return f"{arrow} {self.title} → {self.target_date.isoformat()}"
+
+    # ── 展示 helper ──────────────────────────────────────────────────
+    def next_occurrence(self, today=None):
+        """Return the next / current occurrence date based on recurrence.
+
+        For DOWN direction + YEARLY recurrence, if today is past target_date,
+        roll forward to next year (so the countdown never shows negative days).
+        """
+        from datetime import timedelta
+        today = today or timezone_now_localdate()
+        d = self.target_date
+        if self.recurrence == self.Recurrence.NONE:
+            return d
+        if self.recurrence == self.Recurrence.YEARLY:
+            # jump forward year-by-year until >= today
+            try:
+                while d < today:
+                    d = d.replace(year=d.year + 1)
+            except ValueError:  # 2/29 in non-leap year
+                d = d.replace(year=d.year + 1, day=28)
+            return d
+        if self.recurrence == self.Recurrence.MONTHLY:
+            while d < today:
+                y, m = (d.year, d.month + 1) if d.month < 12 else (d.year + 1, 1)
+                try:
+                    d = d.replace(year=y, month=m)
+                except ValueError:
+                    d = d.replace(year=y, month=m, day=28)
+            return d
+        if self.recurrence == self.Recurrence.WEEKLY:
+            while d < today:
+                d = d + timedelta(days=7)
+            return d
+        if self.recurrence == self.Recurrence.DAILY:
+            # for daily, target_date is just the start day; next = today
+            return today
+        return d
+
+    def days_diff(self, today=None):
+        """Return signed day count (negative = past)."""
+        from datetime import timedelta
+        today = today or timezone_now_localdate()
+        target = self.next_occurrence(today) if self.direction == self.Direction.DOWN else self.target_date
+        return (target - today).days
+
+    @property
+    def accent_color(self):
+        return self.color or "#5b8def"  # default brand blue
+
+
+def timezone_now_localdate():
+    """Small helper — avoid importing timezone at module load time."""
+    from django.utils import timezone
+    return timezone.localdate()
+
+
 # ── AI Conversation models ──────────────────────────────────────────
 
 
@@ -363,6 +473,8 @@ class ProposedAction(models.Model):
         CREATE_TASK = "create_task", "新建任务"
         CREATE_REMINDER = "create_reminder", "新建提醒"
         CREATE_NOTE = "create_note", "新建记事"
+        CREATE_RECURRING_EXPENSE = "create_recurring_expense", "新建固定账单"
+        CREATE_DAILY_REMINDER = "create_daily_reminder", "新建每日提醒"
 
     parse_result = models.ForeignKey(ParseResult, on_delete=models.CASCADE, related_name="proposed_actions")
     action_type = models.CharField(max_length=30, choices=ActionType.choices)

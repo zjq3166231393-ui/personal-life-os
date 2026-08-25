@@ -1,0 +1,288 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}{% if cd %}编辑{% else %}新增{% endif %}倒计时 · 我的 LifeOS{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* iOS Settings 风格 group */
+  .lf-ios-group {
+    background: var(--surface, #fff); border-radius: 14px; margin: 0 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden;
+  }
+  [data-theme="dark"] .lf-ios-group { background: var(--surface-1, #1f232b); }
+  .lf-ios-group__head {
+    font-size: 12px; color: var(--text-soft); padding: 14px 22px 6px;
+    text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+  }
+  .lf-ios-row {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    border-top: 1px solid var(--border, #f0f1f4);
+  }
+  .lf-ios-row:first-child { border-top: none; }
+  .lf-ios-row__label { font-size: 15px; flex-shrink: 0; width: 96px; color: var(--text); }
+  .lf-ios-row__control { flex: 1; }
+  .lf-ios-row input[type="text"],
+  .lf-ios-row input[type="date"],
+  .lf-ios-row select,
+  .lf-ios-row textarea {
+    width: 100%; padding: 8px 10px; font-size: 15px;
+    background: transparent; border: none; color: var(--text); outline: none;
+    font-family: inherit;
+  }
+  .lf-ios-row textarea { min-height: 60px; resize: vertical; }
+  .lf-ios-toggle {
+    position: relative; width: 50px; height: 30px; flex-shrink: 0;
+    background: var(--border, #e5e7eb); border-radius: 999px; cursor: pointer; transition: background 0.2s var(--ease);
+  }
+  .lf-ios-toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 26px; height: 26px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+    transition: transform 0.2s var(--ease);
+  }
+  .lf-ios-toggle.is-on { background: #34c759; }
+  .lf-ios-toggle.is-on::after { transform: translateX(20px); }
+  .lf-ios-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+
+  .lf-color-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+  .lf-color-sw {
+    width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.15s var(--ease);
+  }
+  .lf-color-sw.is-active { border-color: var(--text); transform: scale(1.1); }
+
+  .lf-emoji-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0; max-height: 160px; overflow-y: auto; }
+  .lf-emoji-sw {
+    width: 34px; height: 34px; border-radius: 10px; background: var(--bg-soft, #f3f4f6);
+    display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer;
+    transition: background 0.15s var(--ease);
+  }
+  .lf-emoji-sw:hover { background: var(--border, #e5e7eb); }
+  .lf-emoji-sw.is-active { background: var(--brand-soft, rgba(91,141,239,0.15)); outline: 2px solid var(--brand, #5b8def); }
+
+  .lf-ios-foot {
+    text-align: center; color: var(--text-soft); font-size: 12px; padding: 10px 22px; line-height: 1.6;
+  }
+
+  .lf-ios-danger {
+    display: block; margin: 24px 22px; padding: 14px; text-align: center; border-radius: 12px;
+    background: transparent; color: #ef4444; border: 1px solid #ef4444; font-size: 14px; font-weight: 600;
+    cursor: pointer; text-decoration: none; transition: background 0.15s var(--ease);
+  }
+  .lf-ios-danger:hover { background: #ef4444; color: #fff; }
+</style>
+{% endblock %}
+
+{% block body %}
+<header class="lf-page-header">
+  <div>
+    <a href="{% url 'countdown_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+    <h1 class="lf-page-header__title">{% if cd %}编辑倒计时{% else %}新建倒计时{% endif %}</h1>
+  </div>
+  <button form="cdForm" type="submit" class="lf-btn lf-btn--primary">保存</button>
+</header>
+
+<form id="cdForm" method="post">{% csrf_token %}
+  {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+  <div class="lf-ios-group__head">基本信息</div>
+  <div class="lf-ios-group">
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label" for="id_title">标题</label>
+      <div class="lf-ios-row__control">
+        <input id="id_title" type="text" name="title" maxlength="80" required
+               value="{{ cd.title|default_if_none:'' }}" placeholder="比如「考研」「妈妈的生日」">
+      </div>
+    </div>
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label" for="id_target_date">日期</label>
+      <div class="lf-ios-row__control">
+        <input id="id_target_date" type="date" name="target_date" required
+               value="{{ cd.target_date|date:'Y-m-d'|default:today }}">
+      </div>
+    </div>
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label" for="id_direction">方向</label>
+      <div class="lf-ios-row__control">
+        <select id="id_direction" name="direction">
+          <option value="down" {% if cd.direction == 'down' or not cd %}selected{% endif %}>倒计时（向 0 数）</option>
+          <option value="up" {% if cd.direction == 'up' %}selected{% endif %}>纪念日（已 +N 天）</option>
+        </select>
+      </div>
+    </div>
+    <div class="lf-ios-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+      <label class="lf-ios-row__label">循环</label>
+      <div class="lf-seg" id="recurrenceSeg" role="group" aria-label="循环方式">
+        <button type="button" class="lf-seg__btn" data-rec="none">不循环</button>
+        <button type="button" class="lf-seg__btn" data-rec="yearly">每年</button>
+        <button type="button" class="lf-seg__btn" data-rec="monthly">每月</button>
+        <button type="button" class="lf-seg__btn" data-rec="weekly">每周</button>
+        <button type="button" class="lf-seg__btn" data-rec="daily">每天</button>
+      </div>
+      <input type="hidden" name="recurrence" id="id_recurrence" value="{{ cd.recurrence|default:'none' }}">
+    </div>
+    <div class="lf-ios-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <label class="lf-ios-row__label" for="id_note">备注</label>
+      <textarea id="id_note" name="note" maxlength="500" placeholder="可选：写一句对自己的鼓励">{{ cd.note|default_if_none:'' }}</textarea>
+    </div>
+  </div>
+
+  <div class="lf-ios-group__head">显示</div>
+  <div class="lf-ios-group">
+    <div class="lf-ios-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <label class="lf-ios-row__label">Emoji</label>
+      <input id="id_emoji" type="text" name="emoji" maxlength="8" value="{{ cd.emoji|default_if_none:'' }}" placeholder="🎯" style="text-align:center; font-size:28px; padding:8px;">
+      <div class="lf-emoji-row" id="emojiPicker" data-target="id_emoji">
+        {% for e in "🎯🎉🎂💍✈️📚🏆💍🎓💪🍼🌹🍰⏰📅🌟🚀🎁🎈🔥❤️💼🏠🚗💎🌈🎨🎮⚽🎵☕🍕🎬📷🏖️🚲🛍️📌🌹🎀"|make_list %}{% if e != " " %}
+          <span class="lf-emoji-sw" data-emoji="{{ e }}">{{ e }}</span>
+        {% endif %}{% endfor %}
+      </div>
+    </div>
+    <div class="lf-ios-row" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <label class="lf-ios-row__label">主题色</label>
+      <div class="lf-color-row" id="colorPicker" data-target="id_color">
+        <span class="lf-color-sw" data-color="#5b8def" style="background:#5b8def;"></span>
+        <span class="lf-color-sw" data-color="#6a7bf2" style="background:#6a7bf2;"></span>
+        <span class="lf-color-sw" data-color="#22c55e" style="background:#22c55e;"></span>
+        <span class="lf-color-sw" data-color="#f59e0b" style="background:#f59e0b;"></span>
+        <span class="lf-color-sw" data-color="#ef4444" style="background:#ef4444;"></span>
+        <span class="lf-color-sw" data-color="#ec4899" style="background:#ec4899;"></span>
+        <span class="lf-color-sw" data-color="#14b8a6" style="background:#14b8a6;"></span>
+        <span class="lf-color-sw" data-color="#a855f7" style="background:#a855f7;"></span>
+        <span class="lf-color-sw" data-color="#0ea5e9" style="background:#0ea5e9;"></span>
+        <span class="lf-color-sw" data-color="#84cc16" style="background:#84cc16;"></span>
+      </div>
+      <input id="id_color" type="hidden" name="color" value="{{ cd.color|default_if_none:'#5b8def' }}">
+    </div>
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label">首页置顶</label>
+      <label class="lf-ios-toggle {% if cd.pinned %}is-on{% endif %}" data-toggle>
+        <input type="checkbox" name="pinned" {% if cd.pinned %}checked{% endif %}>
+      </label>
+    </div>
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label">首页显示</label>
+      <label class="lf-ios-toggle {% if cd.show_on_home or not cd %}is-on{% endif %}" data-toggle>
+        <input type="checkbox" name="show_on_home" {% if cd.show_on_home or not cd %}checked{% endif %}>
+      </label>
+    </div>
+  </div>
+
+  <div class="lf-ios-group__head">日历提醒</div>
+  <div class="lf-ios-group">
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label">同步到日历</label>
+      <label class="lf-ios-toggle {% if cd.sync_to_reminder %}is-on{% endif %}" data-toggle>
+        <input type="checkbox" name="sync_to_reminder" {% if cd.sync_to_reminder %}checked{% endif %}>
+      </label>
+    </div>
+    <div class="lf-ios-row">
+      <label class="lf-ios-row__label" for="id_remind_days_before">提前</label>
+      <div class="lf-ios-row__control">
+        <select id="id_remind_days_before" name="remind_days_before">
+          <option value="0" {% if cd.reminder.remind_days_before == '0' %}selected{% endif %}>当天</option>
+          <option value="1" selected>提前 1 天</option>
+          <option value="3" {% if cd.reminder.remind_days_before == '3' %}selected{% endif %}>提前 3 天</option>
+          <option value="7" {% if cd.reminder.remind_days_before == '7' %}selected{% endif %}>提前 7 天</option>
+          <option value="14" {% if cd.reminder.remind_days_before == '14' %}selected{% endif %}>提前 14 天</option>
+          <option value="30" {% if cd.reminder.remind_days_before == '30' %}selected{% endif %}>提前 30 天</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <p class="lf-ios-foot">
+    倒计时会在首页小板块按"置顶优先 + 临近优先"展示。<br>
+    不想看某条时，点击右上角"首页显示"关闭即可。
+  </p>
+
+  {% if cd %}
+    <button type="button" class="lf-ios-danger" id="deleteBtn"
+            data-url="{% url 'countdown_delete' cd.pk %}"
+            data-next="{% url 'countdown_list' %}">删除该倒计时</button>
+  {% endif %}
+</form>
+
+<script>
+(function(){
+  // iOS toggle: clicking the pill flips the checkbox + visual state
+  document.querySelectorAll('[data-toggle]').forEach(function(pill){
+    pill.addEventListener('click', function(e){
+      if (e.target.tagName === 'INPUT') return; // already toggled by native
+      const cb = pill.querySelector('input[type="checkbox"]');
+      cb.checked = !cb.checked;
+      pill.classList.toggle('is-on', cb.checked);
+    });
+  });
+
+  // emoji picker
+  const eP = document.getElementById('emojiPicker');
+  const eI = document.getElementById('id_emoji');
+  if (eP && eI) {
+    const syncEmoji = () => {
+      eP.querySelectorAll('.lf-emoji-sw').forEach(s => s.classList.toggle('is-active', s.dataset.emoji === eI.value.trim()));
+    };
+    syncEmoji();
+    eI.addEventListener('input', syncEmoji);
+    eP.querySelectorAll('.lf-emoji-sw').forEach(function(s){
+      s.addEventListener('click', function(){
+        eI.value = s.dataset.emoji;
+        syncEmoji();
+      });
+    });
+  }
+
+  // color picker
+  const cP = document.getElementById('colorPicker');
+  const cI = document.getElementById('id_color');
+  if (cP && cI) {
+    const syncColor = () => {
+      cP.querySelectorAll('.lf-color-sw').forEach(s => s.classList.toggle('is-active', s.dataset.color === cI.value));
+    };
+    syncColor();
+    cP.querySelectorAll('.lf-color-sw').forEach(function(s){
+      s.addEventListener('click', function(){
+        cI.value = s.dataset.color;
+        syncColor();
+      });
+    });
+  }
+
+  // 循环分段选择器 → 同步到隐藏 input
+  var rSeg = document.getElementById('recurrenceSeg');
+  var rIn = document.getElementById('id_recurrence');
+  if (rSeg && rIn) {
+    var paintRec = function(){
+      rSeg.querySelectorAll('.lf-seg__btn').forEach(function(b){
+        b.classList.toggle('is-active', b.dataset.rec === rIn.value);
+      });
+    };
+    paintRec();
+    rSeg.addEventListener('click', function(e){
+      var b = e.target.closest('.lf-seg__btn'); if(!b) return;
+      rIn.value = b.dataset.rec; paintRec();
+    });
+  }
+
+  // 删除（POST 到 delete 视图）
+  const dBtn = document.getElementById('deleteBtn');
+  if (dBtn) {
+    dBtn.addEventListener('click', function(){
+      if (!confirm('确定要删除「' + (document.getElementById('id_title').value || '这个倒计时') + '」吗？此操作不会级联删除已同步的日历提醒。')) return;
+      const f = document.createElement('form');
+      f.method = 'post'; f.action = dBtn.dataset.url;
+      const csrf = document.querySelector('input[name="csrfmiddlewaretoken"]');
+      const t = document.createElement('input'); t.type='hidden'; t.name='csrfmiddlewaretoken'; t.value = csrf.value;
+      f.appendChild(t);
+      document.body.appendChild(f); f.submit();
+    });
+  }
+
+  // 默认日期：若未填则用今天
+  const dEl = document.getElementById('id_target_date');
+  if (dEl && !dEl.value) dEl.value = '{{ today }}';
+})();
+</script>
+{% endblock %}

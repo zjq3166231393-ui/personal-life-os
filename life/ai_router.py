@@ -21,9 +21,13 @@ def _rule_confidence(draft: dict) -> str:
 
     if kind == "expense" and has_amount and has_category:
         return "high"
+    if kind == "recurring_expense" and has_amount and has_category:
+        return "high"
     if kind == "income" and has_amount:
         return "high"
     if kind == "task" and bool(draft.get("due_at")):
+        return "high"
+    if kind == "daily_reminder" and bool(draft.get("title")):
         return "high"
     if kind == "expense" and has_amount and not has_category:
         return "medium"
@@ -42,7 +46,7 @@ def _detect_multi_intent(text: str) -> bool:
     if len(amounts) >= 2:
         return True
     # Expense + task mixed
-    has_expense = (any(w in text for w in ("花了", "买", "吃", "喝", "饭", "菜", "午餐", "晚餐")) and bool(amounts)) or bool(amounts)
+    has_expense = bool(amounts)
     has_task = any(w in text for w in ("提醒", "要做", "待办", "记得", "安排"))
     if has_expense and has_task:
         return True
@@ -164,6 +168,8 @@ def _draft_to_action(draft: dict) -> dict:
         "income": "create_income",
         "task": "create_task",
         "note": "create_note",
+        "recurring_expense": "create_recurring_expense",
+        "daily_reminder": "create_daily_reminder",
     }
     action = {
         "intent": intent_map.get(kind, "create_note"),
@@ -173,6 +179,9 @@ def _draft_to_action(draft: dict) -> dict:
         "amount": draft.get("amount"),
         "occurred_at": draft.get("occurred_on"),
         "due_at": draft.get("due_at"),
+        "frequency": draft.get("frequency"),
+        "icon": draft.get("icon"),
+        "source": draft.get("source", "rule"),
     }
     # Clean None values
     return {k: v for k, v in action.items() if v is not None}

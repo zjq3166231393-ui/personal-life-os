@@ -1,85 +1,375 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>财务看板</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
+{% extends "_base.html" %}
+{% block title %}财务看板 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;border-radius:22px}.stat-val{font-size:1.5rem;font-weight:700}.income{color:#22c55e}.expense{color:#ef4444}.chart-wrap{position:relative;height:220px}@media(min-width:768px){.chart-wrap{height:260px}}</style></head>
-<body><main class="container py-3 py-md-4" style="max-width:860px">
-<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between"><div><h1 class="h5 fw-bold mb-0">{{ month_start|date:'Y年n月' }} 财务看板</h1></div><a href="{% url 'home' %}" class="text-white text-decoration-none small">← 首页</a></section>
+{% endblock %}
+{% block body %}
+<main class="lf-container">
 
-<!-- KPI -->
-<section class="row g-2 mb-3">
-  <div class="col-4"><div class="card shadow-sm p-3 text-center"><span class="text-secondary small">支出</span><div class="stat-val expense mt-1">¥{{ total_expense|floatformat:0 }}</div></div></div>
-  <div class="col-4"><div class="card shadow-sm p-3 text-center"><span class="text-secondary small">收入</span><div class="stat-val income mt-1">¥{{ total_income|floatformat:0 }}</div></div></div>
-  <div class="col-4"><div class="card shadow-sm p-3 text-center"><span class="text-secondary small">结余</span><div class="stat-val mt-1 {% if balance >= 0 %}income{% else %}expense{% endif %}">¥{{ balance|floatformat:0 }}</div></div></div>
-</section>
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">
+      {% if is_current %}综合看板{% else %}{{ sel_year }}年{{ sel_month }}月 历史看板{% endif %}
+    </h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
 
-<!-- monthly trend chart -->
-<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">月度收支趋势</h2><div class="chart-wrap"><canvas id="chartMonthly"></canvas></div></section>
+  {# ───── 年/月筛选器（下拉式）───── #}
+  <section class="lf-card lf-mb-3">
+    <form method="get" class="lf-row lf-row--wrap" style="gap:10px;align-items:flex-end;">
+      <div class="lf-field" style="min-width:120px;">
+        <label for="dashYear" class="lf-label">年份</label>
+        <select name="year" id="dashYear" class="lf-select">
+          {% for y in year_range %}<option value="{{ y }}" {% if sel_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="lf-field" style="min-width:120px;">
+        <label for="dashMonth" class="lf-label">月份</label>
+        <select name="month" id="dashMonth" class="lf-select">
+          {% for m in month_range %}
+            <option value="{{ m }}" {% if sel_month == m %}selected{% endif %}>{{ m }}月</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="lf-btn lf-btn--primary">查看</button>
+      {% if not is_current %}<a href="{% url 'dashboard' %}" class="lf-btn lf-btn--ghost lf-btn--sm">回到本月</a>{% endif %}
+    </form>
+  </section>
 
-<!-- category + budget -->
-<section class="row g-2 mb-3">
-  <div class="col-md-6"><div class="card shadow-sm p-3 p-md-4 h-100"><h2 class="h6 fw-bold mb-2">分类占比</h2><div class="chart-wrap"><canvas id="chartCategory"></canvas></div></div></div>
-  <div class="col-md-6">
-    <div class="card shadow-sm p-3 mb-2"><span class="text-secondary small">预算执行率</span><div class="d-flex align-items-center"><h3 class="h4 fw-bold mb-0 me-2">{% if budget_amount > 0 %}{{ budget_pct }}%{% else %}—{% endif %}</h3><span class="text-secondary small">已花 ¥{{ total_expense|floatformat:0 }} / 预算 ¥{{ budget_amount|floatformat:0 }}</span></div><div class="progress mt-1" style="height:8px"><div class="progress-bar {% if budget_pct > 100 %}bg-danger{% elif budget_pct > 80 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ budget_pct }}%"></div></div></div>
-    <div class="card shadow-sm p-3"><span class="text-secondary small">固定支出占比</span><div class="d-flex align-items-center"><h3 class="h4 fw-bold mb-0 me-2">{% if rec_total > 0 and total_expense > 0 %}{% widthratio rec_total total_expense 100 %}{% else %}0{% endif %}%</h3><span class="text-secondary small">¥{{ rec_total|floatformat:0 }} / ¥{{ total_expense|floatformat:0 }}</span></div></div>
-  </div>
-</section>
+  <script type="application/json" id="chart-data">{{ chart_data|safe }}</script>
 
-<!-- prediction -->
-<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">月末预测</h2>
-<div class="row g-2">
-  <div class="col-6"><span class="text-secondary small">预测月末总支出</span><div class="stat-val expense">¥{{ predicted_total|floatformat:0 }}</div></div>
-  <div class="col-6"><span class="text-secondary small">保守估计（排除大额）</span><div class="stat-val income">¥{{ conservative_total|floatformat:0 }}</div></div>
-</div>
-<div class="mt-2"><small class="text-secondary">依据：本月已过 {{ days_passed }} 天，日均 ¥{{ daily_avg|floatformat:0 }} × 剩余 {{ days_remaining }} 天 = 预计 +¥{{ predicted_extra|floatformat:0 }}</small></div>
-{% if large_items %}<div class="mt-1"><small class="text-warning">大额支出（已排除）：{% for li in large_items %}{{ li.note }} ¥{{ li.amount }}{% if not forloop.last %}、{% endif %}{% endfor %}</small></div>{% endif %}
-</section>
+  {# ───── 顶部 3 KPI 卡片（2026-08-24：点击联动到 expense_list 并预填过滤） ───── #}
+  <section class="lf-row lf-mb-4" style="gap:12px;">
+    <a href="{% url 'expense_list' %}?type=expense&date_from={{ month_start|date:'Y-m-d' }}&date_to={{ month_end|date:'Y-m-d' }}"
+       class="lf-card lf-card--tight lf-card--link" style="flex:1;text-align:center;padding:16px 12px;text-decoration:none;color:inherit;">
+      <div class="lf-text-xs lf-text-faint">支出</div>
+      <div class="lf-amount lf-amount--lg lf-num lf-text-danger lf-mt-2">¥{{ total_expense|floatformat:0 }}</div>
+      <div class="lf-text-xs lf-text-faint lf-mt-1">点击查看本月支出 ▸</div>
+    </a>
+    <a href="{% url 'expense_list' %}?type=income&date_from={{ month_start|date:'Y-m-d' }}&date_to={{ month_end|date:'Y-m-d' }}"
+       class="lf-card lf-card--tight lf-card--link" style="flex:1;text-align:center;padding:16px 12px;text-decoration:none;color:inherit;">
+      <div class="lf-text-xs lf-text-faint">收入</div>
+      <div class="lf-amount lf-amount--lg lf-num lf-text-success lf-mt-2">¥{{ total_income|floatformat:0 }}</div>
+      <div class="lf-text-xs lf-text-faint lf-mt-1">点击查看本月收入 ▸</div>
+    </a>
+    <a href="{% url 'expense_list' %}?date_from={{ month_start|date:'Y-m-d' }}&date_to={{ month_end|date:'Y-m-d' }}"
+       class="lf-card lf-card--tight lf-card--link" style="flex:1;text-align:center;padding:16px 12px;text-decoration:none;color:inherit;">
+      <div class="lf-text-xs lf-text-faint">结余</div>
+      <div class="lf-amount lf-amount--lg lf-num lf-mt-2 {% if balance >= 0 %}lf-text-success{% else %}lf-text-danger{% endif %}">¥{{ balance|floatformat:0 }}</div>
+      <div class="lf-text-xs lf-text-faint lf-mt-1">点击查看本月所有账目 ▸</div>
+    </a>
+  </section>
 
-<!-- daily trend -->
-<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">每日消费趋势</h2><div class="chart-wrap"><canvas id="chartDaily"></canvas></div></section>
+  {# ───── 综合概览 chips（任务/打卡/财务/倒计时，2026-08-25 重设计）───── #}
+  <section class="lf-card lf-mb-3" style="padding:14px 14px;">
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;text-align:center;">
+      <a href="{% url 'task_list' %}"
+         style="text-decoration:none;color:inherit;padding:8px 4px;border-radius:10px;">
+        <div style="font-size:18px;font-weight:800;letter-spacing:-.03em;color:var(--brand);">{{ week_rate }}%</div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:2px;">任务</div>
+        {% if overdue_count %}<div style="font-size:10px;color:var(--danger);margin-top:1px;">{{ overdue_count }} 逾期</div>{% endif %}
+      </a>
+      <a href="{% url 'daily_list' %}"
+         style="text-decoration:none;color:inherit;padding:8px 4px;border-radius:10px;">
+        <div style="font-size:18px;font-weight:800;letter-spacing:-.03em;color:#22c55e;">{{ streak }}</div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:2px;">连续打卡</div>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:1px;">天</div>
+      </a>
+      <a href="#financeSection"
+         style="text-decoration:none;color:inherit;padding:8px 4px;border-radius:10px;">
+        <div style="font-size:18px;font-weight:800;letter-spacing:-.03em;color:#ef4444;">¥{{ total_expense|floatformat:0 }}</div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:2px;">本月支出</div>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:1px;">{{ sel_month }}月</div>
+      </a>
+      <a href="{% url 'countdown_list' %}"
+         style="text-decoration:none;color:inherit;padding:8px 4px;border-radius:10px;">
+        <div style="font-size:18px;font-weight:800;letter-spacing:-.03em;color:#f59e0b;">{{ cd_total }}</div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:2px;">倒计时</div>
+        <div style="font-size:10px;color:var(--text-faint);margin-top:1px;">里程碑</div>
+      </a>
+    </div>
+  </section>
 
-<!-- suggestions -->
-{% if suggestions %}
-<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">💡 建议</h2>
-{% for s in suggestions %}<div class="d-flex justify-content-between align-items-start border-bottom py-1"><div><strong>{{ s.title }}</strong><p class="text-secondary small mb-0">{{ s.evidence }}</p></div><div class="text-nowrap ms-2"><a href="{% url 'suggestion_feedback' s.pk 'useful' %}" class="btn btn-sm btn-outline-success">👍</a><a href="{% url 'suggestion_feedback' s.pk 'not_useful' %}" class="btn btn-sm btn-outline-danger ms-1">👎</a><a href="{% url 'suggestion_feedback' s.pk 'dismissed' %}" class="btn btn-sm btn-outline-secondary ms-1">✕</a></div></div>{% endfor %}
-</section>
-{% endif %}
+  {# ───── 7 日任务 / 打卡柱状条（轻量图表）───── #}
+  <section class="lf-card lf-mb-3" style="padding:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+      <h3 class="lf-section-title" style="margin:0;">近 7 天 · 任务与打卡</h3>
+      <span style="font-size:11px;color:var(--text-faint);">{{ task_trend|first|date:"m-d" }} ~ {{ today|date:"m-d" }}</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-soft);margin-bottom:4px;">
+          <span>任务完成</span>
+          <span style="font-weight:600;color:var(--brand);">共 {{ week_completed }} 个</span>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:48px;">
+          {% for d in task_trend %}
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+            {% if d.completed > 0 %}<div style="width:100%;background:linear-gradient(to top, var(--brand), color-mix(in srgb, var(--brand) 60%, transparent));border-radius:4px 4px 0 0;height:{% widthratio d.completed 8 100 %}%;min-height:6px;"></div>
+            {% else %}<div style="width:100%;background:var(--border-soft);border-radius:4px 4px 0 0;height:2px;min-height:2px;"></div>{% endif %}
+            <div style="font-size:9px;color:var(--text-faint);margin-top:2px;">{{ d.date|date:"d" }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-soft);margin-bottom:4px;">
+          <span>每日打卡</span>
+          <span style="font-weight:600;color:#22c55e;">{% with x=checkin_trend|last %}{{ x.done }}/{{ x.total }}{% endwith %} 今</span>
+        </div>
+        <div style="display:flex;gap:4px;align-items:flex-end;height:48px;">
+          {% for d in checkin_trend %}
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+            {% if d.done > 0 %}<div style="width:100%;background:linear-gradient(to top, #22c55e, color-mix(in srgb, #22c55e 50%, transparent));border-radius:4px 4px 0 0;height:{% widthratio d.done d.total|add:1 100 %}%;min-height:6px;"></div>
+            {% else %}<div style="width:100%;background:var(--border-soft);border-radius:4px 4px 0 0;height:2px;min-height:2px;"></div>{% endif %}
+            <div style="font-size:9px;color:var(--text-faint);margin-top:2px;">{{ d.date|date:"d" }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </section>
 
-<!-- anomaly detection -->
-{% if anomalies %}
-<section class="card shadow-sm p-3 p-md-4 mb-3" style="border-left:4px solid #ef4444"><h2 class="h6 fw-bold mb-2 text-danger">异常提醒</h2>
-{% for a in anomalies %}<div class="d-flex justify-content-between border-bottom py-1"><div><span class="badge bg-danger me-1 small">{{ a.type }}</span><span class="small">{{ a.detail }}</span></div><small class="text-secondary">{{ a.date|date:'m/d' }}</small></div>{% endfor %}
-</section>
-{% endif %}
+  {# ───── 倒计时小板块（首屏位置，iOS 风）───── #}
+  {% if cd_list %}
+  <section class="lf-card lf-mb-3" style="padding:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+      <h3 class="lf-section-title" style="margin:0;">倒计时</h3>
+      <a href="{% url 'countdown_list' %}" style="font-size:12px;color:var(--brand);text-decoration:none;">全部 ›</a>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:0;">
+      {% for c in cd_list %}
+      <a href="{% url 'countdown_edit' c.obj.pk %}"
+         style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-soft);">
+        <div style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:color-mix(in srgb, {{ c.color }} 18%, transparent);flex-shrink:0;">{{ c.emoji }}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.title }}</div>
+          <div style="font-size:11px;color:var(--text-soft);margin-top:2px;">{{ c.obj.target_date|date:"Y-m-d" }}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:18px;font-weight:800;color:{{ c.color }};line-height:1;">
+            {% if c.direction == 'up' and c.days < 0 %}{{ c.days|stringformat:"+d" }}{% else %}{{ c.days }}{% endif %}
+          </div>
+          <div style="font-size:10px;color:var(--text-soft);margin-top:2px;">
+            {% if c.direction == 'up' %}天已过{% else %}天{% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
-<!-- task analytics -->
-<section class="card shadow-sm p-3 p-md-4 mb-3"><h2 class="h6 fw-bold mb-2">行动力分析</h2>
-<div class="row g-2">
-  <div class="col-4"><div class="text-center"><span class="text-secondary small">本周完成率</span><div class="stat-val {% if week_rate >= 70 %}income{% else %}expense{% endif %}">{{ week_rate }}%</div><small class="text-secondary">{{ week_completed }} 个</small></div></div>
-  <div class="col-4"><div class="text-center"><span class="text-secondary small">高优先完成率</span><div class="stat-val {% if high_rate >= 50 %}income{% else %}expense{% endif %}">{{ high_rate }}%</div></div></div>
-  <div class="col-4"><div class="text-center"><span class="text-secondary small">连续完成</span><div class="stat-val">{{ streak }} 天</div></div></div>
-</div>
-<div class="row g-2 mt-2">
-  <div class="col-6"><span class="text-secondary small">逾期任务</span><div class="fw-bold {% if overdue_count > 0 %}text-danger{% endif %}">{{ overdue_count }} 个</div></div>
-  <div class="col-6"><span class="text-secondary small">今日要事</span><div class="fw-bold">{% if top_task %}{{ top_task.title|truncatechars:12 }}{% else %}暂无{% endif %} {% if top_done %}✅{% else %}⏳{% endif %}</div></div>
-</div>
-</section>
+  <div id="financeSection"></div>
 
-<!-- upcoming bills -->
-<section class="card shadow-sm p-3 p-md-4"><h2 class="h6 fw-bold mb-2">即将到期账单</h2>
-{% for b in upcoming %}<div class="d-flex justify-content-between border-bottom py-1"><div><span class="badge text-bg-light me-1">{{ b.type }}</span>{{ b.name }}</div><div class="text-end"><strong>¥{{ b.amount }}</strong><span class="text-secondary small ms-2">{{ b.date|date:'m/d' }}</span></div></div>
-{% empty %}<p class="text-secondary small mb-0">暂无。</p>{% endfor %}
-</section>
-{% include 'life/_bottom_nav.html' %}</main>
+  {# ───── 生活建议（突出显示） ───── #}
+  {% if life_suggestions %}
+  <section class="lf-card lf-mb-4" style="background:linear-gradient(135deg,#fff8e6 0%,#fef3c7 100%);border:1px solid rgba(234,179,8,.25);">
+    <div class="lf-row lf-row--between lf-mb-3">
+      <h3 class="lf-section-title lf-mb-0 lf-row" style="gap:6px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#d97706;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
+        生活建议
+      </h3>
+      <span class="lf-text-xs lf-text-faint lf-num">{{ life_suggestions|length }} 条</span>
+    </div>
+    {% for s in life_suggestions %}
+    <div class="lf-list-item" style="background:rgba(255,255,255,.7);border-radius:12px;margin-bottom:8px;padding:12px;border:1px solid rgba(234,179,8,.15);">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-row" style="gap:6px;align-items:center;">
+          <span class="lf-badge {% if s.tone == 'danger' %}lf-badge--danger{% elif s.tone == 'success' %}lf-badge--success{% elif s.tone == 'warning' %}lf-badge--warning{% else %}lf-badge--info{% endif %}">{{ s.title }}</span>
+        </div>
+        <div class="lf-text-sm lf-text-faint lf-mt-1" style="line-height:1.55;">{{ s.detail }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">月度收支趋势</h3>
+    <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
+  </section>
+
+  <section class="lf-row lf-mb-4" style="gap:12px;flex-wrap:wrap;">
+    <div class="lf-card" style="flex:1;min-width:260px;">
+      <h3 class="lf-section-title">分类占比</h3>
+      <div class="chart-wrap"><canvas id="chartCategory"></canvas></div>
+    </div>
+    <div style="flex:1;min-width:260px;" class="lf-stack-sm">
+      <div class="lf-card lf-card--tight">
+        <div class="lf-text-xs lf-text-faint">预算执行率</div>
+        <div class="lf-row lf-row--between lf-mt-2" style="align-items:baseline;">
+          <div class="lf-amount lf-amount--lg lf-num">{% if budget_amount > 0 %}{{ budget_pct }}{% else %}—{% endif %}{% if budget_amount > 0 %}<span class="lf-text-sm">%</span>{% endif %}</div>
+          <div class="lf-text-xs lf-text-faint lf-num">¥{{ total_expense|floatformat:0 }} / ¥{{ budget_amount|floatformat:0 }}</div>
+        </div>
+        <div class="lf-progress lf-mt-2 {% if budget_pct > 100 %}lf-progress--danger{% elif budget_pct > 80 %}lf-progress--warning{% else %}lf-progress--success{% endif %}">
+          <div class="lf-progress__bar" style="width:{% if budget_pct > 100 %}100{% else %}{{ budget_pct }}{% endif %}%;"></div>
+        </div>
+      </div>
+      <div class="lf-card lf-card--tight">
+        <div class="lf-text-xs lf-text-faint">固定支出占比</div>
+        <div class="lf-row lf-row--between lf-mt-2" style="align-items:baseline;">
+          <div class="lf-amount lf-amount--lg lf-num">{% if rec_total > 0 and total_expense > 0 %}{% widthratio rec_total total_expense 100 %}{% else %}0{% endif %}<span class="lf-text-sm">%</span></div>
+          <div class="lf-text-xs lf-text-faint lf-num">¥{{ rec_total|floatformat:0 }} / ¥{{ total_expense|floatformat:0 }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">月末预测</h3>
+    <div class="lf-row" style="gap:24px;">
+      <div style="flex:1;">
+        <div class="lf-text-xs lf-text-faint">预测月末总支出</div>
+        <div class="lf-amount lf-amount--lg lf-num lf-text-danger lf-mt-2">¥{{ predicted_total|floatformat:0 }}</div>
+      </div>
+      <div style="flex:1;">
+        <div class="lf-text-xs lf-text-faint">保守估计</div>
+        <div class="lf-amount lf-amount--lg lf-num lf-text-success lf-mt-2">¥{{ conservative_total|floatformat:0 }}</div>
+      </div>
+    </div>
+    <div class="lf-text-xs lf-text-faint lf-mt-3">
+      依据：本月已过 {{ days_passed }} 天，日均 ¥{{ daily_avg|floatformat:0 }} × 剩余 {{ days_remaining }} 天 = +¥{{ predicted_extra|floatformat:0 }}
+    </div>
+    {% if large_items %}<div class="lf-text-xs lf-text-warning lf-mt-2">大额支出（已排除）：{% for li in large_items %}{{ li.note }} ¥{{ li.amount }}{% if not forloop.last %}、{% endif %}{% endfor %}</div>{% endif %}
+  </section>
+
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">每日消费趋势</h3>
+    <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+  </section>
+
+  {% if suggestions %}
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">建议</h3>
+    {% for s in suggestions %}
+    <div class="lf-list-item" style="padding-left:0;padding-right:0;">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-text-1 lf-text-bold">{{ s.title }}</div>
+        <div class="lf-text-sm lf-text-faint lf-mt-1">{{ s.evidence }}</div>
+      </div>
+      <div class="lf-row" style="gap:4px;">
+        <a href="{% url 'suggestion_feedback' s.pk 'useful' %}" class="lf-btn lf-btn--ghost lf-btn--icon lf-btn--sm" title="有用">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+        </a>
+        <a href="{% url 'suggestion_feedback' s.pk 'not_useful' %}" class="lf-btn lf-btn--ghost lf-btn--icon lf-btn--sm" title="没用" style="color:var(--danger);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if anomalies %}
+  <section class="lf-card lf-mb-4" style="border-left:3px solid var(--danger);">
+    <h3 class="lf-section-title lf-text-danger">异常提醒</h3>
+    {% for a in anomalies %}
+    <div class="lf-list-item" style="padding-left:0;padding-right:0;">
+      <span class="lf-badge lf-badge--danger">{{ a.type }}</span>
+      <span class="lf-text-sm" style="flex:1;">{{ a.detail }}</span>
+      <span class="lf-text-xs lf-text-faint lf-num">{{ a.date|date:"m/d" }}</span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">行动力分析</h3>
+    <div class="lf-row" style="gap:12px;">
+      <div style="flex:1;text-align:center;padding:8px;background:var(--surface-2);border-radius:12px;">
+        <div class="lf-text-xs lf-text-faint">本周完成率</div>
+        <div class="lf-amount lf-amount--lg lf-num lf-mt-2 {% if week_rate >= 70 %}lf-text-success{% else %}lf-text-danger{% endif %}">{{ week_rate }}%</div>
+        <div class="lf-text-xs lf-text-faint lf-num lf-mt-1">{{ week_completed }} 个</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:8px;background:var(--surface-2);border-radius:12px;">
+        <div class="lf-text-xs lf-text-faint">高优先完成率</div>
+        <div class="lf-amount lf-amount--lg lf-num lf-mt-2 {% if high_rate >= 50 %}lf-text-success{% else %}lf-text-danger{% endif %}">{{ high_rate }}%</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:8px;background:var(--surface-2);border-radius:12px;">
+        <div class="lf-text-xs lf-text-faint">连续完成</div>
+        <div class="lf-amount lf-amount--lg lf-num lf-mt-2">{{ streak }}<span class="lf-text-sm lf-text-faint"> 天</span></div>
+      </div>
+    </div>
+    <div class="lf-row lf-row--between lf-mt-3" style="padding-top:12px;border-top:1px solid var(--border-soft);">
+      <div><div class="lf-text-xs lf-text-faint">逾期任务</div><div class="lf-text-bold lf-num lf-mt-1 {% if overdue_count > 0 %}lf-text-danger{% endif %}">{{ overdue_count }} 个</div></div>
+      <div class="lf-text-end"><div class="lf-text-xs lf-text-faint">今日要事</div><div class="lf-text-bold lf-mt-1 lf-truncate" style="max-width:180px;">{% if top_task %}{{ top_task.title }}{% else %}暂无{% endif %} {% if top_done %}✅{% else %}⏳{% endif %}</div></div>
+    </div>
+  </section>
+
+  {% if upcoming %}
+  <section class="lf-card">
+    <h3 class="lf-section-title">即将到期账单</h3>
+    <ul class="lf-list">
+      {% for b in upcoming %}
+      <li class="lf-list-item">
+        <span class="lf-badge {% if b.type == '固定' %}lf-badge--brand{% else %}lf-badge--warning{% endif %}">{{ b.type }}</span>
+        <span style="flex:1;">{{ b.name }}</span>
+        <span class="lf-amount lf-num">¥{{ b.amount }}</span>
+        <span class="lf-text-xs lf-text-faint lf-num">{{ b.date|date:"m/d" }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+</main>
+
+<style>
+.chart-wrap { position: relative; height: 220px; }
+@media (min-width: 768px) { .chart-wrap { height: 260px; } }
+</style>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+
+{% block scripts %}
 <script>
-var D=JSON.parse('{{ chart_data|safe }}');
-var font={family:"'Noto Sans SC',system-ui,sans-serif"};
-// Monthly trend
-new Chart(document.getElementById('chartMonthly'),{type:'bar',data:{labels:D.monthlyLabels,datasets:[{label:'支出',data:D.monthlyExpense,backgroundColor:'#ef4444',borderRadius:4},{label:'收入',data:D.monthlyIncome,backgroundColor:'#22c55e',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:font}}});
-// Category doughnut
-new Chart(document.getElementById('chartCategory'),{type:'doughnut',data:{labels:D.catLabels,datasets:[{data:D.catAmounts,backgroundColor:D.catColors,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:font,padding:12,usePointStyle:true}}}}});
-// Daily bar
-new Chart(document.getElementById('chartDaily'),{type:'bar',data:{labels:D.dailyLabels,datasets:[{label:'支出',data:D.dailyAmounts,backgroundColor:'#3b82f6',borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+window.__chartDebug={errs:[],oks:[]};
+window.addEventListener('error',function(e){window.__chartDebug.errs.push(e.message+'@'+e.lineno+':'+e.colno)});
+(function(){
+  function ensureChart(cb){
+    if(typeof Chart!=='undefined'){window.__chartDebug.oks.push('Chart ready immediately');cb();return}
+    var tries=0,iv=setInterval(function(){
+      tries++;
+      if(typeof Chart!=='undefined'){clearInterval(iv);window.__chartDebug.oks.push('Chart ready after '+tries*50+'ms');cb()}
+      else if(tries>60){clearInterval(iv);window.__chartDebug.errs.push('Chart.js load timeout')}
+    },50);
+  }
+  function init(){
+    try{
+      ensureChart(function(){
+        try{
+          var dataNode=document.getElementById('chart-data');
+          if(!dataNode){window.__chartDebug.errs.push('no chart-data node');return;}
+          var D={};
+          try{D=JSON.parse(dataNode.textContent||dataNode.innerText||'{}')}catch(e){window.__chartDebug.errs.push('JSON parse: '+e.message);return;}
+          var font={family:"'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif"};
+          var wraps=document.querySelectorAll('.chart-wrap canvas');
+          for(var i=0;i<wraps.length;i++){var cw=wraps[i];if(!cw.style.height) cw.style.height='220px';if(!cw.style.width) cw.style.width='100%';}
+          var monthlyCanvas=document.getElementById('chartMonthly');
+          if(D.monthlyExpense && D.monthlyExpense.some(function(v){return v>0;})){
+            new Chart(monthlyCanvas,{type:'bar',data:{labels:D.monthlyLabels,datasets:[{label:'支出',data:D.monthlyExpense,backgroundColor:'rgba(220,38,38,.85)',borderRadius:6},{label:'收入',data:D.monthlyIncome,backgroundColor:'rgba(5,150,105,.85)',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:600},plugins:{legend:{labels:font}},scales:{x:{grid:{display:false},ticks:{font:font}},y:{grid:{color:'#eef2f7'},ticks:{font:font,callback:function(v){return '¥'+v}}}}}});
+            window.__chartDebug.oks.push('monthly');
+          } else {monthlyCanvas.parentElement.innerHTML='<div class="lf-empty"><p class="lf-empty__text">近6个月暂无收支记录</p></div>';window.__chartDebug.oks.push('monthly:empty');}
+          var catCanvas=document.getElementById('chartCategory');
+          if(D.catLabels && D.catLabels.length>0){
+            new Chart(catCanvas,{type:'doughnut',data:{labels:D.catLabels,datasets:[{data:D.catAmounts,backgroundColor:D.catColors,borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'65%',animation:{duration:600},plugins:{legend:{position:'bottom',labels:{font:font,padding:10,usePointStyle:true,pointStyle:'circle'}}}}});
+            window.__chartDebug.oks.push('category');
+          } else {catCanvas.parentElement.innerHTML='<div class="lf-empty"><p class="lf-empty__text">本月暂无分类支出</p></div>';window.__chartDebug.oks.push('category:empty');}
+          var dailyCanvas=document.getElementById('chartDaily');
+          if(D.dailyAmounts && D.dailyAmounts.some(function(v){return v>0;})){
+            new Chart(dailyCanvas,{type:'bar',data:{labels:D.dailyLabels,datasets:[{label:'支出',data:D.dailyAmounts,backgroundColor:'rgba(43,86,216,.85)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:600},plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:font,maxRotation:0,autoSkip:true}},y:{grid:{color:'#eef2f7'},ticks:{font:font}}}}});
+            window.__chartDebug.oks.push('daily');
+          } else {dailyCanvas.parentElement.innerHTML='<div class="lf-empty"><p class="lf-empty__text">本月每日消费趋势（暂无消费）</p></div>';window.__chartDebug.oks.push('daily:empty');}
+        }catch(e){window.__chartDebug.errs.push('init inner:'+e.message);}
+      });
+    }catch(e){window.__chartDebug.errs.push('ensureChart outer:'+e.message);}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
 </script>
-</body></html>
+{% endblock %}

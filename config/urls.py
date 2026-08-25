@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.shortcuts import render
 from django.urls import include, path
@@ -29,4 +31,8 @@ urlpatterns = [
     path("common/", include("common.urls")),
     path("", include("life.urls")),
 ]
+
+# 仅 DEBUG 模式下由 Django 直接服务用户上传的头像；生产环境用 nginx/static
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

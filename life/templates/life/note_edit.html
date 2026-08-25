@@ -1,10 +1,45 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><title>编辑随心记</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}</style></head>
-<body><main class="container py-4" style="max-width:540px">
-<section class="hero p-4 shadow-sm mb-4 d-flex justify-content-between"><h1 class="h5 fw-bold mb-0">编辑随心记</h1><a href="{% url 'note_list' %}" class="text-white text-decoration-none small">← 返回</a></section>
-<section class="card shadow-sm p-4"><form method="post">{% csrf_token %}
-<div class="mb-3"><label class="form-label">标题</label><input type="text" name="title" class="form-control" value="{{ note.title }}" required></div>
-<div class="mb-3"><label class="form-label">日期</label><input type="date" name="occurred_on" class="form-control" value="{{ note.occurred_on|date:'Y-m-d' }}"></div>
-<button type="submit" class="btn btn-dark">保存</button></form></section>
-</main></body></html>
+{% extends "_base.html" %}
+{% block title %}{% if note %}编辑{% else %}新增{% endif %}随心记 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{% if note %}编辑随心记{% else %}新增随心记{% endif %}</h1>
+    <a href="{% url 'note_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+  </header>
+
+  <form method="post" class="lf-card lf-card--padded">
+    {% csrf_token %}
+    <div class="lf-field">
+      <label class="lf-label">标题</label>
+      <input type="text" name="title" class="lf-input" value="{{ note.title|default:'' }}" maxlength="200" required placeholder="比如：今天感冒好了之后想去体验新生活">
+    </div>
+    <div class="lf-field">
+      <label class="lf-label">日期</label>
+      <input type="date" name="occurred_on" class="lf-input" max="{% now 'Y-m-d' %}" value="{% if note %}{{ note.occurred_on|date:'Y-m-d' }}{% endif %}">
+      <p class="lf-text-xs lf-text-faint lf-mt-1">随心记记录当下，日期不超过今天（可回填过去的某天）。</p>
+    </div>
+    <div class="lf-field">
+      <label class="lf-label">正文（可选）</label>
+      <textarea name="raw_text" class="lf-input" rows="6" placeholder="详细的思考、灵感、感慨……">{{ note.raw_text|default:'' }}</textarea>
+    </div>
+    <div class="lf-text-xs lf-text-faint lf-mb-3">
+      ✏️ 提示：在首页输入框也可以直接说「我现在有个新的想法」「记录一下…」，AI 会自动解析到这里的笔记。
+    </div>
+    <div class="lf-row lf-mt-2" style="gap:8px;">
+      <button type="submit" class="lf-btn lf-btn--primary">保存</button>
+      {% if note %}
+        <a href="{% url 'note_delete' note.pk %}" class="lf-btn lf-btn--ghost" style="color:var(--danger);">删除</a>
+      {% endif %}
+      <a href="{% url 'note_list' %}" class="lf-btn lf-btn--ghost">取消</a>
+    </div>
+  </form>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

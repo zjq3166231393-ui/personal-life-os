@@ -1,31 +1,395 @@
-<!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>个人设置 - Personal Life OS</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#1e40af,#3b82f6);color:#fff;border-radius:22px}</style>
-</head>
-<body>
-<main class="container py-4 py-md-5" style="max-width:540px">
-  <section class="hero p-4 shadow-sm mb-4 d-flex justify-content-between align-items-center">
-    <div><h1 class="h5 fw-bold mb-0">个人设置</h1><p class="mb-0 opacity-75 small mt-1">{{ user.username }}</p></div>
-    <a href="{% url 'home' %}" class="text-white text-decoration-none small">← 返回首页</a>
-  </section>
-  <section class="card shadow-sm p-4">
-    <form method="post" novalidate>{% csrf_token %}
-      <div class="mb-3"><label for="id_display_name" class="form-label">显示名称</label><input type="text" name="display_name" id="id_display_name" class="form-control" value="{{ form.display_name.value|default:'' }}" placeholder="留空则使用用户名"></div>
-      <div class="row mb-3">
-        <div class="col-md-6"><label for="id_timezone" class="form-label">时区</label><select name="timezone" id="id_timezone" class="form-select"><option value="Asia/Shanghai" {% if form.timezone.value == "Asia/Shanghai" %}selected{% endif %}>北京时间</option><option value="Asia/Tokyo" {% if form.timezone.value == "Asia/Tokyo" %}selected{% endif %}>东京</option><option value="America/New_York" {% if form.timezone.value == "America/New_York" %}selected{% endif %}>纽约</option><option value="Europe/London" {% if form.timezone.value == "Europe/London" %}selected{% endif %}>伦敦</option></select></div>
-        <div class="col-md-6"><label for="id_currency" class="form-label">货币</label><select name="currency" id="id_currency" class="form-select"><option value="CNY" {% if form.currency.value == "CNY" %}selected{% endif %}>人民币 ¥</option><option value="USD" {% if form.currency.value == "USD" %}selected{% endif %}>美元 $</option><option value="JPY" {% if form.currency.value == "JPY" %}selected{% endif %}>日元 ¥</option></select></div>
-      </div>
-      <div class="mb-3"><label for="id_monthly_budget" class="form-label">月度预算</label><input type="number" name="monthly_budget" id="id_monthly_budget" class="form-control" step="0.01" min="0" value="{{ form.monthly_budget.value|default:'' }}" placeholder="留空表示不设置预算"></div>
-      <div class="mb-3"><label for="id_daily_ai_limit" class="form-label">单日 AI 调用上限</label><input type="number" name="daily_ai_limit" id="id_daily_ai_limit" class="form-control" min="0" value="{{ form.daily_ai_limit.value|default:'20' }}" placeholder="0=不限制"></div><div class="mb-4 form-check form-switch"><input type="checkbox" name="ai_parsing_enabled" id="id_ai_parsing_enabled" class="form-check-input" {% if form.ai_parsing_enabled.value %}checked{% endif %}><label for="id_ai_parsing_enabled" class="form-check-label">启用 AI 解析</label></div>
-      <button type="submit" class="btn btn-dark">保存设置</button>
+{% extends "_base.html" %}
+{% comment %}
+LifeOS — 个人主页（合并原 profile + appearance）。
+- 头像 hero + 账号只读卡
+- 显示名（前端 localStorage）
+- 外观（主题 / 主题色 / 重置）
+- 偏好（时区 / 货币 / 月预算 / AI 开关，POST 入库）
+- 数据（导出各类型 → /accounts/export/）
+- 危险操作（登出 / 注销账号）
+{% endcomment %}
+{% block title %}我的 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+
+{% block body %}
+<main class="lf-container lf-container--profile">
+
+  {# 返回 / 面包屑 #}
+  <header class="lf-page-header">
+    <a href="{% url 'home' %}" class="lf-page-header__back">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+    <h1 class="lf-page-header__title">我的</h1>
+    <span class="lf-page-header__hint">{{ user.username }}</span>
+  </header>
+
+  {# ── Hero：头像 + 显示名（用户最常改这个） ── #}
+  <section class="lf-profile-hero lf-mb-4">
+    <div class="lf-profile-hero__avatar" id="profileAvatar"
+         aria-label="个人头像">
+      {% if profile.avatar %}
+        <img src="{{ profile.avatar.url }}" alt="头像" id="profileAvatarImg" class="lf-profile-hero__avatar-img">
+      {% else %}
+        {{ display_name|first|upper }}
+      {% endif %}
+    </div>
+    <div class="lf-profile-hero__name" id="profilePreviewName">{{ display_name }}</div>
+    <div class="lf-profile-hero__sub">@{{ user.username }}</div>
+    <div class="lf-profile-hero__meta lf-mt-2">
+      加入于 {{ user.date_joined|date:"Y年n月j日" }}
+    </div>
+
+    {# 头像上传 / 更换（2026-08-24） #}
+    <form method="post" action="{% url 'avatar_upload' %}" enctype="multipart/form-data" class="lf-avatar-uploader lf-mt-3">
+      {% csrf_token %}
+      <label for="avatarInput" class="lf-btn lf-btn--ghost lf-btn--sm" style="cursor:pointer;backdrop-filter:blur(8px);background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.3);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        {% if profile.avatar %}更换头像{% else %}上传头像{% endif %}
+      </label>
+      <input type="file" id="avatarInput" name="avatar" accept="image/png,image/jpeg,image/webp" hidden onchange="this.form.submit()">
     </form>
   </section>
+
+  {# ── 历史头像（仅当有头像或历史记录时显示） ── #}
+  {% if profile.avatar_history %}
+  <section class="lf-card lf-mb-4">
+    <header class="lf-section-header">
+      <h3 class="lf-section-title">历史头像</h3>
+      <span class="lf-section-header__hint">点击恢复</span>
+    </header>
+    <div class="lf-avatar-history">
+      {% for item in profile.avatar_history %}
+      <form method="post" action="{% url 'avatar_history_select' %}" style="display:inline;">
+        {% csrf_token %}
+        <input type="hidden" name="index" value="{{ forloop.counter0 }}">
+        <button type="submit" class="lf-avatar-history__chip" title="恢复 {{ item.uploaded_at|date:'Y-m-d H:i' }}">
+          <img src="{{ item.url }}" alt="历史头像">
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ── 区段 1：账号（可修改用户名/邮箱/手机号，各自最多 3 次） ── #}
+  <section class="lf-card lf-mb-4">
+    <header class="lf-section-header">
+      <h3 class="lf-section-title">账号</h3>
+    </header>
+    <dl class="lf-kv">
+      {# 用户名行：带"修改"按钮（次数显示 + 行内表单） #}
+      <div class="lf-kv__row">
+        <dt>用户名</dt>
+        <dd>
+          <span id="usernameDisplay">{{ user.username }}</span>
+          <button type="button" class="lf-action-pill lf-ml-2" onclick="toggleIdentityEditor('username')">
+            {% if profile.username_changes_left > 0 %}修改{% else %}已达上限{% endif %}
+          </button>
+          <span class="lf-text-xs lf-text-faint lf-num lf-ml-2">(剩 {{ profile.username_changes_left }}/{{ profile.MAX_FIELD_CHANGES }})</span>
+          <form id="usernameEdit" method="post" action="{% url 'change_identity' %}" class="lf-hidden lf-row lf-row--wrap lf-mt-2" style="gap:6px;">
+            {% csrf_token %}
+            <input type="hidden" name="field" value="username">
+            <input type="text" name="value" class="lf-input lf-num" style="flex:1;min-width:160px;" value="{{ user.username }}" minlength="3" maxlength="30" required>
+            <button type="submit" class="lf-btn lf-btn--primary lf-btn--sm">保存</button>
+            <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" onclick="toggleIdentityEditor('username')">取消</button>
+          </form>
+        </dd>
+      </div>
+
+      {# 邮箱行 #}
+      <div class="lf-kv__row">
+        <dt>邮箱</dt>
+        <dd>
+          <span id="emailDisplay">{{ user.email|default:"未设置" }}</span>
+          <button type="button" class="lf-action-pill lf-ml-2" onclick="toggleIdentityEditor('email')">
+            {% if profile.email_changes_left > 0 %}修改{% else %}已达上限{% endif %}
+          </button>
+          <span class="lf-text-xs lf-text-faint lf-num lf-ml-2">(剩 {{ profile.email_changes_left }}/{{ profile.MAX_FIELD_CHANGES }})</span>
+          <form id="emailEdit" method="post" action="{% url 'change_identity' %}" class="lf-hidden lf-row lf-row--wrap lf-mt-2" style="gap:6px;">
+            {% csrf_token %}
+            <input type="hidden" name="field" value="email">
+            <input type="email" name="value" class="lf-input" style="flex:1;min-width:200px;" value="{{ user.email }}" required>
+            <button type="submit" class="lf-btn lf-btn--primary lf-btn--sm">保存</button>
+            <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" onclick="toggleIdentityEditor('email')">取消</button>
+          </form>
+        </dd>
+      </div>
+
+      {# 手机号行（存在 profile.phone） #}
+      <div class="lf-kv__row">
+        <dt>手机号</dt>
+        <dd>
+          <span id="phoneDisplay">{{ profile.phone|default:"未设置" }}</span>
+          <button type="button" class="lf-action-pill lf-action-pill--ghost lf-ml-2" onclick="toggleIdentityEditor('phone')">
+            {% if profile.phone_changes_left > 0 %}{% if profile.phone %}修改{% else %}设置{% endif %}{% else %}已达上限{% endif %}
+          </button>
+          <span class="lf-text-xs lf-text-faint lf-num lf-ml-2">(剩 {{ profile.phone_changes_left }}/{{ profile.MAX_FIELD_CHANGES }})</span>
+          <form id="phoneEdit" method="post" action="{% url 'change_identity' %}" class="lf-hidden lf-row lf-row--wrap lf-mt-2" style="gap:6px;">
+            {% csrf_token %}
+            <input type="hidden" name="field" value="phone">
+            <input type="tel" name="value" class="lf-input lf-num" style="flex:1;min-width:180px;" value="{{ profile.phone }}" pattern="[0-9]*" maxlength="20" placeholder="如未填写则不修改">
+            <button type="submit" class="lf-btn lf-btn--primary lf-btn--sm">保存</button>
+            <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" onclick="toggleIdentityEditor('phone')">取消</button>
+          </form>
+        </dd>
+      </div>
+
+      <div class="lf-kv__row">
+        <dt>最后登录</dt>
+        <dd>{{ user.last_login|date:"Y-m-d H:i"|default:"首次登录" }}</dd>
+      </div>
+
+      <div class="lf-kv__row">
+        <dt>密码</dt>
+        <dd>
+          <span>••••••••</span>
+          <a href="{% url 'password_change' %}" class="lf-action-pill lf-ml-2">修改</a>
+        </dd>
+      </div>
+    </dl>
+    <p class="lf-text-xs lf-text-faint lf-mt-3">
+      💡 用户名 / 邮箱 / 手机号每个字段最多可修改 {{ profile.MAX_FIELD_CHANGES }} 次，避免账号属性被频繁变更。修改次数到达上限后将不再允许修改。
+    </p>
+  </section>
+
+  {# ── 区段 2：显示名 + 外观（合并原 appearance，复用其前端行为） ── #}
+  <section class="lf-card lf-mb-4" id="appearance">
+    <header class="lf-section-header">
+      <h3 class="lf-section-title">显示与外观</h3>
+      <span class="lf-section-header__hint">保存在本浏览器</span>
+    </header>
+
+    <div class="lf-setting-row">
+      <div class="lf-setting-row__label">显示名</div>
+      <div class="lf-setting-row__hint">首页头像与问候会用这个名字（仅本机存储）</div>
+      <input id="displayName" class="lf-input lf-mt-3" maxlength="20"
+             placeholder="给自己起个名字" value="{{ display_name }}">
+    </div>
+
+    <div class="lf-setting-row">
+      <div>
+        <div class="lf-setting-row__label">语言</div>
+        <div class="lf-setting-row__hint">界面语言（你输入的数据仍按原语言保存）</div>
+      </div>
+      <select id="langSelect" class="lf-select" onchange="window.setLang(this.value)">
+        <option value="zh">中文</option>
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+        <option value="de">Deutsch</option>
+        <option value="ja">日本語</option>
+        <option value="ru">Русский</option>
+        <option value="pt">Português</option>
+      </select>
+    </div>
+    <script>try{var _ls=document.getElementById('langSelect');if(_ls)_ls.value=localStorage.getItem('lifeos-lang')||'zh';}catch(e){}</script>
+
+    <div class="lf-setting-row">
+      <div class="lf-setting-row__label">主题模式</div>
+      <div class="lf-setting-row__hint">跟随系统会随手机/电脑自动切换</div>
+      <div class="lf-seg lf-mt-3" id="themeSeg">
+        <button class="lf-seg__btn" data-theme="light">☀️ 浅色</button>
+        <button class="lf-seg__btn" data-theme="dark">🌙 深色</button>
+        <button class="lf-seg__btn" data-theme="auto">💡 跟随系统</button>
+      </div>
+    </div>
+
+    <div class="lf-setting-row">
+      <div class="lf-setting-row__label">主题色</div>
+      <div class="lf-setting-row__hint">全站按钮/图标会跟着变</div>
+      <div class="lf-swatches lf-mt-3" id="accentSwatches">
+        <span class="lf-swatch" data-accent="blue"   style="background:#2b56d8;" title="经典蓝"></span>
+        <span class="lf-swatch" data-accent="teal"   style="background:#0d9488;" title="青柠"></span>
+        <span class="lf-swatch" data-accent="violet" style="background:#7c3aed;" title="薰衣紫"></span>
+        <span class="lf-swatch" data-accent="rose"   style="background:#e11d48;" title="玫红"></span>
+        <span class="lf-swatch" data-accent="amber"  style="background:#d97706;" title="暖琥珀"></span>
+        <span class="lf-swatch" data-accent="green"  style="background:#16a34a;" title="森野绿"></span>
+      </div>
+    </div>
+  </section>
+
+  {# ── 区段 3：偏好（服务端保存） ── #}
+  <section class="lf-card lf-mb-4">
+    <header class="lf-section-header">
+      <h3 class="lf-section-title">偏好</h3>
+      <span class="lf-section-header__hint">同步到你的账号</span>
+    </header>
+    <form method="post" novalidate>{% csrf_token %}
+      <div class="lf-row lf-row--wrap" style="gap:12px;">
+        <div class="lf-field" style="flex:1;min-width:140px;">
+          <label for="id_timezone" class="lf-label">时区</label>
+          <select name="timezone" id="id_timezone" class="lf-select">
+            <option value="Asia/Shanghai"   {% if form.timezone.value == "Asia/Shanghai"   %}selected{% endif %}>北京时间</option>
+            <option value="Asia/Tokyo"      {% if form.timezone.value == "Asia/Tokyo"      %}selected{% endif %}>东京</option>
+            <option value="America/New_York"{% if form.timezone.value == "America/New_York" %}selected{% endif %}>纽约</option>
+            <option value="Europe/London"   {% if form.timezone.value == "Europe/London"   %}selected{% endif %}>伦敦</option>
+          </select>
+        </div>
+        <div class="lf-field" style="flex:1;min-width:140px;">
+          <label for="id_currency" class="lf-label">货币</label>
+          <select name="currency" id="id_currency" class="lf-select">
+            <option value="CNY" {% if form.currency.value == "CNY" %}selected{% endif %}>人民币 ¥</option>
+            <option value="USD" {% if form.currency.value == "USD" %}selected{% endif %}>美元 $</option>
+            <option value="JPY" {% if form.currency.value == "JPY" %}selected{% endif %}>日元 ¥</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="lf-field">
+        <label for="id_monthly_budget" class="lf-label">月度预算</label>
+        <input type="number" name="monthly_budget" id="id_monthly_budget"
+               class="lf-input lf-num" step="0.01" min="0"
+               value="{{ form.monthly_budget.value|default:'' }}"
+               placeholder="留空表示不设置预算">
+      </div>
+
+      <div class="lf-field">
+        <label for="id_daily_ai_limit" class="lf-label">单日 AI 调用上限</label>
+        <input type="number" name="daily_ai_limit" id="id_daily_ai_limit"
+               class="lf-input lf-num" min="0"
+               value="{{ form.daily_ai_limit.value|default:'100' }}"
+               placeholder="0=不限制">
+      </div>
+
+      <div class="lf-field">
+        <label for="id_default_reminder_time" class="lf-label">提醒默认时间</label>
+        <input type="time" name="default_reminder_time" id="id_default_reminder_time"
+               class="lf-input lf-num" value="{{ form.default_reminder_time.value|default:'10:00' }}">
+        <p class="lf-help">语音/文字说「提醒我 X」但没指定几点时，默认用这个时间（建议 10:00，比 12:00 早）。</p>
+      </div>
+
+      <label class="lf-checkbox lf-mt-2">
+        <input type="checkbox" name="ai_parsing_enabled" id="id_ai_parsing_enabled"
+               {% if form.ai_parsing_enabled.value %}checked{% endif %}>
+        启用 AI 解析
+      </label>
+
+      <div class="lf-row lf-mt-6" style="gap:8px;">
+        <button type="submit" class="lf-btn lf-btn--primary">保存偏好</button>
+        <span class="lf-text-xs lf-text-faint">修改只影响本设备上的显示与预算。</span>
+      </div>
+    </form>
+  </section>
+
+  {# ── 区段 4：数据导出 ── #}
+  <section class="lf-card lf-mb-4">
+    <header class="lf-section-header">
+      <h3 class="lf-section-title">我的数据</h3>
+      <span class="lf-section-header__hint">CSV 在 Excel/Numbers 直接打开</span>
+    </header>
+    <div class="lf-export-grid">
+      <a href="{% url 'export_data' %}?type=expense&format=csv" class="lf-export-tile">
+        <span class="lf-export-tile__label">账目 CSV</span>
+        <span class="lf-export-tile__sub">支出记录</span>
+      </a>
+      <a href="{% url 'export_data' %}?type=task&format=csv" class="lf-export-tile">
+        <span class="lf-export-tile__label">任务 CSV</span>
+        <span class="lf-export-tile__sub">待办/已完成</span>
+      </a>
+      <a href="{% url 'export_data' %}?type=note&format=csv" class="lf-export-tile">
+        <span class="lf-export-tile__label">随心记 CSV</span>
+        <span class="lf-export-tile__sub">随手的小想法</span>
+      </a>
+      <a href="{% url 'export_data' %}?format=json" class="lf-export-tile lf-export-tile--accent">
+        <span class="lf-export-tile__label">全部 JSON</span>
+        <span class="lf-export-tile__sub">结构化备份</span>
+      </a>
+    </div>
+  </section>
+
+  {# ── 区段 5：危险操作 ── #}
+  <section class="lf-card lf-card--danger lf-mb-4">
+    <header class="lf-section-header">
+      <h3 class="lf-section-title" style="color:var(--danger);">账号操作</h3>
+    </header>
+
+    <form method="post" action="{% url 'logout' %}" class="lf-row">
+      {% csrf_token %}
+      <button type="submit" class="lf-btn lf-btn--ghost">
+        登出当前账号
+      </button>
+      <a href="{% url 'delete_account' %}" class="lf-btn lf-btn--danger">
+        注销账号
+      </a>
+      <span class="lf-text-xs lf-text-faint">注销会停用账号并匿名化邮箱，不可恢复。</span>
+    </form>
+  </section>
+
 </main>
-</body>
-</html>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var lifeos = window.__lifeos || {
+    themePref: function(){ return localStorage.getItem('lifeos-theme') || 'auto'; },
+    setTheme: function(p){ localStorage.setItem('lifeos-theme', p); document.documentElement.setAttribute('data-theme', (p==='dark'?'dark':'light')); },
+    accent: function(){ return localStorage.getItem('lifeos-accent') || 'blue'; },
+    setAccent: function(n){ localStorage.setItem('lifeos-accent', n); document.documentElement.setAttribute('data-accent', n); }
+  };
+
+  {# 主题分段 #}
+  var themeSeg = document.getElementById('themeSeg');
+  var curTheme = lifeos.themePref();
+  function paintTheme(p){
+    if(!themeSeg) return;
+    themeSeg.querySelectorAll('.lf-seg__btn').forEach(function(b){
+      b.classList.toggle('is-active', b.dataset.theme === p);
+    });
+  }
+  paintTheme(curTheme);
+  themeSeg.addEventListener('click', function(e){
+    var btn = e.target.closest('.lf-seg__btn'); if(!btn) return;
+    lifeos.setTheme(btn.dataset.theme);
+    paintTheme(btn.dataset.theme);
+  });
+
+  // 账号字段行内编辑（用户名/邮箱/手机号）
+  window.toggleIdentityEditor = function(field){
+    var f = document.getElementById(field + 'Edit');
+    if(!f) return;
+    f.classList.toggle('lf-hidden');
+  };
+
+  // 主题色
+  var sw = document.getElementById('accentSwatches');
+  var curAccent = lifeos.accent();
+  function paintAccent(n){
+    if(!sw) return;
+    sw.querySelectorAll('.lf-swatch').forEach(function(s){
+      s.classList.toggle('is-active', s.dataset.accent === n);
+    });
+  }
+  paintAccent(curAccent);
+  sw.addEventListener('click', function(e){
+    var s = e.target.closest('.lf-swatch'); if(!s) return;
+    lifeos.setAccent(s.dataset.accent);
+    paintAccent(s.dataset.accent);
+  });
+
+  // 显示名：同时更新本页 hero + 首页 hero（如果有打开的）
+  var nameInput  = document.getElementById('displayName');
+  var heroName   = document.getElementById('profilePreviewName');
+  var heroAvatar = document.getElementById('profileAvatar');
+  function applyName(v){
+    v = (v || '').trim();
+    if(heroName)   heroName.textContent   = v || '我';
+    if(heroAvatar) heroAvatar.textContent = (v || '我').slice(0, 1).toUpperCase();
+    try { localStorage.setItem('lifeos-name', v); } catch(e) {}
+  }
+  if(nameInput){
+    nameInput.addEventListener('input', function(){ applyName(this.value); });
+    // 本机已存过名字 → 优先用它
+    var stored = null;
+    try { stored = localStorage.getItem('lifeos-name'); } catch(e) {}
+    if(stored !== null && stored !== undefined){
+      nameInput.value = stored;
+      applyName(stored);
+    }
+  }
+})();
+</script>
+{% endblock %}

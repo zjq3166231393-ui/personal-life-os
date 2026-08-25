@@ -1,0 +1,113 @@
+{% load static %}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}Personal Life OS{% endblock %}</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2b56d8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Life OS">
+<link rel="apple-touch-icon" href="/pwa-icon/192/">
+{% comment %}
+字体走系统栈（PingFang SC / system-ui / Noto Sans SC fallback），不依赖 Google Fonts CDN：
+离线/PWA 友好，外网不可达时不阻塞渲染，也避免隐私泄露。见 static/css/lifeos.css 的 --font-sans。
+{% endcomment %}
+{# 主题防闪烁：在 CSS 加载前就定好 data-theme / data-accent，避免白屏闪烁 #}
+<script>
+(function(){
+  var root = document.documentElement;
+  var THEME_KEY = 'lifeos-theme', ACCENT_KEY = 'lifeos-accent';
+  var ACCENT_HEX = { blue:'#2b56d8', teal:'#0d9488', violet:'#7c3aed', rose:'#e11d48', amber:'#d97706', green:'#16a34a' };
+  function resolveTheme(pref){
+    if(pref === 'auto' || !pref){ return (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
+    return pref === 'dark' ? 'dark' : 'light';
+  }
+  function applyTheme(pref){
+    var t = resolveTheme(pref);
+    root.setAttribute('data-theme', t);
+    var meta = document.querySelector('meta[name=theme-color]');
+    if(meta){ meta.setAttribute('content', t === 'dark' ? '#0e131a' : (ACCENT_HEX[localStorage.getItem(ACCENT_KEY)||'blue'] || '#2b56d8')); }
+  }
+  function applyAccent(name){
+    if(name) root.setAttribute('data-accent', name); else root.removeAttribute('data-accent');
+    var meta = document.querySelector('meta[name=theme-color]');
+    if(meta && (localStorage.getItem(THEME_KEY)||'auto') !== 'dark'){ meta.setAttribute('content', ACCENT_HEX[name] || '#2b56d8'); }
+  }
+  var themePref = localStorage.getItem(THEME_KEY) || 'auto';
+  var accent = localStorage.getItem(ACCENT_KEY) || 'blue';
+  applyAccent(accent);
+  applyTheme(themePref);
+  if(window.matchMedia){
+    var mq = matchMedia('(prefers-color-scheme: dark)');
+    var onMq = function(){ if((localStorage.getItem(THEME_KEY)||'auto') === 'auto') applyTheme('auto'); };
+    if(mq.addEventListener) mq.addEventListener('change', onMq); else if(mq.addListener) mq.addListener(onMq);
+  }
+  window.__lifeos = {
+    themePref: function(){ return localStorage.getItem(THEME_KEY) || 'auto'; },
+    setTheme: function(p){ localStorage.setItem(THEME_KEY, p); applyTheme(p); },
+    accent: function(){ return localStorage.getItem(ACCENT_KEY) || 'blue'; },
+    setAccent: function(n){ localStorage.setItem(ACCENT_KEY, n); applyAccent(n); }
+  };
+})();
+</script>
+<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=6">
+{% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% if messages %}
+<div id="lf-toast-stack" class="lf-toast-stack">
+  {% for m in messages %}
+    <div class="lf-toast lf-toast--{{ m.tags|default:'info' }}" role="status" data-auto-dismiss="true">{{ m }}</div>
+  {% endfor %}
+</div>
+<script>
+(function(){
+  var toasts=document.querySelectorAll('.lf-toast[data-auto-dismiss="true"]');
+  toasts.forEach(function(t){
+    setTimeout(function(){
+      t.classList.add('is-leaving');
+      setTimeout(function(){t.remove()},240);
+    },2600);
+  });
+})();
+</script>
+{% endif %}
+{% block body %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+{% block scripts %}{% endblock %}
+<script src="{% static 'js/i18n.js' %}?v=2" defer></script>
+<script>
+// Smart back: any link with [data-back="history"] uses the browser's history
+// stack when the previous page belongs to this app (same-origin), and falls
+// back to the link's href otherwise. This is how Notion / Apple Notes /
+// Bear all behave: edit pages always bring you back where you came from.
+(function(){
+  document.addEventListener('click', function(ev){
+    var a = ev.target.closest && ev.target.closest('a[data-back="history"]');
+    if(!a) return;
+    var href = a.getAttribute('href');
+    if(!href || href === '#') return;
+    try {
+      // Came from inside this app? Go back. Otherwise follow the link target.
+      var ref = document.referrer;
+      if(ref && ref.indexOf(window.location.origin) === 0){
+        ev.preventDefault();
+        if(window.history.length > 1){ window.history.back(); }
+        else { window.location.href = href; }
+      }
+    } catch(e) { /* ignore — let the link do its default thing */ }
+  });
+})();
+</script>
+<script>
+// Register the PWA service worker (network-first: always fresh HTML, offline-capable shell).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('SW register failed:', e); });
+  });
+}
+</script>
+</body>
+</html>
