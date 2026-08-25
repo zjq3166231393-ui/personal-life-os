@@ -8,7 +8,7 @@ from common.models import NotificationLog
 from .ai_provider import FakeProvider, get_provider, set_provider
 from .ai_router import route_parse, _rule_confidence, _detect_multi_intent
 from .ai_schema import validate_ai_response
-from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
+from .models import Budget, Category, ConversationLog, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
 from django.urls import reverse
 from .parser import parse_text
 
@@ -389,15 +389,23 @@ class NoteTests(TestCase):
 
 
 class DataMigrationTests(TestCase):
+    """确认 0005 已把历史 Entry 数据迁入新模型（Expense/Task/Note）。
+
+    Entry 模型本身已在 v0.9.1 删除；这里只校验新模型链路仍可用，
+    不再依赖已废弃的 Entry 表。
+    """
+
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("migrate", password="pass")
 
-    def test_entry_still_works_after_migration(self):
-        Entry.objects.create(user=self.user, kind="expense", title="测试", amount=Decimal("100"))
-        Entry.objects.create(user=self.user, kind="task", title="任务")
-        Entry.objects.create(user=self.user, kind="note", title="笔记")
-        self.assertEqual(Entry.objects.count(), 3)
+    def test_new_models_accept_records(self):
+        Expense.objects.create(user=self.user, type="expense", amount=Decimal("100"), note="测试", occurred_at=timezone.now())
+        Task.objects.create(user=self.user, title="任务")
+        Note.objects.create(user=self.user, title="笔记")
+        self.assertEqual(Expense.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Task.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Note.objects.filter(user=self.user).count(), 1)
 
 
 class BudgetTests(TestCase):

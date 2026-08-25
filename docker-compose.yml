@@ -1,0 +1,44 @@
+# Personal Life OS — 一键本地 / 服务器部署
+#
+# 用法：
+#   cp .env.example .env          # 按需填写 DB_*/SECRET_KEY/DEEPSEEK_API_KEY
+#   docker compose up -d --build
+#   docker compose exec web python manage.py migrate
+#   docker compose exec web python manage.py createsuperuser
+#
+# 注意：.env 中的 DB_HOST 必须设为 db（与下方服务名一致），否则 Web 连不上数据库。
+services:
+  web:
+    build: .
+    # 容器内监听 0.0.0.0，否则端口映射无法从宿主机访问
+    command: gunicorn -b 0.0.0.0:8000 -w 1 config.wsgi:application
+    env_file:
+      - .env
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-*}
+      - REDIS_URL=${REDIS_URL:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/app/media
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    env_file:
+      - .env
+    environment:
+      - MYSQL_DATABASE=${DB_NAME:-lifeos}
+      - MYSQL_USER=${DB_USER:-lifeos}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-lifeos}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpw}
+    volumes:
+      - dbdata:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  media:
+  dbdata:

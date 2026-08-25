@@ -18,7 +18,6 @@
 | 📝 笔记 | 随心记、周/月复盘草稿 |
 | 🌅 每日打卡 | 习惯/每日提醒（背单词、签到、练口语），首页可见 + 连续天数 |
 | 📅 农历 & 日历提醒 | 首页显示农历，生日/纪念日提前 N 天提醒（设置一次年年有效） |
-| 🔔 提醒 | 生日、账单、纪念日、自定义事件、提前多天提醒 |
 | 🤖 AI 解析 | 自然语言输入 → 多意图识别 → 确认卡 → 保存 |
 | 📊 看板 | Chart.js 图表、月末预测、异常检测、行动力分析 |
 | 📱 PWA | 可添加到手机桌面、离线页面、底部导航 |
@@ -30,7 +29,7 @@
 |----|------|
 | 后端 | Python 3.12 + Django 5.2 |
 | 数据库 | SQLite (开发) / MySQL (生产) |
-| 前端 | Django Templates + Bootstrap 5.3 + Chart.js 4 |
+| 前端 | Django Templates + 原生 CSS（lifeos.css，无 UI 框架）+ Chart.js 4 |
 | AI | DeepSeek API (可选，规则优先) |
 | 农历 | zhdate（农历/生肖转换，已在 requirements.txt） |
 | 部署 | Gunicorn + Nginx + systemd + Let's Encrypt |
