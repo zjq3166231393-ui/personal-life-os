@@ -189,7 +189,7 @@ def delete_account(request):
     from django.shortcuts import render
     if request.method == "POST" and request.POST.get("confirm") == "DELETE":
         user = request.user
-        record(user, "login.failed", None, f"账户删除申请: {user.username}")
+        record(user, "account.delete", None, f"账户删除申请: {user.username}")
         user.is_active = False
         user.email = f"deleted_{user.pk}@archived"
         user.set_unusable_password()

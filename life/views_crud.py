@@ -10,6 +10,7 @@ from decimal import Decimal
 from django.db.models import Avg, Sum
 
 from common.audit import record
+from common.utils import safe_next
 from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Review, Suggestion, Task
 from .models_daily import DailyCheckin
 
@@ -192,8 +193,9 @@ def expense_delete(request, pk):
         expense.is_deleted = True
         expense.deleted_at = timezone.now()
         expense.save()
-        record(request.user, "expense.delete", expense.pk, f"删除支出: {expense.title}")
-        messages.success(request, f"已删除支出「{expense.title}」")
+        _disp = expense.note or expense.merchant or "未命名"
+        record(request.user, "expense.delete", expense.pk, f"删除支出: {_disp}")
+        messages.success(request, f"已删除支出「{_disp}」")
         return redirect("expense_list")
     return render(request, "life/expense_delete.html", {"expense": expense})
 
@@ -319,9 +321,8 @@ def task_complete(request, pk):
     task.save()
     record(request.user, "task.complete", task.pk, f"完成任务: {task.title}")
     messages.success(request, f"已完成「{task.title}」")
-    # Stay where the user is: if they came from Home, return there; else task list
-    nxt = request.POST.get("next") or ""
-    return redirect(nxt if nxt and nxt.startswith("/") else "task_list")
+    # 安全跳转：仅允许站内绝对路径，拒绝 // 协议相对与外部地址
+    return safe_next(request, default="task_list", allow_referer=False)
 
 
 @login_required
@@ -553,10 +554,8 @@ def category_create(request):
             color=request.POST.get("color", ""),
             is_system=False,
         )
-        # 自定义分类来自某页「+」入口时，创建后跳回原页（2026-08-24）
-        if next_url and next_url.startswith("/") and not next_url.startswith("//"):
-            return redirect(next_url)
-        return redirect("category_list")
+        # 安全跳转：仅允许站内绝对路径，拒绝 // 协议相对与外部地址
+        return safe_next(request, default="category_list", allow_referer=False)
     return render(request, "life/category_edit.html", {
         "category": None,
         "next": next_url,
@@ -1683,9 +1682,8 @@ def countdown_create(request):
             cd.reminder = rem
             cd.sync_to_reminder = True
             cd.save(update_fields=["reminder", "sync_to_reminder", "updated_at"])
-        if next_url and next_url.startswith("/"):
-            return redirect(next_url)
-        return redirect("countdown_list")
+        # 安全跳转：仅允许站内绝对路径，拒绝 // 协议相对与外部地址
+        return safe_next(request, default="countdown_list", allow_referer=False)
     return render(request, "life/countdown_edit.html", {
         "cd": None,
         "next": next_url,
