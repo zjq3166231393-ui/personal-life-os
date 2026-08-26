@@ -186,6 +186,7 @@ def expense_edit(request, pk):
     return render(request, "life/expense_edit.html", {"expense": expense, "categories": categories})
 
 @login_required
+@require_POST
 def expense_delete(request, pk):
     expense = get_object_or_404(Expense, pk=pk, is_deleted=False)
     _check_owner(expense, request)
@@ -418,6 +419,7 @@ def task_edit(request, pk):
     return render(request, "life/task_edit.html", {"task": task})
 
 @login_required
+@require_POST
 def task_delete(request, pk):
     task = get_object_or_404(Task, pk=pk, is_deleted=False)
     _check_owner(task, request)
@@ -515,6 +517,7 @@ def note_edit(request, pk):
     return render(request, "life/note_edit.html", {"note": note})
 
 @login_required
+@require_POST
 def note_delete(request, pk):
     note = get_object_or_404(Note, pk=pk, is_deleted=False)
     _check_owner(note, request)
@@ -582,6 +585,7 @@ def category_edit(request, pk):
 
 
 @login_required
+@require_POST
 def category_deactivate(request, pk):
     cat = get_object_or_404(Category, pk=pk, is_active=True)
     if cat.user_id and cat.user_id != request.user.id:
@@ -801,6 +805,7 @@ def recurring_edit(request, pk):
 
 
 @login_required
+@require_POST
 def recurring_deactivate(request, pk):
     item = get_object_or_404(RecurringExpense, pk=pk)
     _check_owner(item, request)
@@ -858,6 +863,7 @@ def installment_edit(request, pk):
 
 
 @login_required
+@require_POST
 def installment_pay(request, pk):
     plan = get_object_or_404(InstallmentPlan, pk=pk)
     _check_owner(plan, request)
@@ -1546,6 +1552,7 @@ def daily_edit(request, pk):
 
 
 @login_required
+@require_POST
 def daily_delete(request, pk):
     item = get_object_or_404(DailyCheckin, pk=pk, is_deleted=False)
     _check_owner(item, request)
@@ -1739,6 +1746,7 @@ def countdown_edit(request, pk):
 
 
 @login_required
+@require_POST
 def countdown_delete(request, pk):
     from .models import Countdown
     cd = get_object_or_404(Countdown, pk=pk)

@@ -33,12 +33,15 @@
 
     <div class="lf-row" style="gap:10px;">
       <button type="submit" class="lf-btn lf-btn--primary">{% if item %}保存{% else %}添加{% endif %}</button>
-      {% if item %}
-        <a href="{% url 'daily_delete' item.pk %}" class="lf-btn lf-btn--ghost" style="color:var(--danger);">删除</a>
-      {% endif %}
       <a href="{% url 'daily_list' %}" class="lf-btn lf-btn--ghost">取消</a>
     </div>
   </form>
+  {% if item %}
+  <form method="post" action="{% url 'daily_delete' item.pk %}" style="margin-top:10px;">
+    {% csrf_token %}
+    <button type="submit" class="lf-btn lf-btn--ghost" style="color:var(--danger);" onclick="return confirm('确定删除这条每日提醒？此操作不可恢复。');">删除</button>
+  </form>
+  {% endif %}
 
 </main>
 {% endblock %}

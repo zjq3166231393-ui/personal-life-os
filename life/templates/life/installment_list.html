@@ -39,7 +39,7 @@
     <div class="lf-row lf-row--between">
       <span class="lf-text-xs lf-text-faint lf-num">剩余 ¥{{ plan.remaining_amount }}（{{ plan.remaining_periods }} 期）</span>
       <div class="lf-row" style="gap:6px;">
-        {% if plan.status == 'active' %}<a href="{% url 'installment_pay' plan.pk %}" class="lf-btn lf-btn--secondary lf-btn--sm">还一期</a>{% endif %}
+        {% if plan.status == 'active' %}<form method="post" action="{% url 'installment_pay' plan.pk %}" style="display:inline;">{% csrf_token %}<button type="submit" class="lf-btn lf-btn--secondary lf-btn--sm">还一期</button></form>{% endif %}
         <a href="{% url 'installment_edit' plan.pk %}" class="lf-btn lf-btn--ghost lf-btn--sm">编辑</a>
       </div>
     </div>

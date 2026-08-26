@@ -11,7 +11,7 @@
     </a>
     <div class="lf-row" style="gap:8px;">
       <a href="{% url 'expense_edit' expense.pk %}" class="lf-btn lf-btn--primary lf-btn--sm">编辑</a>
-      <a href="{% url 'expense_delete' expense.pk %}" class="lf-btn lf-btn--danger lf-btn--sm">删除</a>
+      <form method="post" action="{% url 'expense_delete' expense.pk %}" style="display:inline;">{% csrf_token %}<button type="submit" class="lf-btn lf-btn--danger lf-btn--sm">删除</button></form>
     </div>
   </header>
 

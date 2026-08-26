@@ -78,6 +78,31 @@ bottom nav is shown there instead.
     <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18a6 6 0 0 1 11 0"/></svg></span>
     <span>我的</span>
   </a>
+  <div class="lf-sidebar__section">功能</div>
+  <a href="{% url 'task_list' %}" class="lf-sidebar__item {% if url_name == 'task_list' or url_name == 'task_create' or url_name == 'task_detail' or url_name == 'task_edit' or url_name == 'task_complete' or url_name == 'task_postpone' or url_name == 'task_cancel' or url_name == 'task_archive' or url_name == 'task_renew' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+    <span>任务</span>
+  </a>
+  <a href="{% url 'countdown_list' %}" class="lf-sidebar__item {% if url_name == 'countdown_list' or url_name == 'countdown_create' or url_name == 'countdown_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
+    <span>倒计时</span>
+  </a>
+  <a href="{% url 'recurring_list' %}" class="lf-sidebar__item {% if url_name == 'recurring_list' or url_name == 'recurring_create' or url_name == 'recurring_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+    <span>固定支出</span>
+  </a>
+  <a href="{% url 'installment_list' %}" class="lf-sidebar__item {% if url_name == 'installment_list' or url_name == 'installment_create' or url_name == 'installment_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+    <span>分期</span>
+  </a>
+  <a href="{% url 'reminder_list' %}" class="lf-sidebar__item {% if url_name == 'reminder_list' or url_name == 'reminder_create' or url_name == 'reminder_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+    <span>提醒</span>
+  </a>
+  <a href="{% url 'category_list' %}" class="lf-sidebar__item {% if url_name == 'category_list' or url_name == 'category_create' or url_name == 'category_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+    <span>分类</span>
+  </a>
   <div class="lf-sidebar__spacer"></div>
   <div class="lf-sidebar__foot">Personal Life OS · v0.9.0</div>
 </aside>

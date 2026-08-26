@@ -32,12 +32,15 @@
     </div>
     <div class="lf-row lf-mt-2" style="gap:8px;">
       <button type="submit" class="lf-btn lf-btn--primary">保存</button>
-      {% if note %}
-        <a href="{% url 'note_delete' note.pk %}" class="lf-btn lf-btn--ghost" style="color:var(--danger);">删除</a>
-      {% endif %}
       <a href="{% url 'note_list' %}" class="lf-btn lf-btn--ghost">取消</a>
     </div>
   </form>
+  {% if note %}
+  <form method="post" action="{% url 'note_delete' note.pk %}" style="margin-top:8px;">
+    {% csrf_token %}
+    <button type="submit" class="lf-btn lf-btn--ghost" style="color:var(--danger);" onclick="return confirm('确定删除这篇随心记？此操作不可恢复。');">删除</button>
+  </form>
+  {% endif %}
 
 </main>
 {% endblock %}
