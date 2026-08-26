@@ -26,12 +26,16 @@
       </div>
       <button type="submit" class="lf-btn lf-btn--primary lf-btn--lg lf-btn--block">登录</button>
     </form>
-    <p class="lf-text-sm lf-text-faint lf-text-center lf-mt-4 lf-mb-0">
+      <p class="lf-text-sm lf-text-faint lf-text-center lf-mt-4 lf-mb-0">
       还没有账号？<a href="{% url 'register' %}">立即注册</a>
       {% if "password_reset" in settings.INSTALLED_APPS or True %}
         · <a href="{% url 'password_reset' %}">忘记密码</a>
       {% endif %}
     </p>
+    <form method="post" action="{% url 'guest_login' %}" class="lf-mt-3">
+      {% csrf_token %}
+      <button type="submit" class="lf-btn lf-btn--ghost lf-btn--lg lf-btn--block">🚪 游客体验（无需注册）</button>
+    </form>
   </section>
 </main>
 {% endblock %}

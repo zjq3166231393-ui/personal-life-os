@@ -499,8 +499,15 @@ function showDraft(data){
   if(actions.length===0){draftBox.innerHTML='<div class="lf-alert lf-alert--warning lf-mb-0">未能识别到操作。</div>';draftBox.classList.remove('lf-hidden');return}
   // 记录解析来源（rule/ai/fallback），用于后续保存时写回 source 字段
   currentActions=actions;
+  // 后端带回的合法性提示（如「2 月没有这一天，已改为今天」）以醒目方式呈现
+  var warns=[];
+  for(var i=0;i<actions.length;i++){ if(actions[i].validation_warning) warns.push(actions[i].validation_warning); }
   var sourceTag=sourceLabels[data.source||'rule']||data.source||'规则';
   var html='<div class="lf-row lf-row--between lf-mb-2"><strong class="lf-text-sm lf-text-bold">识别结果 <span id="actionCount">'+actions.length+'</span> 条</strong><span class="lf-text-xs lf-text-faint">来源: '+sourceTag+'</span></div>';
+  if(warns.length){
+    html+='<div class="lf-alert lf-alert--warning lf-mb-2">⚠️ '+warns.join('；')+'</div>';
+    showToast('⚠️ '+warns[0], 3800);
+  }
   for(var i=0;i<actions.length;i++) html+=renderAction(actions[i],i);
   html+='<div class="lf-row lf-mt-3" style="gap:8px;"><button type="button" class="lf-btn lf-btn--primary" onclick="confirmAll()">全部确认</button><button type="button" class="lf-btn lf-btn--ghost" onclick="draftBox.classList.add(\'lf-hidden\')">取消</button></div>';
   draftBox.innerHTML=html; draftBox.classList.remove('lf-hidden');

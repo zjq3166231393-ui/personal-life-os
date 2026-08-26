@@ -12,6 +12,43 @@ from django.views.decorators.http import require_POST
 
 from .models import UserProfile
 
+# 共享游客账号（无可用密码，无法被口令登录；仅 guest_login 视图可直登）
+GUEST_USERNAME = "guest_demo"
+
+
+def is_guest(user):
+    return bool(user.is_authenticated and user.username == GUEST_USERNAME)
+
+
+def guest_blocked(view_func):
+    """拦截游客账号访问破坏性/身份类操作（注销、改身份、改密码）。"""
+    from functools import wraps
+
+    @wraps(view_func)
+    def _w(request, *a, **k):
+        if is_guest(request.user):
+            from django.contrib import messages
+
+            messages.error(request, "游客模式不支持该操作，注册账号后可解锁全部功能。")
+            return redirect("home")
+        return view_func(request, *a, **k)
+
+    return _w
+
+
+@require_POST
+def guest_login(request):
+    """免注册体验：自动创建/登录共享游客账号。"""
+    user, _ = User.objects.get_or_create(username=GUEST_USERNAME)
+    if not user.is_active:
+        user.is_active = True
+    if not user.has_usable_password():
+        user.set_unusable_password()
+    user.save()
+    UserProfile.objects.get_or_create(user=user)
+    login(request, user)
+    return redirect("home")
+
 
 class RegisterForm(UserCreationForm):
     email = forms.EmailField(required=True, label="邮箱")
@@ -185,8 +222,14 @@ def export_data(request):
 @login_required
 def delete_account(request):
     from common.audit import record
+    from django.contrib import messages
     from django.contrib.auth import logout
     from django.shortcuts import render
+
+    if is_guest(request.user):
+        messages.error(request, "游客模式不支持注销账号，注册后可解锁。")
+        return redirect("home")
+
     if request.method == "POST" and request.POST.get("confirm") == "DELETE":
         user = request.user
         record(user, "account.delete", None, f"账户删除申请: {user.username}")
@@ -226,6 +269,10 @@ def change_identity(request):
     profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
     if request.method != "POST":
+        return redirect("profile")
+
+    if is_guest(request.user):
+        messages.error(request, "游客模式不支持修改身份信息，注册后可解锁。")
         return redirect("profile")
 
     field = request.POST.get("field", "").strip()

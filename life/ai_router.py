@@ -262,5 +262,9 @@ def _draft_to_action(draft: dict) -> dict:
         "icon": draft.get("icon"),
         "source": draft.get("source", "rule"),
     }
+    # Propagate parser-level sanity warnings (e.g. invalid date → fell back to today)
+    # so the frontend can surface a friendly hint instead of a silently-wrong action.
+    if draft.get("validation_warning"):
+        action["validation_warning"] = draft["validation_warning"]
     # Clean None values
     return {k: v for k, v in action.items() if v is not None}
