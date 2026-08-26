@@ -80,6 +80,19 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 # single-process dev servers, but each worker keeps its own counters).
 REDIS_URL = os.getenv("REDIS_URL")
 if REDIS_URL:
+    # Django's RedisCache imports redis-py lazily, so a missing package would
+    # only surface as a runtime ImportError on the first cache hit. Degrade to
+    # LocMem with a loud warning instead of taking the whole app down.
+    try:
+        import redis  # noqa: F401
+    except ImportError:
+        import logging
+        logging.getLogger("django").warning(
+            "REDIS_URL is set but the 'redis' package is missing; rate limiting "
+            "falls back to LocMemCache (NOT shared across workers). Run: pip install redis"
+        )
+        REDIS_URL = None
+if REDIS_URL:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",
