@@ -338,15 +338,16 @@ def change_identity(request):
 
 
 @login_required
+@guest_blocked
 def profile(request):
+    profile, _ = UserProfile.objects.get_or_create(user=request.user)
     if request.method == "POST":
-        form = ProfileForm(request.POST, instance=request.user.profile)
+        form = ProfileForm(request.POST, instance=profile)
         if form.is_valid():
             form.save()
             return redirect("profile")
     else:
-        form = ProfileForm(instance=request.user.profile)
-    profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        form = ProfileForm(instance=profile)
     # 显示名：DB 优先（profile 提交过就用 DB），否则用 username；前端 localStorage
     # 会再覆盖一层（用户在本机输入的名字），所以这里只是 SSR fallback。
     display_name = profile.display_name or request.user.username
@@ -387,6 +388,7 @@ def _process_avatar_upload(profile, uploaded_file):
 
 
 @login_required
+@guest_blocked
 @require_POST
 def avatar_upload(request):
     """上传新头像：旧头像归档到 history（最多 8 张）。"""
@@ -416,6 +418,7 @@ def avatar_upload(request):
 
 
 @login_required
+@guest_blocked
 @require_POST
 def avatar_history_select(request):
     """把历史头像里某条重新设回当前头像。"""

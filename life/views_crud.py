@@ -533,12 +533,14 @@ def note_delete(request, pk):
 
 @login_required
 def category_list(request):
-    from django.db.models import Q
-    cats = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), is_active=True)
-    cat_data = []
-    for c in cats:
-        refs = Expense.objects.filter(category=c, is_deleted=False).count()
-        cat_data.append({"obj": c, "refs": refs, "is_system": c.user_id is None})
+    from django.db.models import Q, Count
+    cats = list(Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), is_active=True))
+    cat_ids = [c.id for c in cats]
+    counts = dict(
+        Expense.objects.filter(category_id__in=cat_ids, is_deleted=False)
+        .values_list("category_id").annotate(c=Count("id"))
+    )
+    cat_data = [{"obj": c, "refs": counts.get(c.id, 0), "is_system": c.user_id is None} for c in cats]
     return render(request, "life/category_list.html", {"categories": cat_data})
 
 
@@ -1000,6 +1002,9 @@ def dashboard(request):
         "budgetPct": budget_pct,
         "recurringPct": round(float(rec_total / total_expense * 100) if total_expense > 0 else 0),
     })
+    # 防止用户可控的分类名含 </script> 跳出 <script> 块（存储型 XSS）。
+    # 与 Django json_script 同源：对 < > & 做 \u 转义，JSON.parse 可无损还原。
+    chart_data = chart_data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
     # ── month-end prediction ─────────────────────────────────────
     # 当查询月份 ≠ 当前月时：跳过预测（未来/历史月份无法预测）
@@ -1584,7 +1589,7 @@ def daily_toggle(request, pk):
             "ok": True, "done": done, "date": iso,
             "streak": item.streak(today),
         })
-    return redirect(request.POST.get("next") or "home")
+    return safe_next(request, default="home", allow_referer=False)
 
 
 # ── 倒计时 / 纪念日模块（2026-08-25）───────────────────────────
@@ -1746,31 +1751,27 @@ def countdown_delete(request, pk):
 
 
 @login_required
+@require_POST
 def countdown_pin(request, pk):
-    """切换置顶状态（AJAX 或普通 POST 都可）"""
+    """切换置顶状态（仅 POST）"""
     from .models import Countdown
     cd = get_object_or_404(Countdown, pk=pk)
     _check_owner(cd, request)
     cd.pinned = not cd.pinned
     cd.save(update_fields=["pinned", "updated_at"])
-    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or ""
-    if next_url.startswith("/"):
-        return redirect(next_url)
-    return redirect("countdown_list")
+    return safe_next(request, default="countdown_list", allow_referer=False)
 
 
 @login_required
+@require_POST
 def countdown_toggle_home(request, pk):
-    """切换「首页显示」状态 — 隐藏/恢复都在首页小板块操作"""
+    """切换「首页显示」状态 — 隐藏/恢复都在首页小板块操作（仅 POST）"""
     from .models import Countdown
     cd = get_object_or_404(Countdown, pk=pk)
     _check_owner(cd, request)
     cd.show_on_home = not cd.show_on_home
     cd.save(update_fields=["show_on_home", "updated_at"])
-    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or ""
-    if next_url.startswith("/"):
-        return redirect(next_url)
-    return redirect("countdown_list")
+    return safe_next(request, default="countdown_list", allow_referer=False)
 
 
 # ── helper imports (deferred to avoid breaking module-level ordering) ──
