@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
 {% block title %}{% if item %}编辑{% else %}新增{% endif %}固定支出 · Personal Life OS{% endblock %}
 {% block body %}
 <main class="lf-container" style="max-width:560px;">
@@ -65,4 +66,5 @@
   </section>
 
 </main>
+{% include "life/_bottom_nav.html" %}
 {% endblock %}

@@ -1,5 +1,6 @@
 {% extends "_base.html" %}
 {% load static %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
 {% block title %}倒计时 · 我的 LifeOS{% endblock %}
 
 {% block extra_head %}
@@ -192,4 +193,5 @@
 {% endif %}
 
 <a href="{% url 'countdown_create' %}" class="lf-fab" aria-label="新建倒计时">+</a>
+{% include "life/_bottom_nav.html" %}
 {% endblock %}

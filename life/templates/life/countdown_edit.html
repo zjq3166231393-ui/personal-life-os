@@ -1,5 +1,6 @@
 {% extends "_base.html" %}
 {% load static %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
 {% block title %}{% if cd %}编辑{% else %}新增{% endif %}倒计时 · 我的 LifeOS{% endblock %}
 
 {% block extra_head %}
@@ -285,4 +286,5 @@
   if (dEl && !dEl.value) dEl.value = '{{ today }}';
 })();
 </script>
+{% include "life/_bottom_nav.html" %}
 {% endblock %}
