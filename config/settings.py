@@ -27,6 +27,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -146,8 +147,15 @@ if ENVIRONMENT == "production" or not DEBUG:
     ]
 
 # ── Production DB ───────────────────────────────────────────────
-if os.getenv("MYSQL_DATABASE") and os.getenv("MYSQL_USER"):
-    DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": os.getenv("MYSQL_DATABASE"), "USER": os.getenv("MYSQL_USER"), "PASSWORD": os.getenv("MYSQL_PASSWORD"), "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"), "PORT": os.getenv("MYSQL_PORT", "3306"), "OPTIONS": {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"}}}
+# 同时识别自管变量（MYSQL_*）与 Railway MySQL 插件注入变量（MYSQL* 无下划线），
+# 挂上插件即自动切换 MySQL，无需手写映射。
+_db_name = os.getenv("MYSQL_DATABASE") or os.getenv("MYSQLDATABASE")
+_db_user = os.getenv("MYSQL_USER") or os.getenv("MYSQLUSER")
+_db_pass = os.getenv("MYSQL_PASSWORD") or os.getenv("MYSQLPASSWORD")
+_db_host = os.getenv("MYSQL_HOST") or os.getenv("MYSQLHOST", "127.0.0.1")
+_db_port = os.getenv("MYSQL_PORT") or os.getenv("MYSQLPORT", "3306")
+if _db_name and _db_user:
+    DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": _db_name, "USER": _db_user, "PASSWORD": _db_pass, "HOST": _db_host, "PORT": _db_port, "OPTIONS": {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"}}}
 else:
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
@@ -194,3 +202,10 @@ LOGGING = {
 # ── Static files ────────────────────────────────────────────────
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# WhiteNoise 直接由 Django 服务压缩静态文件（生产无 nginx 时必需）。
+# 用 CompressedStaticFilesStorage（不做文件名哈希），避免 Manifest 在测试渲染期
+# 因找不到 manifest entry 而抛错；模板已用 ?v=N 查询串做缓存失效。
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}

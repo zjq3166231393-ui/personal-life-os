@@ -14,9 +14,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/
 
-# 静态文件收集（由 Nginx 托管；收集失败不阻断镜像构建）
+# 静态文件收集（由 WhiteNoise 直接托管；收集失败不阻断镜像构建）
 RUN python manage.py collectstatic --noinput || true
 
 EXPOSE 8000
 
-CMD ["gunicorn", "-c", "deploy/gunicorn.conf.py", "config.wsgi:application"]
+# Railway / 容器平台通过 $PORT 注入端口，且需监听 0.0.0.0 才能被路由访问。
+# 单 worker 保证 LocMemCache 限流计数正确；挂 REDIS_URL 后可加 -w 提升并发。
+CMD gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} -w 1
