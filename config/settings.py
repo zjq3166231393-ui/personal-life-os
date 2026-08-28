@@ -114,6 +114,14 @@ ENVIRONMENT = os.getenv("DJANGO_ENVIRONMENT", "development")
 if ENVIRONMENT == "production":
     if not os.getenv("DJANGO_SECRET_KEY"):
         raise RuntimeError("DJANGO_SECRET_KEY must be set in .env for production mode")
+    # 生产环境 fail-fast：禁止把开发用 .env（DEBUG=true / ALLOWED_HOSTS=*）直接上线，
+    # 否则会泄露调试栈、允许任意 Host 头（Web 缓存投毒 / 密码重置投毒）。
+    if DEBUG:
+        raise RuntimeError("DJANGO_DEBUG 必须为 false（DJANGO_ENVIRONMENT=production 时）。")
+    if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
+        raise RuntimeError(
+            "生产环境 DJANGO_ALLOWED_HOSTS 必须设为具体域名，禁止使用 '*'。"
+        )
 
 # Trust Nginx X-Forwarded-Proto. Safe to always set: the actual redirect
 # is controlled by SECURE_SSL_REDIRECT inside the production block below.

@@ -101,6 +101,7 @@ def push_unsubscribe(request):
 def vapid_public_key(request):
     """Return the VAPID public key so the client can subscribe."""
     import os
+
     from django.http import JsonResponse
     key = os.getenv("VAPID_PUBLIC_KEY", "")
     return JsonResponse({"publicKey": key})

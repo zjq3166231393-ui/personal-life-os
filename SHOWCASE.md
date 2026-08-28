@@ -44,7 +44,7 @@ Personal Life OS 是一个「用自然语言管理生活」的 AI 产品：用�
 | **在线地址** | 部署后填这里：`https://___________.up.railway.app` |
 | **Demo 账号** | 用户名 `demo`　密码 `demo123456`（预置一整月完整数据：收支 / 预算 / 分期 / 任务 / 提醒 / 复盘） |
 | **游客模式** | 登录页点「🚪 游客体验（无需注册）」即可浏览，零门槛 |
-| **源码** | `github.com/zjq3166236231393-ui/personal-life-os` |
+| **源码** | `github.com/zjq3166231393-ui/personal-life-os` |
 
 > 部署后首次需执行 `python manage.py seed_demo` 注入 demo 数据；游客账号为共享只读体验，不可改身份 / 改密 / 注销（防污染）。
 

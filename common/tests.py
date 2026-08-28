@@ -1,7 +1,6 @@
-import json
 
 from django.contrib.auth.models import User
-from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from .audit import record

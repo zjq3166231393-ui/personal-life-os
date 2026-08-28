@@ -2,14 +2,27 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from common.models import NotificationLog
+
 from .ai_provider import FakeProvider, get_provider, set_provider
-from .ai_router import route_parse, _rule_confidence, _detect_multi_intent
+from .ai_router import _detect_multi_intent, _rule_confidence, route_parse
 from .ai_schema import validate_ai_response
-from .models import Budget, Category, ConversationLog, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
-from django.urls import reverse
+from .models import (
+    Budget,
+    Category,
+    ConversationLog,
+    Expense,
+    InstallmentPlan,
+    Note,
+    ParseResult,
+    ProposedAction,
+    RecurringExpense,
+    Reminder,
+    Task,
+)
 from .parser import parse_text
 
 
@@ -287,7 +300,6 @@ class ExpenseTests(TestCase):
         self.assertEqual(income.type, "income")
 
     def test_amount_must_be_positive(self):
-        from django.core.exceptions import ValidationError
         if Decimal("-1") < 0:
             pass  # Negative amounts exist — model layer accepts them
         expense = Expense(
@@ -854,6 +866,7 @@ class ScanRemindersTests(TestCase):
 
     def test_command_creates_notification(self):
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("scan_reminders", stdout=out)
@@ -862,7 +875,6 @@ class ScanRemindersTests(TestCase):
         self.assertIsNotNone(log)
 
     def test_command_no_duplicate(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders")
         first_count = NotificationLog.objects.count()
@@ -873,13 +885,13 @@ class ScanRemindersTests(TestCase):
         self.reminder.is_enabled = False
         self.reminder.save()
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("scan_reminders", stdout=out)
         self.assertIn("0 new notification", out.getvalue())
 
     def test_notification_fields(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders")
         log = NotificationLog.objects.first()
@@ -888,14 +900,12 @@ class ScanRemindersTests(TestCase):
         self.assertEqual(log.status, "pending")
 
     def test_dry_run_creates_nothing(self):
-        from io import StringIO
         from django.core.management import call_command
         count_before = NotificationLog.objects.count()
         call_command("scan_reminders", "--dry-run")
         self.assertEqual(NotificationLog.objects.count(), count_before)
 
     def test_scan_tasks_creates_notification(self):
-        from io import StringIO
         from django.core.management import call_command
         Task.objects.create(user=self.user, title="今日任务", due_at=timezone.now(), status="todo")
         call_command("scan_reminders", "--type=task")
@@ -903,7 +913,6 @@ class ScanRemindersTests(TestCase):
         self.assertIsNotNone(log)
 
     def test_scan_does_not_duplicate(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders", "--type=reminder")
         first_count = NotificationLog.objects.filter(notification_type="reminder").count()
@@ -930,6 +939,7 @@ class CSRFTests(TestCase):
 class PWACacheTests(SimpleTestCase):
     def test_sw_never_caches_user_pages(self):
         from django.test import RequestFactory
+
         from life.views_pwa import service_worker
         sw = service_worker(RequestFactory().get('/sw.js')).content.decode()
         self.assertIn('/expenses/', sw)
@@ -941,6 +951,7 @@ class PWACacheTests(SimpleTestCase):
 
     def test_sw_has_offline_fallback(self):
         from django.test import RequestFactory
+
         from life.views_pwa import service_worker
         sw = service_worker(RequestFactory().get('/sw.js')).content.decode()
         self.assertIn('offline.html', sw)
@@ -1023,7 +1034,6 @@ class ReminderDedupTests(TestCase):
         cls.reminder = Reminder.objects.create(user=cls.user, title="去重测试", event_at=timezone.now(), remind_at=timezone.now(), reminder_type="custom")
 
     def test_scan_twice_does_not_duplicate(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders")
         first = NotificationLog.objects.filter(user=self.user).count()
@@ -1034,6 +1044,7 @@ class ReminderDedupTests(TestCase):
 class SeedDemoTests(TestCase):
     def test_seed_creates_demo_user(self):
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("seed_demo", "--clean", stdout=out)
@@ -1041,7 +1052,6 @@ class SeedDemoTests(TestCase):
         self.assertTrue(User.objects.filter(username="demo").exists())
 
     def test_seed_creates_expenses(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("seed_demo", "--clean")
         call_command("seed_demo")
@@ -1050,6 +1060,7 @@ class SeedDemoTests(TestCase):
 
     def test_seed_does_not_overwrite_real_user(self):
         from io import StringIO
+
         from django.core.management import call_command
         real = User.objects.create_user("realuser", password="pass")
         Expense.objects.create(user=real, type="expense", amount=Decimal("10"), occurred_at=timezone.now())
@@ -1065,6 +1076,7 @@ class DataCheckTests(TestCase):
 
     def test_command_runs_without_errors(self):
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", stdout=out)
@@ -1074,6 +1086,7 @@ class DataCheckTests(TestCase):
     def test_detects_negative_amount(self):
         Expense.objects.create(user=self.user, type="expense", amount=Decimal("-50"), occurred_at=timezone.now(), note="负金额")
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", "--check=amount", stdout=out)
@@ -1082,6 +1095,7 @@ class DataCheckTests(TestCase):
     def test_detects_missing_category(self):
         Expense.objects.create(user=self.user, type="expense", amount=Decimal("10"), occurred_at=timezone.now(), note="无分类")
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", "--check=category", stdout=out)
@@ -1090,6 +1104,7 @@ class DataCheckTests(TestCase):
     def test_detects_deleted_confirmed(self):
         Expense.objects.create(user=self.user, type="expense", amount=Decimal("10"), occurred_at=timezone.now(), note="删除但已确认", is_deleted=True, status="confirmed")
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", "--check=deleted", stdout=out)
@@ -1368,8 +1383,9 @@ class ConfirmActionsTests(TestCase):
 
     def test_task_dedup_same_day_no_due_at(self):
         """未指定时间的任务，按「同日同标题」去重（防止一天内多次语音输入同一任务）。"""
-        from django.utils import timezone as _tz
         from datetime import timedelta
+
+        from django.utils import timezone as _tz
         # 用一个未来的 due_at（不立即过期），同一标题、同日重复提交
         future = (_tz.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
         for _ in range(3):
@@ -1384,6 +1400,7 @@ class ConfirmActionsTests(TestCase):
     def test_completed_task_not_blocked_by_dedup(self):
         """已完成的同名任务不应阻止新建同标题任务（用户可能想做下一轮）。"""
         from datetime import datetime
+
         from django.utils import timezone as _tz
         due = _tz.make_aware(datetime(2026, 8, 25, 10, 0))
         Task.objects.create(user=self.user, title="线上面试", due_at=due, status="completed")

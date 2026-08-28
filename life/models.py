@@ -1,3 +1,5 @@
+import uuid as _uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -61,6 +63,14 @@ class Expense(models.Model):
 
     class Meta:
         ordering = ["-occurred_at", "-created_at"]
+        indexes = [
+            # 列表/看板高频：filter(user, is_deleted=False, occurred_at__range)
+            models.Index(fields=["user", "is_deleted", "occurred_at"]),
+            # 类型/状态筛选 + 时间排序
+            models.Index(fields=["user", "is_deleted", "type", "status"]),
+            # 按分类聚合（预算/分析页 values("category").annotate(Sum)）
+            models.Index(fields=["user", "is_deleted", "category"]),
+        ]
 
     def __str__(self):
         sign = "+" if self.type == "income" else "-"
@@ -102,6 +112,11 @@ class Task(models.Model):
 
     class Meta:
         ordering = ["status", "-priority", "due_at"]
+        indexes = [
+            # 今日/本周/逾期任务：filter(user, is_deleted=False, status__in=[...], due_at__date...)
+            models.Index(fields=["user", "is_deleted", "due_at"]),
+            models.Index(fields=["user", "is_deleted", "status"]),
+        ]
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.title}"
@@ -148,6 +163,10 @@ class Note(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_deleted", "created_at"]),
+            models.Index(fields=["user", "is_deleted", "occurred_on"]),
+        ]
 
     def __str__(self):
         return f"随心记：{self.title}"
@@ -167,6 +186,11 @@ class Budget(models.Model):
         ordering = ["-month", "category"]
         constraints = [
             models.UniqueConstraint(fields=["user", "category", "month"], name="unique_budget_per_user_category_month"),
+        ]
+        indexes = [
+            # 预算/分析页按月拉取：filter(user, month...) 及按分类聚合
+            models.Index(fields=["user", "month"]),
+            models.Index(fields=["user", "category"]),
         ]
 
     def __str__(self):
@@ -198,6 +222,10 @@ class RecurringExpense(models.Model):
 
     class Meta:
         ordering = ["is_active", "due_day"]
+        indexes = [
+            # scan_reminders / 固定支出列表：filter(user, is_active=True/False)
+            models.Index(fields=["user", "is_active"]),
+        ]
 
     def __str__(self):
         freq = dict(self.Frequency.choices).get(self.frequency, self.frequency)
@@ -227,6 +255,9 @@ class InstallmentPlan(models.Model):
 
     class Meta:
         ordering = ["-status", "next_due_date"]
+        indexes = [
+            models.Index(fields=["user", "status"]),
+        ]
 
     def remaining_amount(self):
         return self.total_amount - (self.installment_amount * self.paid_periods)
@@ -268,6 +299,11 @@ class Reminder(models.Model):
 
     class Meta:
         ordering = ["remind_at"]
+        indexes = [
+            # 首页/扫描提醒高频：filter(user, is_enabled=True, remind_at__range)
+            models.Index(fields=["user", "is_enabled", "remind_at"]),
+            models.Index(fields=["user", "is_enabled", "event_at"]),
+        ]
 
     def __str__(self):
         return f"🔔 {self.title} ({self.get_reminder_type_display()})"
@@ -366,7 +402,6 @@ class Countdown(models.Model):
 
     def days_diff(self, today=None):
         """Return signed day count (negative = past)."""
-        from datetime import timedelta
         today = today or timezone_now_localdate()
         target = self.next_occurrence(today) if self.direction == self.Direction.DOWN else self.target_date
         return (target - today).days
@@ -410,6 +445,9 @@ class ConversationLog(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+        ]
 
     def __str__(self):
         snippet = self.raw_text[:60] + "…" if len(self.raw_text) > 60 else self.raw_text
@@ -480,6 +518,9 @@ class Review(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["user", "period", "period_start"], name="unique_review_per_user_period"),
         ]
+        indexes = [
+            models.Index(fields=["user", "period_start"]),
+        ]
 
     def __str__(self):
         return f"{self.get_period_display()}复盘 {self.period_start}"
@@ -500,3 +541,36 @@ class Suggestion(models.Model):
 
     def __str__(self):
         return f"💡 {self.title}"
+
+
+class ParseJob(models.Model):
+    """AI 解析异步任务表。
+
+    解析文本时，规则解析同步返回；需要 AI 时改为后台线程执行并写入本表，
+    前端通过 ``/api/parse-status/<uuid>/`` 轮询结果，避免 AI 调用（最长 ~30s）
+    阻塞 Web worker。仅单用户量级的本地辅助表，不做复杂约束。
+    """
+
+    STATUS = [
+        ("pending", "等待中"),
+        ("running", "解析中"),
+        ("done", "已完成"),
+        ("error", "失败"),
+    ]
+
+    uuid = models.CharField(max_length=32, unique=True, db_index=True, default=_uuid.uuid4().hex,
+                            help_text="对外暴露的任务标识，用于轮询，无业务含义")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="parse_jobs")
+    raw_text = models.TextField(help_text="待解析的原始文本")
+    status = models.CharField(max_length=10, choices=STATUS, default="pending")
+    result = models.JSONField(null=True, blank=True, help_text="解析结果（与 route_parse 返回结构一致）")
+    error = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "status", "-created_at"], name="parsejob_user_status_idx")]
+
+    def __str__(self):
+        return f"ParseJob[{self.uuid}] {self.status}"

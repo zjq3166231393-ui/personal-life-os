@@ -6,11 +6,8 @@ Usage:
     python manage.py backup_db --list             # List existing backups
 """
 import gzip
-import json
 import os
 import shutil
-from datetime import date, timedelta
-from io import TextIOWrapper
 from pathlib import Path
 
 from django.core.management import call_command
@@ -73,8 +70,9 @@ class Command(BaseCommand):
 
     def _aes_encrypt(self, src, dst, key):
         """AES-256-GCM encrypt. Fails hard if cryptography is not installed."""
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         import hashlib
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         aes_key = hashlib.sha256(key.encode()).digest()
         aesgcm = AESGCM(aes_key)
         nonce = os.urandom(12)

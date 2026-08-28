@@ -3,7 +3,6 @@ import time
 
 from django.core.cache import cache
 from django.http import JsonResponse
-from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers

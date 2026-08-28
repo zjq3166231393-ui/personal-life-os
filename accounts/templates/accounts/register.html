@@ -30,15 +30,17 @@
         {% if form.email.errors %}<div class="lf-error">{{ form.email.errors.0 }}</div>{% endif %}
       </div>
 
-      <div class="lf-field">
+      <div class="lf-field lf-field--pw">
         <label for="id_password1" class="lf-label">密码</label>
-        <input type="password" name="password1" id="id_password1" class="lf-input{% if form.password1.errors %} lf-input--invalid{% endif %}" required>
+        <input type="password" name="password1" id="id_password1" class="lf-input lf-input--pw{% if form.password1.errors %} lf-input--invalid{% endif %}" required>
+        <button type="button" class="lf-pw-toggle" data-target="id_password1" tabindex="-1"></button>
         {% if form.password1.errors %}<div class="lf-error">{{ form.password1.errors.0 }}</div>{% endif %}
       </div>
 
-      <div class="lf-field">
+      <div class="lf-field lf-field--pw">
         <label for="id_password2" class="lf-label">确认密码</label>
-        <input type="password" name="password2" id="id_password2" class="lf-input{% if form.password2.errors %} lf-input--invalid{% endif %}" required>
+        <input type="password" name="password2" id="id_password2" class="lf-input lf-input--pw{% if form.password2.errors %} lf-input--invalid{% endif %}" required>
+        <button type="button" class="lf-pw-toggle" data-target="id_password2" tabindex="-1"></button>
         {% if form.password2.errors %}<div class="lf-error">{{ form.password2.errors.0 }}</div>{% endif %}
       </div>
 

@@ -219,8 +219,8 @@ class DataIsolationTests(TestCase):
 
     def _make_resources(self, user):
         """Create one of each owned resource for `user`."""
-        from life.models_daily import DailyCheckin
         from life.models import Note, Reminder
+        from life.models_daily import DailyCheckin
         daily = DailyCheckin.objects.create(user=user, title="A 的打卡", icon="📌")
         note = Note.objects.create(user=user, title="A 的随心记", raw_text="x")
         reminder = Reminder.objects.create(
@@ -259,7 +259,6 @@ class DataIsolationTests(TestCase):
         self.assertTrue(reminder.is_enabled)  # unchanged
 
     def test_user_b_cannot_toggle_user_a_daily(self):
-        from life.models_daily import DailyCheckin
         daily, _, _ = self._make_resources(self.user_a)
         self.client.login(username="bob", password="passB")
         resp = self.client.post(reverse("daily_toggle", args=[daily.pk]))
@@ -273,6 +272,7 @@ class ExportDataTests(TestCase):
 
     def setUp(self):
         from django.contrib.auth import get_user_model
+
         from life.models import Category, Expense, Task
         self.user = get_user_model().objects.create_user("alice", password="pw")
         self.client.login(username="alice", password="pw")
@@ -324,7 +324,6 @@ class ExportDataTests(TestCase):
     def test_export_user_isolation(self):
         """B 导出时不应看到 A 的数据。"""
         from django.contrib.auth import get_user_model
-        from life.models import Expense
         get_user_model().objects.create_user("bob", password="pwB")
         self.client.login(username="bob", password="pwB")
         resp = self.client.get(reverse("export_data") + "?type=expense&format=json")

@@ -20,9 +20,10 @@
         <label for="id_username" class="lf-label">用户名</label>
         <input type="text" name="username" id="id_username" class="lf-input" required autofocus>
       </div>
-      <div class="lf-field">
+      <div class="lf-field lf-field--pw">
         <label for="id_password" class="lf-label">密码</label>
-        <input type="password" name="password" id="id_password" class="lf-input" required>
+        <input type="password" name="password" id="id_password" class="lf-input lf-input--pw" required>
+        <button type="button" class="lf-pw-toggle" data-target="id_password" tabindex="-1"></button>
       </div>
       <button type="submit" class="lf-btn lf-btn--primary lf-btn--lg lf-btn--block">登录</button>
     </form>

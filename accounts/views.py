@@ -83,7 +83,7 @@ class AccountLoginView(LoginView):
         return super().form_valid(form)
 
     def form_invalid(self, form):
-        from life.middleware import record_login_failure, get_login_attempts
+        from life.middleware import get_login_attempts, record_login_failure
         ip = self.request.META.get("REMOTE_ADDR", "127.0.0.1")
         record_login_failure(ip)
         remaining = get_login_attempts(ip)
@@ -128,9 +128,16 @@ def export_data(request):
     """
     fmt = request.GET.get("format", "json")
     type_filter = request.GET.get("type", "").strip()
-    from life.models import Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Task
-    from django.core.serializers import serialize
     from django.http import HttpResponse
+
+    from life.models import (
+        Expense,
+        InstallmentPlan,
+        Note,
+        RecurringExpense,
+        Reminder,
+        Task,
+    )
 
     type_to_model = {
         "expense": Expense,
@@ -221,10 +228,11 @@ def export_data(request):
 
 @login_required
 def delete_account(request):
-    from common.audit import record
     from django.contrib import messages
     from django.contrib.auth import logout
     from django.shortcuts import render
+
+    from common.audit import record
 
     if is_guest(request.user):
         messages.error(request, "游客模式不支持注销账号，注册后可解锁。")
@@ -363,6 +371,7 @@ def profile(request):
 # 上传成功后旧头像 URL 推入 avatar_history（上限 8 张），不删除磁盘文件。
 
 import io
+
 from django.core.files.base import ContentFile
 
 AVATAR_MAX_BYTES = 2 * 1024 * 1024   # 2MB

@@ -15,8 +15,15 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from life.models import (
-    Budget, Category, Expense, InstallmentPlan, Note,
-    RecurringExpense, Reminder, Review, Task,
+    Budget,
+    Category,
+    Expense,
+    InstallmentPlan,
+    Note,
+    RecurringExpense,
+    Reminder,
+    Review,
+    Task,
 )
 
 DEMO_USERNAME = "demo"

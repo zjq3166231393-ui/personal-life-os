@@ -1,17 +1,61 @@
-from django.contrib.auth.decorators import login_required
+from calendar import monthrange
+from datetime import date, timedelta
+from decimal import Decimal
+
 from django.contrib import messages
-from django.http import Http404
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
-from datetime import date, timedelta
-from calendar import monthrange
-from decimal import Decimal
-from django.db.models import Avg, Sum
 
 from common.audit import record
 from common.utils import safe_next
-from .models import Budget, Category, Expense, InstallmentPlan, Note, RecurringExpense, Reminder, Review, Suggestion, Task
+
+from .constants import (
+    ANOMALY_SPIKE_FACTOR,
+    ANOMALY_TOPN,
+    BILL_CHANGE_ALERT_RATIO,
+    BUDGET_WARN_RATIO,
+    CATEGORY_GROWTH_FACTOR,
+    CATEGORY_SPIKE_RATIO,
+    COUNTDOWN_HOME_TOPN,
+    DAY_TREND_DAYS,
+    DEFAULT_PERIOD,
+    EXPENSE_CAT_TOPN_HOME,
+    LARGE_EXPENSE_MIN,
+    LARGE_EXPENSE_PCT,
+    LARGE_ITEM_TOPN,
+    MONTH_DIFF_ALERT_RATIO,
+    MONTH_TREND_COUNT,
+    OVERDUE_ALERT_COUNT,
+    PAGE_SIZE,
+    PERIOD_DAYS,
+    RECURRING_SHARE_ALERT,
+    SAVINGS_IMPROVE_RATIO,
+    SAVINGS_RATE_LOW,
+    SOON_DAYS,
+    STREAK_MAX_DAYS,
+    SUGGESTION_GEN_EVERY_N_DAYS,
+    SUGGESTION_TOPN,
+    TOP_CAT_CONCENTRATION_PCT,
+    TOP_SPENDING_CATS,
+    UPCOMING_HORIZON_DAYS,
+    UPCOMING_TOPN,
+    WEEK_TREND_DAYS,
+)
+from .models import (
+    Budget,
+    Category,
+    Expense,
+    InstallmentPlan,
+    Note,
+    RecurringExpense,
+    Reminder,
+    Review,
+    Suggestion,
+    Task,
+)
 from .models_daily import DailyCheckin
 
 
@@ -19,21 +63,15 @@ def _user_queryset(model, request):
     return model.objects.filter(user=request.user, is_deleted=False)
 
 
-def _check_owner(obj, request):
-    if obj.user_id != request.user.id:
-        from django.http import Http404
-        raise Http404("未找到此记录。")
-    return None
-
-
 # ── Expense CRUD ────────────────────────────────────────────────────
 
 @login_required
 def expense_list(request):
-    from datetime import date, datetime, timedelta
-    from decimal import Decimal, InvalidOperation
+    from datetime import datetime, timedelta
+    from decimal import InvalidOperation
+
     from django.core.paginator import Paginator
-    from django.db.models import Q, Sum, Avg, Max
+    from django.db.models import Max, Q, Sum
 
     # ── 2026-08-24：recurring=fixed 时直接跳到 /recurring/（固定账单独立页面）────
     if request.GET.get("recurring") == "fixed":
@@ -51,13 +89,13 @@ def expense_list(request):
     amount_max = request.GET.get("amount_max", "")
     query = request.GET.get("q", "").strip()
     # 智能时段：3天 / 1周 / 1月 / 全部。默认 1周（近 7 天）。
-    period = request.GET.get("period", "7")
-    if period not in ("3", "7", "30", "all"):
-        period = "7"
+    period = request.GET.get("period", DEFAULT_PERIOD)
+    if period not in list(PERIOD_DAYS) + ["all"]:
+        period = DEFAULT_PERIOD
 
     today = timezone.localdate()
     if period != "all":
-        days_map = {"3": 3, "7": 7, "30": 30}
+        days_map = PERIOD_DAYS
         period_start = today - timedelta(days=days_map[period] - 1)
         qs = qs.filter(occurred_at__gte=timezone.make_aware(datetime.combine(period_start, datetime.min.time())))
 
@@ -92,7 +130,7 @@ def expense_list(request):
         qs = qs.filter(Q(note__icontains=query) | Q(merchant__icontains=query) | Q(raw_text__icontains=query))
 
     # ── pagination ───────────────────────────────────────────────
-    paginator = Paginator(qs, 20)
+    paginator = Paginator(qs, PAGE_SIZE)
     page_num = request.GET.get("page", "1")
     page_obj = paginator.get_page(page_num)
 
@@ -101,13 +139,12 @@ def expense_list(request):
 
     # ── 自动统计 KPI（针对当前筛选结果，不依赖手填筛选条件）────────
     # 用户进入页面默认看到 1 周数据 + 顶部 KPI 卡片，而不是一个空的筛选表单。
-    from collections import defaultdict
     all_in_period = qs
     total_amount = all_in_period.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal("0")
     total_count = all_in_period.count()
     income_total = all_in_period.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal("0")
     max_single = all_in_period.filter(type="expense").aggregate(m=Max("amount"))["m"] or Decimal("0")
-    days_in_period = {"3": 3, "7": 7, "30": 30}.get(period, 30)
+    days_in_period = PERIOD_DAYS.get(period, 30)
     daily_avg = total_amount / days_in_period if days_in_period else Decimal("0")
 
     # 分类占比（仅支出）
@@ -149,7 +186,7 @@ def expense_list(request):
             "last_total": last_total,
             "diff_pct": round(float((total_amount - last_total) / last_total * 100)) if last_total > 0 else 0,
         },
-        "cat_breakdown": cat_breakdown[:5],
+        "cat_breakdown": cat_breakdown[:EXPENSE_CAT_TOPN_HOME],
         "filters": {
             "date_from": date_from, "date_to": date_to,
             "category": cat_id, "type": typ,
@@ -160,15 +197,13 @@ def expense_list(request):
 
 @login_required
 def expense_detail(request, pk):
-    expense = get_object_or_404(Expense, pk=pk, is_deleted=False)
-    _check_owner(expense, request)
+    expense = get_object_or_404(Expense, pk=pk, user=request.user, is_deleted=False)
     return render(request, "life/expense_detail.html", {"expense": expense})
 
 @login_required
 def expense_edit(request, pk):
     from django.db.models import Q
-    expense = get_object_or_404(Expense, pk=pk, is_deleted=False)
-    _check_owner(expense, request)
+    expense = get_object_or_404(Expense, pk=pk, user=request.user, is_deleted=False)
     categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
     if request.method == "POST":
         expense.note = request.POST.get("note", expense.note)[:500]
@@ -188,8 +223,7 @@ def expense_edit(request, pk):
 @login_required
 @require_POST
 def expense_delete(request, pk):
-    expense = get_object_or_404(Expense, pk=pk, is_deleted=False)
-    _check_owner(expense, request)
+    expense = get_object_or_404(Expense, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         expense.is_deleted = True
         expense.deleted_at = timezone.now()
@@ -212,8 +246,7 @@ def task_list(request):
     - 状态/优先级筛选仍保留为可选项（顶部下拉）
     """
     from collections import OrderedDict
-    from datetime import date, timedelta
-    from django.db.models import Q
+    from datetime import timedelta
 
     today = timezone.localdate()
     tomorrow = today + timedelta(days=1)
@@ -315,8 +348,7 @@ def task_list(request):
 @login_required
 @require_POST
 def task_complete(request, pk):
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     task.status = "completed"
     task.completed_at = timezone.now()
     task.save()
@@ -330,8 +362,7 @@ def task_complete(request, pk):
 @require_POST
 def task_postpone(request, pk):
     from datetime import timedelta
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     if task.due_at:
         task.due_at = task.due_at + timedelta(days=1)
         task.save()
@@ -342,8 +373,7 @@ def task_postpone(request, pk):
 @login_required
 @require_POST
 def task_cancel(request, pk):
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     task.status = "cancelled"
     task.save()
     messages.info(request, f"已取消「{task.title}」")
@@ -353,8 +383,7 @@ def task_cancel(request, pk):
 @login_required
 @require_POST
 def task_archive(request, pk):
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     task.status = "archived"
     task.save()
     messages.info(request, f"已归档「{task.title}」")
@@ -365,8 +394,7 @@ def task_archive(request, pk):
 @require_POST
 def task_renew(request, pk):
     """Generate the next occurrence of a recurring task. Skips if already generated."""
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     existing = Task.objects.filter(
         user=request.user, title=task.title, is_deleted=False,
         status__in=["todo", "in_progress"],
@@ -387,14 +415,12 @@ def task_renew(request, pk):
 
 @login_required
 def task_detail(request, pk):
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     return render(request, "life/task_detail.html", {"task": task})
 
 @login_required
 def task_edit(request, pk):
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         task.title = request.POST.get("title", task.title)[:200]
         task.description = request.POST.get("description", "")[:5000]
@@ -421,8 +447,7 @@ def task_edit(request, pk):
 @login_required
 @require_POST
 def task_delete(request, pk):
-    task = get_object_or_404(Task, pk=pk, is_deleted=False)
-    _check_owner(task, request)
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         title = task.title
         task.is_deleted = True
@@ -439,7 +464,8 @@ def task_delete(request, pk):
 @login_required
 def note_list(request):
     """随心记列表（2026-08-24 加下拉筛选器）。"""
-    from datetime import date as _date, timedelta
+    from datetime import date as _date
+    from datetime import timedelta
     interval = request.GET.get("interval", "all")  # all/today/week/month
     interval_label_map = {"all": "全部", "today": "今天", "week": "本周", "month": "本月", "year": "今年"}
     if interval not in interval_label_map:
@@ -498,14 +524,12 @@ def note_list(request):
 
 @login_required
 def note_detail(request, pk):
-    note = get_object_or_404(Note, pk=pk, is_deleted=False)
-    _check_owner(note, request)
+    note = get_object_or_404(Note, pk=pk, user=request.user, is_deleted=False)
     return render(request, "life/note_detail.html", {"note": note})
 
 @login_required
 def note_edit(request, pk):
-    note = get_object_or_404(Note, pk=pk, is_deleted=False)
-    _check_owner(note, request)
+    note = get_object_or_404(Note, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         note.title = request.POST.get("title", note.title)
         note.raw_text = request.POST.get("raw_text", note.raw_text) or ""
@@ -519,8 +543,7 @@ def note_edit(request, pk):
 @login_required
 @require_POST
 def note_delete(request, pk):
-    note = get_object_or_404(Note, pk=pk, is_deleted=False)
-    _check_owner(note, request)
+    note = get_object_or_404(Note, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         title = note.title
         note.is_deleted = True
@@ -536,7 +559,7 @@ def note_delete(request, pk):
 
 @login_required
 def category_list(request):
-    from django.db.models import Q, Count
+    from django.db.models import Count, Q
     cats = list(Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), is_active=True))
     cat_ids = [c.id for c in cats]
     counts = dict(
@@ -570,12 +593,9 @@ def category_create(request):
 
 @login_required
 def category_edit(request, pk):
-    cat = get_object_or_404(Category, pk=pk, is_active=True)
-    if cat.user_id and cat.user_id != request.user.id:
-        raise Http404()
+    # owner 校验放进查询条件：只允许本人自建分类（系统分类 user=None 不命中 → 404）
+    cat = get_object_or_404(Category, pk=pk, user=request.user, is_active=True)
     if request.method == "POST":
-        if not cat.user_id:
-            raise Http404()
         cat.name = request.POST.get("name", cat.name)[:50]
         cat.icon = request.POST.get("icon", cat.icon)
         cat.color = request.POST.get("color", cat.color)
@@ -587,29 +607,23 @@ def category_edit(request, pk):
 @login_required
 @require_POST
 def category_deactivate(request, pk):
-    cat = get_object_or_404(Category, pk=pk, is_active=True)
-    if cat.user_id and cat.user_id != request.user.id:
-        raise Http404()
-    if request.method == "POST":
-        if not cat.user_id:
-            raise Http404()
-        refs = Expense.objects.filter(category=cat, is_deleted=False).count()
-        if refs > 0:
-            return render(request, "life/category_delete.html", {"category": cat, "refs": refs, "blocked": True})
-        cat.is_active = False
-        cat.save()
-        return redirect("category_list")
+    # owner 校验放进查询条件：只允许本人自建分类（系统分类 user=None 不命中 → 404）
+    cat = get_object_or_404(Category, pk=pk, user=request.user, is_active=True)
     refs = Expense.objects.filter(category=cat, is_deleted=False).count()
-    return render(request, "life/category_delete.html", {"category": cat, "refs": refs, "blocked": refs > 0})
+    if refs > 0:
+        return render(request, "life/category_delete.html", {"category": cat, "refs": refs, "blocked": True})
+    cat.is_active = False
+    cat.save()
+    return redirect("category_list")
 
 
 # ── Budget ────────────────────────────────────────────────────────────
 
 @login_required
 def budget(request):
-    from calendar import monthrange
     from datetime import date
     from decimal import Decimal
+
     from django.db.models import Q, Sum
 
     today = date.today()
@@ -653,16 +667,22 @@ def budget(request):
     categories = Category.objects.filter(
         Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True,
     )
-    cat_budgets = {}
-    for b in Budget.objects.filter(user=request.user, category__isnull=False, month=month_start):
-        cat_budgets[b.category_id] = b.amount
+    cat_budgets = {
+        b.category_id: b.amount
+        for b in Budget.objects.filter(user=request.user, category__isnull=False, month=month_start)
+    }
+    # N+1 → 单次聚合：本月各分类支出一次性算完
+    spent_by_cat = {
+        row["category"]: row["s"]
+        for row in Expense.objects.filter(
+            user=request.user, type="expense", status="confirmed", is_deleted=False,
+            occurred_at__gte=month_start, occurred_at__lte=month_end,
+        ).values("category").annotate(s=Sum("amount"))
+    }
 
     cat_rows = []
     for c in categories:
-        spent = Expense.objects.filter(
-            user=request.user, category=c, type="expense", status="confirmed",
-            is_deleted=False, occurred_at__gte=month_start, occurred_at__lte=month_end,
-        ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+        spent = spent_by_cat.get(c.id, Decimal("0"))
         budgeted = cat_budgets.get(c.id, Decimal("0"))
         rem = budgeted - spent
         cat_pct = min(int(spent / budgeted * 100) if budgeted > 0 else 0, 100)
@@ -682,14 +702,13 @@ def budget(request):
         "cat_rows": cat_rows,
         # ── 新增：30 天趋势 + Top 分类 + 节省建议 ──
         "trend_30": _budget_30day_trend(request.user, today),
-        "top_spending_cats": sorted(cat_rows, key=lambda r: r["spent"], reverse=True)[:3],
+        "top_spending_cats": sorted(cat_rows, key=lambda r: r["spent"], reverse=True)[:TOP_SPENDING_CATS],
         "savings_tip": _budget_savings_tip(request.user, today, total_amount, spent_total, cat_rows, last_month_total=_budget_last_month_total(request.user, today, month_start)),
     })
 
 
 def _budget_last_month_total(user, today, month_start):
     """上月同期总支出，用于做节省/超支对比。"""
-    from decimal import Decimal
     from calendar import monthrange as _monthrange
     if today.month == 1:
         last_start = date(today.year - 1, 12, 1)
@@ -707,27 +726,29 @@ def _budget_last_month_total(user, today, month_start):
 
 
 def _budget_30day_trend(user, today):
-    """返回近 30 天每天的支出金额（date 列表），用于 sparkline。"""
-    from decimal import Decimal
-    trend = []
-    for i in range(29, -1, -1):
-        d = today - timedelta(days=i)
-        amt = Expense.objects.filter(
-            user=user, type="expense", status="confirmed", is_deleted=False,
-            occurred_at__date=d,
-        ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
-        trend.append({"date": d, "amount": amt})
-    return trend
+    """返回近 30 天每天的支出金额（date 列表），用于 sparkline。
+
+    N+1 → 单次按日聚合（30 次查询降为 1 次）。
+    """
+    start = today - timedelta(days=DAY_TREND_DAYS - 1)
+    rows = Expense.objects.filter(
+        user=user, type="expense", status="confirmed", is_deleted=False,
+        occurred_at__date__gte=start, occurred_at__date__lte=today,
+    ).values("occurred_at__date").annotate(s=Sum("amount"))
+    amt_by_day = {row["occurred_at__date"]: row["s"] for row in rows}
+    return [
+        {"date": today - timedelta(days=i), "amount": amt_by_day.get(today - timedelta(days=i), Decimal("0"))}
+        for i in range(DAY_TREND_DAYS - 1, -1, -1)
+    ]
 
 
 def _budget_savings_tip(user, today, total_amount, spent_total, cat_rows, last_month_total):
     """基于对比生成单条省钱建议（若无可不返回 None）。"""
-    from decimal import Decimal
     # 1) 预算未设置
     if total_amount == 0:
         return {"tone": "info", "text": "尚未设置总预算。建议按「上个月总支出 × 0.9」设定，更容易达成储蓄目标。"}
     # 2) 上月有数据且本月比上月节省
-    if last_month_total > 0 and spent_total < last_month_total * Decimal("0.85"):
+    if last_month_total > 0 and spent_total < last_month_total * SAVINGS_IMPROVE_RATIO:
         saved = last_month_total - spent_total
         return {"tone": "success", "text": f"本月比上月省了 ¥{saved:.0f}，继续保持！按这个节奏月末预计结余 ¥{saved:.0f}+。"}
     # 3) 已超支
@@ -739,7 +760,7 @@ def _budget_savings_tip(user, today, total_amount, spent_total, cat_rows, last_m
             return {"tone": "danger", "text": f"已超支 ¥{over:.0f}。「{top_cat['obj'].name}」本月 ¥{top_cat['spent']:.0f} 占比较高，下个月可考虑设分类预算。"}
         return {"tone": "warning", "text": f"已超支 ¥{over:.0f}。建议本月剩余时间避免非必要支出。"}
     # 4) 使用率 > 80%
-    if total_amount > 0 and spent_total / total_amount > Decimal("0.8"):
+    if total_amount > 0 and spent_total / total_amount > BUDGET_WARN_RATIO:
         from calendar import monthrange as _mr
         _, last_day = _mr(today.year, today.month)
         remaining_days = last_day - today.day
@@ -785,8 +806,7 @@ def recurring_create(request):
 
 @login_required
 def recurring_edit(request, pk):
-    item = get_object_or_404(RecurringExpense, pk=pk)
-    _check_owner(item, request)
+    item = get_object_or_404(RecurringExpense, pk=pk, user=request.user)
     if request.method == "POST":
         item.name = request.POST.get("name", item.name)[:200]
         item.amount = request.POST.get("amount", item.amount)
@@ -807,8 +827,7 @@ def recurring_edit(request, pk):
 @login_required
 @require_POST
 def recurring_deactivate(request, pk):
-    item = get_object_or_404(RecurringExpense, pk=pk)
-    _check_owner(item, request)
+    item = get_object_or_404(RecurringExpense, pk=pk, user=request.user)
     if request.method == "POST":
         item.is_active = False
         item.save()
@@ -827,6 +846,7 @@ def installment_list(request):
 @login_required
 def installment_create(request):
     from datetime import date
+
     from django.db.models import Q
     if request.method == "POST":
         InstallmentPlan.objects.create(
@@ -845,8 +865,7 @@ def installment_create(request):
 
 @login_required
 def installment_edit(request, pk):
-    plan = get_object_or_404(InstallmentPlan, pk=pk)
-    _check_owner(plan, request)
+    plan = get_object_or_404(InstallmentPlan, pk=pk, user=request.user)
     if request.method == "POST":
         plan.name = request.POST.get("name", plan.name)[:200]
         plan.total_amount = request.POST.get("total_amount", plan.total_amount)
@@ -865,9 +884,8 @@ def installment_edit(request, pk):
 @login_required
 @require_POST
 def installment_pay(request, pk):
-    plan = get_object_or_404(InstallmentPlan, pk=pk)
-    _check_owner(plan, request)
-    from datetime import date, timedelta
+    plan = get_object_or_404(InstallmentPlan, pk=pk, user=request.user)
+    from datetime import date
     error = None
     if request.method == "POST":
         if plan.status != "active":
@@ -901,11 +919,11 @@ def dashboard(request):
     - ?year=YYYY&month=1-12 时间筛选（下拉式）
     - 支出/收入/结余 3 张卡片点击后跳到 expense_list 并预填过滤
     """
-    from calendar import monthrange
     from collections import defaultdict
     from datetime import date, timedelta
     from decimal import Decimal
-    from django.db.models import Avg, Q, Sum
+
+    from django.db.models import Q, Sum
 
     today = date.today()
 
@@ -955,12 +973,16 @@ def dashboard(request):
     for name, amt in sorted(cat_spent.items(), key=lambda x: x[1], reverse=True):
         cat_pct.append({"name": name, "amount": amt, "pct": round(amt / total_expense * 100) if total_expense > 0 else 0})
 
-    # ── daily trend ────────────────────────────────────────────────
+    # ── daily trend（N+1 → 单次按日聚合）──────────────────────────────
+    daily_agg = {
+        row["occurred_at__date"]: row["s"]
+        for row in base.filter(type="expense", occurred_at__gte=month_start, occurred_at__lte=month_end)
+        .values("occurred_at__date").annotate(s=Sum("amount"))
+    }
     daily = []
     for d in range(1, last_day + 1):
         day = date(sel_year, sel_month, d)
-        amt = base.filter(occurred_at__date=day, type="expense").aggregate(s=Sum("amount"))["s"]
-        daily.append({"day": d, "amount": amt or Decimal("0")})
+        daily.append({"day": d, "amount": daily_agg.get(day, Decimal("0")) or Decimal("0")})
 
     # ── recurring total ────────────────────────────────────────────
     rec_total = RecurringExpense.objects.filter(user=request.user, is_active=True).aggregate(s=Sum("amount"))["s"] or Decimal("0")
@@ -980,21 +1002,30 @@ def dashboard(request):
 
     # ── monthly trend (last 6 months from selected month) ────────────
     import json
-    monthly_labels = []
-    monthly_expense = []
-    monthly_income = []
-    for i in range(5, -1, -1):
+    months = []
+    for i in range(MONTH_TREND_COUNT - 1, -1, -1):
         m = sel_month - i
         y = sel_year
         if m <= 0:
             m += 12
             y -= 1
-        ms = date(y, m, 1)
-        _, ld = monthrange(y, m)
-        me = date(y, m, ld)
-        monthly_labels.append(f"{m}月")
-        monthly_expense.append(float(base.filter(type="expense", occurred_at__gte=ms, occurred_at__lte=me).aggregate(s=Sum("amount"))["s"] or Decimal("0")))
-        monthly_income.append(float(base.filter(type="income", occurred_at__gte=ms, occurred_at__lte=me).aggregate(s=Sum("amount"))["s"] or Decimal("0")))
+        months.append((y, m))
+    monthly_labels = [f"{m}月" for (_y, m) in months]
+    span_start = date(months[0][0], months[0][1], 1)
+    _, sp_ld = monthrange(months[-1][0], months[-1][1])
+    span_end = date(months[-1][0], months[-1][1], sp_ld)
+
+    def _sum_by_month(typ):
+        out = {}
+        for row in base.filter(type=typ, occurred_at__gte=span_start, occurred_at__lte=span_end) \
+                .values("occurred_at__year", "occurred_at__month").annotate(s=Sum("amount")):
+            out[(row["occurred_at__year"], row["occurred_at__month"])] = row["s"] or Decimal("0")
+        return out
+    exp_by_month = _sum_by_month("expense")
+    inc_by_month = _sum_by_month("income")
+    # 12 次查询 → 2 次 GROUP BY
+    monthly_expense = [float(exp_by_month.get((y, m), Decimal("0"))) for (y, m) in months]
+    monthly_income = [float(inc_by_month.get((y, m), Decimal("0"))) for (y, m) in months]
 
     chart_data = json.dumps({
         "monthlyLabels": monthly_labels,
@@ -1030,45 +1061,73 @@ def dashboard(request):
     # Identify potential one-time large expenses (> 3x daily avg)
     large_items = []
     threshold = daily_avg * 3 if daily_avg > 0 else Decimal("999999")
-    for e in month_qs.filter(type="expense", amount__gte=threshold).order_by("-amount")[:3]:
+    for e in month_qs.filter(type="expense", amount__gte=threshold).order_by("-amount")[:LARGE_ITEM_TOPN]:
         large_items.append({"note": e.note or e.merchant or "未命名", "amount": e.amount})
     # Exclude large items for a conservative estimate
     excluded = sum(item["amount"] for item in large_items)
     conservative_total = predicted_total - excluded if excluded else predicted_total
     predicted_extra = predicted_total - total_expense
 
-    # ── anomaly detection ─────────────────────────────────────────
+    # ── anomaly detection（已优化：原逐分类/逐日 N+1 改为单次聚合）─────────
     anomalies = []
     categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
-    # 1. Single transaction > 3x category average this month
-    for c in categories:
-        cat_expenses = month_qs.filter(type="expense", category=c).exclude(amount=0)
-        cat_avg = cat_expenses.aggregate(a=Avg("amount"))["a"] or Decimal("0")
-        if cat_avg > 0:
-            for e in cat_expenses.filter(amount__gte=cat_avg * 3):
-                anomalies.append({"type": "单笔异常", "detail": f"{c.name}: {e.note or '未命名'} ¥{e.amount}（分类均值 ¥{cat_avg:.0f}）", "date": e.occurred_at.date()})
 
-    # 2. Today's total > 3x 30-day daily average
-    daily_30 = base.filter(type="expense", occurred_at__gte=today - timedelta(days=30)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    # 1. 单笔异常：本月该分类某笔 > 3x 分类均值。一次性取出本月支出后在内存分组，
+    #    避免「分类数 × (均值查询 + 明细查询)」的 N+1。
+    month_exps = list(
+        month_qs.filter(type="expense").exclude(amount=0)
+        .values("category", "amount", "note", "merchant", "occurred_at")
+    )
+    from collections import defaultdict as _dd
+    cat_items = _dd(list)
+    for e in month_exps:
+        cat_items[e["category"]].append(e)
+
+    for c in categories:
+        items = cat_items.get(c.id)
+        if not items:
+            continue
+        avg = sum((x["amount"] or Decimal("0")) for x in items) / len(items)
+        if avg > 0:
+            for e in items:
+                if e["amount"] >= avg * ANOMALY_SPIKE_FACTOR:
+                    note = e["note"] or e["merchant"] or "未命名"
+                    anomalies.append({
+                        "type": "单笔异常",
+                        "detail": f"{c.name}: {note} ¥{e['amount']}（分类均值 ¥{avg:.0f}）",
+                        "date": e["occurred_at"].date(),
+                    })
+
+    # 2. 当日暴增：今天 > 3x 30 日均（保留原逻辑，已是单次聚合）
+    daily_30 = base.filter(type="expense", occurred_at__gte=today - timedelta(days=DAY_TREND_DAYS)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
     avg_30 = daily_30 / 30 if daily_30 > 0 else Decimal("0")
     today_spent = base.filter(type="expense", occurred_at__date=today).aggregate(s=Sum("amount"))["s"] or Decimal("0")
-    if avg_30 > 0 and today_spent > avg_30 * 3:
+    if avg_30 > 0 and today_spent > avg_30 * ANOMALY_SPIKE_FACTOR:
         anomalies.append({"type": "当日暴增", "detail": f"今天 ¥{today_spent:.0f}，30日均值 ¥{avg_30:.0f}", "date": today})
 
-    # 3. Category growth: this month > 2x last month
+    # 3. 分类增长：本月 > 2x 上月。两次 GROUP BY 替代「2 × 分类数」次查询
     last_month_start = date(today.year, today.month - 1, 1) if today.month > 1 else date(today.year - 1, 12, 1)
     _, last_ld = monthrange(last_month_start.year, last_month_start.month)
     last_month_end = date(last_month_start.year, last_month_start.month, last_ld)
+    this_m_by_cat = {
+        row["category"]: row["s"]
+        for row in month_qs.filter(type="expense").values("category").annotate(s=Sum("amount"))
+    }
+    last_m_by_cat = {
+        row["category"]: row["s"]
+        for row in base.filter(type="expense", occurred_at__gte=last_month_start, occurred_at__lte=last_month_end)
+        .values("category").annotate(s=Sum("amount"))
+    }
     for c in categories:
-        this_m = float(month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or Decimal("0"))
-        last_m = float(base.filter(type="expense", category=c, occurred_at__gte=last_month_start, occurred_at__lte=last_month_end).aggregate(s=Sum("amount"))["s"] or Decimal("0"))
-        if last_m > 0 and this_m > last_m * 2:
+        this_m = float(this_m_by_cat.get(c.id, Decimal("0")) or 0)
+        last_m = float(last_m_by_cat.get(c.id, Decimal("0")) or 0)
+        if last_m > 0 and this_m > last_m * CATEGORY_GROWTH_FACTOR:
             anomalies.append({"type": "分类增长", "detail": f"{c.name}: 本月 ¥{this_m:.0f} vs 上月 ¥{last_m:.0f}", "date": today})
 
     # 4. Recurring bill amount change > 20%
     for r in RecurringExpense.objects.filter(user=request.user, is_active=True):
         recent = Expense.objects.filter(user=request.user, note__icontains=r.name, type="expense", status="confirmed").order_by("-occurred_at").first()
-        if recent and recent.amount > 0 and abs(recent.amount - r.amount) / r.amount > Decimal("0.2"):
+        if recent and recent.amount > 0 and abs(recent.amount - r.amount) / r.amount > BILL_CHANGE_ALERT_RATIO:
             anomalies.append({"type": "账单异常", "detail": f"{r.name}: 实际 ¥{recent.amount} vs 预期 ¥{r.amount}", "date": recent.occurred_at.date()})
 
     anomalies.sort(key=lambda x: x["date"], reverse=True)
@@ -1095,7 +1154,7 @@ def dashboard(request):
     # Consecutive days (walk backwards from yesterday)
     streak = 0
     d = today - timedelta(days=1)
-    while d >= today - timedelta(days=365):
+    while d >= today - timedelta(days=STREAK_MAX_DAYS):
         if tasks_all.filter(completed_at__date=d).exists():
             streak += 1
             d -= timedelta(days=1)
@@ -1108,8 +1167,7 @@ def dashboard(request):
 
     # ── 7-day task completion & check-in trend (for new dashboard summary) ──
     from .models_daily import DailyCheckin
-    from .models import Countdown
-    last7 = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    last7 = [today - timedelta(days=i) for i in range(WEEK_TREND_DAYS - 1, -1, -1)]
     task_trend = [
         {
             "date": d,
@@ -1134,7 +1192,7 @@ def dashboard(request):
     from life.models import Countdown as _CD
     cd_qs = _CD.objects.filter(user=request.user, is_active=True, show_on_home=True)
     cd_list = []
-    for cd in cd_qs.order_by("-pinned", "target_date")[:6]:
+    for cd in cd_qs.order_by("-pinned", "target_date")[:COUNTDOWN_HOME_TOPN]:
         delta = (cd.next_occurrence(today) - today).days
         cd_list.append({
             "obj": cd,
@@ -1149,10 +1207,10 @@ def dashboard(request):
     cd_total = _CD.objects.filter(user=request.user, is_active=True).count()
 
     # ── suggestions generation ───────────────────────────────────
-    suggest_display = Suggestion.objects.filter(user=request.user, generated_at=today).exclude(feedback__in=["not_useful", "dismissed"])[:5]
-    if not suggest_display.exists() and today.day % 3 == 0:  # Generate every 3 days
+    suggest_display = Suggestion.objects.filter(user=request.user, generated_at=today).exclude(feedback__in=["not_useful", "dismissed"])[:SUGGESTION_TOPN]
+    if not suggest_display.exists() and today.day % SUGGESTION_GEN_EVERY_N_DAYS == 0:  # Generate every N days
         # Budget warning
-        if budget_amount > 0 and total_expense > budget_amount * Decimal("0.8"):
+        if budget_amount > 0 and total_expense > budget_amount * BUDGET_WARN_RATIO:
             Suggestion.objects.create(user=request.user, title="预算即将超支", evidence=f"本月已花 ¥{total_expense:.0f}，预算 ¥{budget_amount}，执行率 {budget_pct}%", category="budget")
         # Category spike vs 3-month average
         for c in categories:
@@ -1160,19 +1218,19 @@ def dashboard(request):
             if cat_month > 0:
                 three_mo = base.filter(type="expense", category=c, occurred_at__gte=today - timedelta(days=90)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
                 three_avg = float(three_mo) / 3
-                if three_avg > 0 and cat_month > three_avg * 1.3:
+                if three_avg > 0 and cat_month > three_avg * CATEGORY_SPIKE_RATIO:
                     pct = round((cat_month - three_avg) / three_avg * 100)
                     Suggestion.objects.create(user=request.user, title=f"{c.name}支出偏高", evidence=f"本月 ¥{cat_month:.0f}，比近3月月均 ¥{three_avg:.0f} 高 {pct}%", category="spending")
         # Overdue tasks
-        if overdue_count > 2:
+        if overdue_count > OVERDUE_ALERT_COUNT:
             Suggestion.objects.create(user=request.user, title=f"有 {overdue_count} 个逾期任务", evidence=f"逾期任务数: {overdue_count}，建议今日优先处理最高优先级任务", category="task")
-        suggest_display = Suggestion.objects.filter(user=request.user, generated_at=today)[:5]
+        suggest_display = Suggestion.objects.filter(user=request.user, generated_at=today)[:SUGGESTION_TOPN]
 
     # ── 生活建议（每视图重新计算，命中率高）──────────────────
     life_suggestions = []
     # 1) 大额单笔：本月任一单笔 > 200 或 > 月支出的 20%
-    threshold_large = max(Decimal("200"), total_expense * Decimal("0.2")) if total_expense > 0 else Decimal("200")
-    for e in month_qs.filter(type="expense", amount__gte=threshold_large).order_by("-amount")[:3]:
+    threshold_large = max(LARGE_EXPENSE_MIN, total_expense * LARGE_EXPENSE_PCT) if total_expense > 0 else LARGE_EXPENSE_MIN
+    for e in month_qs.filter(type="expense", amount__gte=threshold_large).order_by("-amount")[:LARGE_ITEM_TOPN]:
         life_suggestions.append({
             "icon": "wallet",
             "title": f"本月大额支出：{e.note or e.merchant or '未命名'}",
@@ -1180,7 +1238,7 @@ def dashboard(request):
             "tone": "warning",
         })
     # 2) 固定账单占比高
-    if total_expense > 0 and rec_total / total_expense > Decimal("0.5"):
+    if total_expense > 0 and rec_total / total_expense > RECURRING_SHARE_ALERT:
         life_suggestions.append({
             "icon": "calendar",
             "title": f"固定支出占比 {round(float(rec_total / total_expense * 100))}%",
@@ -1195,7 +1253,7 @@ def dashboard(request):
             "detail": f"支出 ¥{total_expense:.0f}，收入 ¥{total_income:.0f}。建议先砍掉非必要订阅。",
             "tone": "danger",
         })
-    elif total_income > 0 and (total_income - total_expense) / total_income < Decimal("0.2"):
+    elif total_income > 0 and (total_income - total_expense) / total_income < SAVINGS_RATE_LOW:
         life_suggestions.append({
             "icon": "piggy",
             "title": "储蓄率偏低",
@@ -1205,14 +1263,14 @@ def dashboard(request):
     # 4) 与上月对比
     if last_month_total > 0:
         diff = total_expense - last_month_total
-        if diff > last_month_total * Decimal("0.15"):
+        if diff > last_month_total * MONTH_DIFF_ALERT_RATIO:
             life_suggestions.append({
                 "icon": "trending",
                 "title": f"支出比上月涨 {round(float(diff / last_month_total * 100))}%",
                 "detail": f"本月 ¥{total_expense:.0f} vs 上月 ¥{last_month_total:.0f}，查看分类找原因。",
                 "tone": "warning",
             })
-        elif diff < -last_month_total * Decimal("0.15"):
+        elif diff < -last_month_total * MONTH_DIFF_ALERT_RATIO:
             life_suggestions.append({
                 "icon": "trending",
                 "title": f"支出比上月省 {round(float(-diff / last_month_total * 100))}%",
@@ -1222,7 +1280,7 @@ def dashboard(request):
     # 5) 分类单笔最大
     if cat_pct:
         top_cat = cat_pct[0]
-        if top_cat["pct"] >= 40 and total_expense > 0:
+        if top_cat["pct"] >= TOP_CAT_CONCENTRATION_PCT and total_expense > 0:
             life_suggestions.append({
                 "icon": "tag",
                 "title": f"{top_cat['name']}占比 {top_cat['pct']}%",
@@ -1231,7 +1289,7 @@ def dashboard(request):
             })
 
     # 限前 5 条
-    life_suggestions = life_suggestions[:5]
+    life_suggestions = life_suggestions[:SUGGESTION_TOPN]
 
     return render(request, "life/dashboard.html", {
         "today": today, "month_start": month_start,
@@ -1239,7 +1297,7 @@ def dashboard(request):
         "year_range": year_range, "month_range": month_range,
         "total_expense": total_expense, "total_income": total_income,
         "balance": balance, "cat_pct": cat_pct, "daily": daily,
-        "rec_total": rec_total, "upcoming": upcoming[:10],
+        "rec_total": rec_total, "upcoming": upcoming[:UPCOMING_TOPN],
         "budget_amount": budget_amount, "budget_pct": budget_pct,
         "chart_data": chart_data,
         "predicted_total": predicted_total,
@@ -1249,7 +1307,7 @@ def dashboard(request):
         "days_remaining": days_remaining,
         "large_items": large_items,
         "conservative_total": conservative_total,
-        "anomalies": anomalies[:5],
+        "anomalies": anomalies[:ANOMALY_TOPN],
         "week_rate": week_rate, "high_rate": high_rate,
         "overdue_count": overdue_count, "streak": streak,
         "top_task": top_task, "top_done": top_done,
@@ -1270,10 +1328,10 @@ def dashboard(request):
 
 @login_required
 def review(request):
-    from calendar import monthrange
     from datetime import date, timedelta
     from decimal import Decimal
-    from django.db.models import Q, Sum
+
+    from django.db.models import Sum
 
     today = date.today()
     period = request.GET.get("period", "weekly")
@@ -1360,7 +1418,7 @@ def reminder_list(request):
     items = Reminder.objects.filter(user=request.user).order_by("event_at")
     # 即将到来 = 未来 30 天的有效提醒（按事件日期算，不管 remind_at）
     today = date.today()
-    horizon = today + timedelta(days=30)
+    horizon = today + timedelta(days=UPCOMING_HORIZON_DAYS)
     upcoming = []
     for r in items:
         if not r.is_enabled:
@@ -1382,7 +1440,7 @@ def reminder_list(request):
             countdown_text = "已过期"; tone = "overdue"
         elif days == 0:
             countdown_text = "今天"; tone = "today"
-        elif days <= 3:
+        elif days <= SOON_DAYS:
             countdown_text = f"{days}天后"; tone = "soon"
         else:
             countdown_text = f"{days}天后"; tone = "later"
@@ -1396,7 +1454,7 @@ def reminder_list(request):
 
 @login_required
 def reminder_create(request):
-    from datetime import date, timedelta
+    from datetime import timedelta
     if request.method == "POST":
         event_at = request.POST.get("event_at", "")
         days = request.POST.get("remind_days_before", "1")
@@ -1424,8 +1482,7 @@ def reminder_create(request):
 
 @login_required
 def reminder_edit(request, pk):
-    item = get_object_or_404(Reminder, pk=pk)
-    _check_owner(item, request)
+    item = get_object_or_404(Reminder, pk=pk, user=request.user)
     if request.method == "POST":
         item.title = request.POST.get("title", item.title)[:200]
         item.reminder_type = request.POST.get("reminder_type", item.reminder_type)
@@ -1445,8 +1502,7 @@ def reminder_edit(request, pk):
 @login_required
 @require_POST
 def reminder_toggle(request, pk):
-    item = get_object_or_404(Reminder, pk=pk)
-    _check_owner(item, request)
+    item = get_object_or_404(Reminder, pk=pk, user=request.user)
     item.is_enabled = not item.is_enabled
     item.save()
     if item.is_enabled:
@@ -1485,7 +1541,7 @@ def note_create(request):
 
 @login_required
 def daily_list(request):
-    from datetime import date as _date, timedelta as _td
+    from datetime import timedelta as _td
     items_qs = DailyCheckin.objects.filter(user=request.user, is_deleted=False).order_by("is_active", "-created_at")
     today = timezone.localdate()
     items = []
@@ -1500,14 +1556,14 @@ def daily_list(request):
         if st > best_streak:
             best_streak = st
         # 近 7 天（含今天）完成次数
-        week_dates = {(today - _td(days=i)).isoformat() for i in range(7)}
+        week_dates = {(today - _td(days=i)).isoformat() for i in range(WEEK_TREND_DAYS)}
         week_done = sum(1 for d in (c.done_dates or []) if d in week_dates)
         week_done_total += week_done
         items.append({"obj": c, "is_done_today": done_today, "streak": st, "week_done": week_done})
     total = len(items)
     # 近 7 天每天的全局完成率（迷你热力）
     day_grid = []
-    for i in range(6, -1, -1):
+    for i in range(WEEK_TREND_DAYS - 1, -1, -1):
         d = today - _td(days=i)
         ds = d.isoformat()
         cnt = sum(1 for c in items_qs if ds in (c.done_dates or []))
@@ -1538,8 +1594,7 @@ def daily_create(request):
 
 @login_required
 def daily_edit(request, pk):
-    item = get_object_or_404(DailyCheckin, pk=pk, is_deleted=False)
-    _check_owner(item, request)
+    item = get_object_or_404(DailyCheckin, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         item.title = (request.POST.get("title") or item.title).strip()[:100]
         item.icon = (request.POST.get("icon") or item.icon)[:4] or "📌"
@@ -1554,8 +1609,7 @@ def daily_edit(request, pk):
 @login_required
 @require_POST
 def daily_delete(request, pk):
-    item = get_object_or_404(DailyCheckin, pk=pk, is_deleted=False)
-    _check_owner(item, request)
+    item = get_object_or_404(DailyCheckin, pk=pk, user=request.user, is_deleted=False)
     if request.method == "POST":
         title = item.title
         item.is_deleted = True
@@ -1575,11 +1629,9 @@ def daily_toggle(request, pk):
     Adds today's date if missing, removes it if already present. Returns
     JSON for AJAX callers; falls back to redirect to Home.
     """
-    from datetime import date as _date
     from django.http import JsonResponse
 
-    item = get_object_or_404(DailyCheckin, pk=pk, is_deleted=False)
-    _check_owner(item, request)
+    item = get_object_or_404(DailyCheckin, pk=pk, user=request.user, is_deleted=False)
     today = timezone.localdate()
     dates = list(item.done_dates or [])
     iso = today.isoformat()
@@ -1604,10 +1656,9 @@ def daily_toggle(request, pk):
 @login_required
 def countdown_list(request):
     """倒计时列表页（iOS Day Matters 风格）。"""
-    from .models import Countdown
-    import datetime as _dt
     from django.utils import timezone as _tz
-    from django.db.models import Q
+
+    from .models import Countdown
 
     today = _tz.localdate()
     cds = Countdown.objects.filter(user=request.user, is_active=True)
@@ -1642,8 +1693,9 @@ def countdown_list(request):
 @login_required
 def countdown_create(request):
     """创建倒计时（GET 渲染表单，POST 入库 + 可选同步到 Reminder）。"""
-    from .models import Countdown, Reminder
     from datetime import datetime as _dt_cls
+
+    from .models import Countdown, Reminder
 
     next_url = request.POST.get("next") or request.GET.get("next", "")
     if request.method == "POST":
@@ -1705,11 +1757,11 @@ def countdown_create(request):
 
 @login_required
 def countdown_edit(request, pk):
-    from .models import Countdown, Reminder
     from datetime import datetime as _dt_cls
 
-    cd = get_object_or_404(Countdown, pk=pk, is_active=True)
-    _check_owner(cd, request)
+    from .models import Countdown
+
+    cd = get_object_or_404(Countdown, pk=pk, user=request.user, is_active=True)
     if request.method == "POST":
         title = (request.POST.get("title") or "")[:80].strip()
         date_raw = request.POST.get("target_date") or ""
@@ -1749,8 +1801,7 @@ def countdown_edit(request, pk):
 @require_POST
 def countdown_delete(request, pk):
     from .models import Countdown
-    cd = get_object_or_404(Countdown, pk=pk)
-    _check_owner(cd, request)
+    cd = get_object_or_404(Countdown, pk=pk, user=request.user)
     if request.method != "POST":
         return redirect("countdown_list")
     cd.is_active = False
@@ -1763,8 +1814,7 @@ def countdown_delete(request, pk):
 def countdown_pin(request, pk):
     """切换置顶状态（仅 POST）"""
     from .models import Countdown
-    cd = get_object_or_404(Countdown, pk=pk)
-    _check_owner(cd, request)
+    cd = get_object_or_404(Countdown, pk=pk, user=request.user)
     cd.pinned = not cd.pinned
     cd.save(update_fields=["pinned", "updated_at"])
     return safe_next(request, default="countdown_list", allow_referer=False)
@@ -1775,8 +1825,7 @@ def countdown_pin(request, pk):
 def countdown_toggle_home(request, pk):
     """切换「首页显示」状态 — 隐藏/恢复都在首页小板块操作（仅 POST）"""
     from .models import Countdown
-    cd = get_object_or_404(Countdown, pk=pk)
-    _check_owner(cd, request)
+    cd = get_object_or_404(Countdown, pk=pk, user=request.user)
     cd.show_on_home = not cd.show_on_home
     cd.save(update_fields=["show_on_home", "updated_at"])
     return safe_next(request, default="countdown_list", allow_referer=False)

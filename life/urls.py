@@ -1,10 +1,12 @@
 from django.urls import path
+
 from . import views, views_crud, views_pwa
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("appearance/", views.appearance, name="appearance"),
     path("api/parse/", views.parse_entry, name="parse_entry"),
+    path("api/parse-status/<str:job_uuid>/", views.parse_status, name="parse_status"),
     path("api/confirm-actions/", views.confirm_actions, name="confirm_actions"),
     path("api/lunar/", views.lunar_api, name="lunar_api"),
     path("expenses/", views_crud.expense_list, name="expense_list"),

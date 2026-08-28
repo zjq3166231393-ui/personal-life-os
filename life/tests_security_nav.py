@@ -8,13 +8,19 @@ Covers:
   the home quick-grid both expose links to them.
 """
 from decimal import Decimal
+
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from life.models import (
-    Category, Countdown, Expense, InstallmentPlan, Note, RecurringExpense,
-    Reminder, Task,
+    Category,
+    Countdown,
+    Expense,
+    InstallmentPlan,
+    Note,
+    RecurringExpense,
+    Task,
 )
 from life.models_daily import DailyCheckin
 

@@ -4,7 +4,6 @@ from decimal import Decimal, InvalidOperation
 
 from django.utils import timezone
 
-
 # ── 中文数字解析 ───────────────────────────────────────────────
 # 用户输入里"三十" / "二十块五" 之类的中文数字必须先转成阿拉伯数字，
 # 否则下游 `_extract_amount` / 分类 / 金额判断都会失败。
@@ -421,6 +420,10 @@ def _date(text):
                    "next occurrence" is honoured).
     """
     today = timezone.localdate()
+    if "大前天" in text:
+        return today - timedelta(days=3)
+    if "大后天" in text:
+        return today + timedelta(days=3)
     if "前天" in text:
         return today - timedelta(days=2)
     if "昨天" in text:

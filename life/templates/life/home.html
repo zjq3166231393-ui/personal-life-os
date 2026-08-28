@@ -669,14 +669,54 @@ async function parse(){
     var r=await fetch('/api/parse/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({text:rawText})});
     if(!r.ok){alert(await r.text());return}
     var data=await r.json();
-    // 把解析来源透传到 actions 上，confirm 时会写回 Task.source / Expense.source
-    if(data.result && data.result.actions && data.source){
-      for(var i=0;i<data.result.actions.length;i++){
-        if(!data.result.actions[i].source) data.result.actions[i].source=data.source;
-      }
+    // AI 解析转入后台任务：前端轮询直到完成，避免阻塞等待
+    if(data.ready===false){
+      parseBtn.innerHTML='AI 解析中…';
+      await pollJob(data.job_id);
+      return;
     }
+    attachSource(data);
     showDraft(data);
   }finally{parseBtn.innerHTML=old;parseBtn.disabled=false}
+}
+
+// 把解析来源透传到每条 action 上（confirm 时写回 Task.source / Expense.source）
+function attachSource(data){
+  if(data && data.result && data.result.actions && data.source){
+    for(var i=0;i<data.result.actions.length;i++){
+      if(!data.result.actions[i].source) data.result.actions[i].source=data.source;
+    }
+  }
+}
+
+// 轮询异步 AI 解析任务；约 36s 后超时提示重试
+function pollJob(jobId){
+  return new Promise(function(resolve){
+    var tries=0;
+    function tick(){
+      tries++;
+      fetch('/api/parse-status/'+encodeURIComponent(jobId)+'/')
+        .then(function(r){return r.json();})
+        .then(function(st){
+          if(st.status==='done'){
+            attachSource(st);
+            showDraft({result: st.result, raw_text: st.raw_text, source: st.source});
+            resolve();
+          } else if(st.status==='error'){
+            alert((st.error||'AI 解析失败')+'，请重试。');
+            resolve();
+          } else {
+            if(tries>45){ alert('解析超时，请重试。'); resolve(); return; }
+            setTimeout(tick, 800);
+          }
+        })
+        .catch(function(){
+          if(tries>45){ alert('解析超时，请重试。'); resolve(); return; }
+          setTimeout(tick, 1200);
+        });
+    }
+    tick();
+  });
 }
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 if(SR){

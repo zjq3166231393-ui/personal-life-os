@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Sum
+from django.db.models import Count
 
 from life.models import Expense, RecurringExpense
 

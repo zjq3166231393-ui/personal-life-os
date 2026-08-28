@@ -3,16 +3,24 @@
 Strategy:
   1. Local rule parser runs first
   2. If result is complete & single-intent → return rule result
-  3. If incomplete or multi-intent → call AI provider
+  3. If incomplete or multi-intent → call AI provider (async-friendly)
   4. AI unavailable → return rule draft or raw text as fallback
 """
 
+import logging
 import re
+import threading
+import uuid as _uuid
 
-from .parser import parse_text
+from django.contrib.auth import get_user_model
+from django.db import connection
+
+logger = logging.getLogger(__name__)
+
 from .ai_provider import get_provider
 from .ai_schema import validate_ai_response
-from .models import ConversationLog
+from .models import ConversationLog, ParseJob
+from .parser import parse_text
 
 
 def _rule_confidence(draft: dict) -> str:
@@ -139,34 +147,26 @@ def _check_sensitive(text: str) -> list:
     return found
 
 
-def route_parse(raw_text: str, user=None) -> dict:
-    """Parse text with rule-first + AI fallback.
+def _decide(raw_text: str, user=None):
+    """Decide the parse path and pre-build the synchronous result.
 
-    Returns:
-      {
-        "actions": [...],
-        "source": "rule" | "ai" | "fallback",
-        "confidence": "high" | "medium" | "low",
-        "error": None | "error message",
-      }
+    Returns ``(mode, result)`` where ``mode`` is one of:
+      - ``"rule"``     : high-confidence single intent → rule result is final
+      - ``"fallback"``  : AI disabled / rate-limited / sensitive → rule draft is final
+      - ``"ai"``        : needs the AI provider → result is ``None`` (caller runs AI)
     """
-    # Step 1: rule parse
     draft = parse_text(raw_text)
     conf = _rule_confidence(draft)
     is_multi = _detect_multi_intent(raw_text)
 
-    # If high confidence single intent → skip AI
     if conf == "high" and not is_multi:
-        result = {
+        return "rule", _attach_meta(raw_text, {
             "actions": [_draft_to_action(draft)],
             "source": "rule",
             "confidence": "high",
             "error": None,
-        }
-        return _attach_meta(raw_text, result)
+        })
 
-    # Step 2: try AI for medium/low or multi-intent
-    # Check AI switch and limits
     skip_reason = None
     if user and hasattr(user, 'profile'):
         if not user.profile.ai_parsing_enabled:
@@ -181,62 +181,143 @@ def route_parse(raw_text: str, user=None) -> dict:
                     skip_reason = f"今日 AI 调用已达上限（{limit}次）。"
 
     if skip_reason:
-        result = {
+        return "fallback", _attach_meta(raw_text, {
             "actions": [_draft_to_action(draft)],
             "source": "fallback",
             "confidence": "low",
             "error": skip_reason,
-        }
-        return _attach_meta(raw_text, result)
+        })
 
-    # Check sensitive content
     sensitive = _check_sensitive(raw_text)
     if sensitive:
-        result = {
+        return "fallback", _attach_meta(raw_text, {
             "actions": [_draft_to_action(draft)],
             "source": "fallback",
             "confidence": "low",
             "error": f"输入包含疑似敏感信息: {', '.join(sensitive)}，已使用本地解析。",
             "sensitive": True,
-        }
-        return _attach_meta(raw_text, result)
+        })
 
+    return "ai", None
+
+
+def _call_ai(raw_text: str, user=None) -> dict:
+    """Run the AI provider and return a fully-formed parse result.
+
+    Any failure degrades gracefully to a local rule draft (source="fallback")
+    so the caller always gets a usable result.
+    """
+    draft = parse_text(raw_text)
     try:
         provider = get_provider()
         ai_result = provider.parse(raw_text)
         ok, errors = validate_ai_response(ai_result)
         if ok:
-            # Log conversation (only when we have an authenticated user; a
-            # user=None call — e.g. anonymous / internal — must not crash the
-            # parse or force a fallback that drops a multi-intent split)
             if user is not None:
                 ConversationLog.objects.create(
                     user=user, raw_text=raw_text, input_type="text",
                     model="deepseek-chat", status="confirmed",
                 )
-            result = {
+            return _attach_meta(raw_text, {
                 "actions": ai_result["actions"],
                 "source": "ai",
                 "confidence": "medium",
                 "error": None,
-            }
-            return _attach_meta(raw_text, result)
-        else:
-            result = {
+            })
+            logger.warning("AI response validation failed for text=%r: %s", raw_text[:200], errors)
+            return _attach_meta(raw_text, {
                 "actions": [_draft_to_action(draft)],
                 "source": "fallback",
                 "confidence": "low",
                 "error": f"AI validation failed: {'; '.join(errors)}",
-            }
-            return _attach_meta(raw_text, result)
+            })
     except Exception as e:
-        result = {
+        logger.exception("AI parse call failed for text=%r; using rule fallback", raw_text[:200])
+        return _attach_meta(raw_text, {
             "actions": [_draft_to_action(draft)],
             "source": "fallback",
             "confidence": "low",
             "error": f"AI error: {str(e)[:200]}",
-        }
-        return _attach_meta(raw_text, result)
+        })
+
+
+def route_parse(raw_text: str, user=None) -> dict:
+    """Parse text with rule-first + AI fallback (synchronous).
+
+    Kept for tests / synchronous callers. Returns the same shape as before:
+      {"actions": [...], "source": "rule"|"ai"|"fallback", "confidence": ..., "error": ...}
+    """
+    mode, result = _decide(raw_text, user)
+    if mode == "ai":
+        return _call_ai(raw_text, user)
+    return result
+
+
+def route_parse_split(raw_text: str, user=None) -> dict:
+    """Async-friendly parse entry.
+
+    Rule parse / local fallback return immediately (``ready=true``). When the AI
+    provider is needed, a background thread runs it and writes the result to a
+    ``ParseJob`` row; we return ``ready=false`` + ``job_id`` so the frontend can
+    poll ``/api/parse-status/<job_id>/`` — this keeps a ~30s AI call from
+    blocking the web worker.
+    """
+    mode, result = _decide(raw_text, user)
+    if mode != "ai":
+        return {"ready": True, "result": result, "raw_text": raw_text}
+
+    job = ParseJob.objects.create(
+        user=user, raw_text=raw_text, uuid=_uuid.uuid4().hex, status="pending",
+    )
+    threading.Thread(
+        target=_run_ai_job,
+        args=(job.uuid, raw_text, user.id if user else None),
+        daemon=True,
+    ).start()
+    return {"ready": False, "job_id": job.uuid, "raw_text": raw_text}
+
+
+def _run_ai_job(job_uuid: str, raw_text: str, user_id=None):
+    """Background worker: run AI parse and persist the result to ParseJob.
+
+    Runs in its own thread with an isolated DB connection (Django connections are
+    thread-local); the connection is closed in ``finally`` so it never leaks into
+    the request thread. Any failure degrades to a local rule draft.
+    """
+    try:
+        job = ParseJob.objects.get(uuid=job_uuid)
+        job.status = "running"
+        job.save(update_fields=["status"])
+
+        user = None
+        if user_id is not None:
+            try:
+                user = get_user_model().objects.get(pk=user_id)
+            except Exception:
+                user = None
+
+        result = _call_ai(raw_text, user)
+        job.result = result
+        job.status = "done"
+        job.save()
+    except Exception as e:  # noqa: BLE001 - last-resort guard so job never hangs
+        logger.exception("ParseJob %s worker crashed; returning rule fallback", job_uuid)
+        try:
+            job = ParseJob.objects.get(uuid=job_uuid)
+            draft = parse_text(raw_text)
+            job.result = _attach_meta(raw_text, {
+                "actions": [_draft_to_action(draft)],
+                "source": "fallback",
+                "confidence": "low",
+                "error": f"AI worker error: {str(e)[:200]}",
+            })
+            job.error = str(e)[:500]
+            job.status = "done"
+            job.save()
+        except Exception:
+            pass
+    finally:
+        connection.close()
 
 
 def _draft_to_action(draft: dict) -> dict:

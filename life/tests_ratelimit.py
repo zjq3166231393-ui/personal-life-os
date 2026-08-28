@@ -9,11 +9,11 @@ or HTTP round-trip — so the tests stay fast and hermetic.
 """
 import json
 
-import life.middleware as mw_mod
 from django.core.cache import cache
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 
+import life.middleware as mw_mod
 from life.middleware import (
     ApiRateLimitMiddleware,
     get_login_attempts,

@@ -1,7 +1,9 @@
 """PWA views: manifest.json, service worker, offline page, icon."""
+import struct
+import zlib
+
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.cache import cache_page
-import struct, zlib
 
 
 @cache_page(3600)

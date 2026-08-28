@@ -81,8 +81,9 @@ class Command(BaseCommand):
 
     def _decrypt(self, fpath, key):
         out = Path(str(fpath).replace(".enc", ""))
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         import hashlib
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         aes_key = hashlib.sha256(key.encode()).digest()
         aesgcm = AESGCM(aes_key)
         data = fpath.read_bytes()
