@@ -32,6 +32,9 @@ ignore = [
     # ruff 无法识别 make_aware(strptime(...)) 这一正确范式，故按误报忽略。
     # 真正要守的时区规则是 DTZ011（date.today）与 DTZ001（naive datetime 构造）。
     "DTZ007",
+    # Django 模型类级属性（Meta.ordering、UniqueConstraint、choices 列表、default=list 等）
+    # 是可变字面量，ruff 误报为「可变类属性默认值」。这是 Django 的标准写法，应忽略。
+    "RUF012",
 ]
 
 [tool.ruff.lint.per-file-ignores]

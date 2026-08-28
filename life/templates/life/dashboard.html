@@ -298,6 +298,10 @@
       <div><div class="lf-text-xs lf-text-faint">逾期任务</div><div class="lf-text-bold lf-num lf-mt-1 {% if overdue_count > 0 %}lf-text-danger{% endif %}">{{ overdue_count }} 个</div></div>
       <div class="lf-text-end"><div class="lf-text-xs lf-text-faint">今日要事</div><div class="lf-text-bold lf-mt-1 lf-truncate" style="max-width:180px;">{% if top_task %}{{ top_task.title }}{% else %}暂无{% endif %} {% if top_done %}✅{% else %}⏳{% endif %}</div></div>
     </div>
+    <div class="lf-row lf-row--between lf-mt-3" style="padding-top:12px;border-top:1px solid var(--border-soft);">
+      <div><div class="lf-text-xs lf-text-faint">本周新建</div><div class="lf-text-bold lf-num lf-mt-1">{{ week_created }} 个</div></div>
+      <div class="lf-text-end"><div class="lf-text-xs lf-text-faint">被推迟</div><div class="lf-text-bold lf-mt-1 lf-num {% if postpone_count > 0 %}lf-text-danger{% endif %}">{{ postpone_count }} 个</div></div>
+    </div>
   </section>
 
   {% if upcoming %}

@@ -85,12 +85,12 @@ class Command(BaseCommand):
                                    source=choice(["text", "manual"]), status="confirmed")
 
         # Income
-        Expense.objects.create(user=user, type="income", amount=Decimal("8000"),
+        Expense.objects.create(user=user, type="income", amount=Decimal(8000),
                                occurred_at=days[0] if days else today, note="工资",
                                source="manual", status="confirmed")
 
         # ── Budget ──────────────────────────────────────────────
-        Budget.objects.create(user=user, month=month_start, amount=Decimal("5000"))
+        Budget.objects.create(user=user, month=month_start, amount=Decimal(5000))
 
         # ── Recurring ──────────────────────────────────────────
         for name, cat, amt, day in [("房租", "住房", 2500, 5), ("话费", "生活缴费", 59, 15), ("视频会员", "购物", 25, 20)]:
@@ -99,7 +99,7 @@ class Command(BaseCommand):
 
         # ── Installment ────────────────────────────────────────
         InstallmentPlan.objects.create(user=user, name="MacBook 分期", category=cats["购物"],
-                                       total_amount=Decimal("12000"), installment_amount=Decimal("1000"),
+                                       total_amount=Decimal(12000), installment_amount=Decimal(1000),
                                        total_periods=12, paid_periods=randint(0, 3),
                                        next_due_date=today + timedelta(days=15))
 

@@ -40,7 +40,7 @@ ANOMALY_SPIKE_FACTOR = 3                    # 单笔 > 分类均值 3 倍 / 当�
 CATEGORY_GROWTH_FACTOR = 2                  # 本月分类支出 > 上月 2 倍
 CATEGORY_SPIKE_RATIO = Decimal("1.3")       # 分类月支出 > 近 3 月均值 1.3 倍
 BILL_CHANGE_ALERT_RATIO = Decimal("0.2")    # 固定账单实付与预期偏离 > 20% 预警
-LARGE_EXPENSE_MIN = Decimal("200")          # 单笔大额判定下限 ¥200
+LARGE_EXPENSE_MIN = Decimal(200)          # 单笔大额判定下限 ¥200
 LARGE_EXPENSE_PCT = Decimal("0.2")          # 或 > 月支出 20%
 TOP_CAT_CONCENTRATION_PCT = 40              # 单一分类占比 >= 40% 集中度过高
 RECURRING_SHARE_ALERT = Decimal("0.5")      # 固定支出占比 > 50% 提醒

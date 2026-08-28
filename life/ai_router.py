@@ -13,14 +13,15 @@ import threading
 import uuid as _uuid
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import connection
 
 from .ai_provider import get_provider
 from .ai_schema import validate_ai_response
 from .models import ConversationLog, ParseJob
+from .parser import parse_text
 
 logger = logging.getLogger(__name__)
-from .parser import parse_text
 
 
 def _rule_confidence(draft: dict) -> str:
@@ -293,7 +294,8 @@ def _run_ai_job(job_uuid: str, raw_text: str, user_id=None):
         if user_id is not None:
             try:
                 user = get_user_model().objects.get(pk=user_id)
-            except Exception:
+            except (ObjectDoesNotExist, ValueError):
+                # 仅当用户不存在或主键非法时降级为匿名解析；其它异常（如 DB 故障）不应被吞掉
                 user = None
 
         result = _call_ai(raw_text, user)

@@ -142,12 +142,12 @@ def expense_list(request):
     # ── 自动统计 KPI（针对当前筛选结果，不依赖手填筛选条件）────────
     # 用户进入页面默认看到 1 周数据 + 顶部 KPI 卡片，而不是一个空的筛选表单。
     all_in_period = qs
-    total_amount = all_in_period.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    total_amount = all_in_period.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
     total_count = all_in_period.count()
-    income_total = all_in_period.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal("0")
-    max_single = all_in_period.filter(type="expense").aggregate(m=Max("amount"))["m"] or Decimal("0")
+    income_total = all_in_period.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    max_single = all_in_period.filter(type="expense").aggregate(m=Max("amount"))["m"] or Decimal(0)
     days_in_period = PERIOD_DAYS.get(period, 30)
-    daily_avg = total_amount / days_in_period if days_in_period else Decimal("0")
+    daily_avg = total_amount / days_in_period if days_in_period else Decimal(0)
 
     # 分类占比（仅支出）
     cat_breakdown = []
@@ -171,9 +171,9 @@ def expense_list(request):
         last_total = Expense.objects.filter(
             user=request.user, type="expense", status="confirmed", is_deleted=False,
             occurred_at__gte=last_period_start, occurred_at__lt=last_period_end,
-        ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+        ).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     else:
-        last_total = Decimal("0")
+        last_total = Decimal(0)
 
     return render(request, "life/expense_list.html", {
         "page_obj": page_obj,
@@ -653,12 +653,12 @@ def budget(request):
     spent_total = Expense.objects.filter(
         user=request.user, type="expense", status="confirmed", is_deleted=False,
         occurred_at__gte=month_start, occurred_at__lte=month_end,
-    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    ).aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
     budget_total = Budget.objects.filter(
         user=request.user, category__isnull=True, month=month_start,
     ).first()
-    total_amount = budget_total.amount if budget_total else Decimal("0")
+    total_amount = budget_total.amount if budget_total else Decimal(0)
 
     remaining = total_amount - spent_total
     pct = min(int(spent_total / total_amount * 100) if total_amount > 0 else 0, 100)
@@ -682,22 +682,22 @@ def budget(request):
 
     cat_rows = []
     for c in categories:
-        spent = spent_by_cat.get(c.id, Decimal("0"))
-        budgeted = cat_budgets.get(c.id, Decimal("0"))
+        spent = spent_by_cat.get(c.id, Decimal(0))
+        budgeted = cat_budgets.get(c.id, Decimal(0))
         rem = budgeted - spent
         cat_pct = min(int(spent / budgeted * 100) if budgeted > 0 else 0, 100)
         cat_rows.append({
             "obj": c, "spent": spent, "budget": budgeted,
             "remaining": rem, "pct": cat_pct,
             "over": spent > budgeted > 0,
-            "over_amount": abs(rem) if rem < 0 else Decimal("0"),
+            "over_amount": abs(rem) if rem < 0 else Decimal(0),
         })
 
     return render(request, "life/budget.html", {
         "today": today, "month_start": month_start,
         "spent_total": spent_total, "total_amount": total_amount,
         "remaining": remaining, "pct": pct,
-        "over_amount": abs(remaining) if remaining < 0 else Decimal("0"),
+        "over_amount": abs(remaining) if remaining < 0 else Decimal(0),
         "over_total": total_amount > 0 and spent_total > total_amount,
         "cat_rows": cat_rows,
         # ── 新增：30 天趋势 + Top 分类 + 节省建议 ──
@@ -722,7 +722,7 @@ def _budget_last_month_total(user, today, month_start):
         user=user, type="expense", status="confirmed", is_deleted=False,
         occurred_at__date__gte=last_start, occurred_at__date__lte=last_end,
     ).aggregate(s=Sum("amount"))["s"]
-    return s or Decimal("0")
+    return s or Decimal(0)
 
 
 def _budget_30day_trend(user, today):
@@ -737,7 +737,7 @@ def _budget_30day_trend(user, today):
     ).values("occurred_at__date").annotate(s=Sum("amount"))
     amt_by_day = {row["occurred_at__date"]: row["s"] for row in rows}
     return [
-        {"date": today - timedelta(days=i), "amount": amt_by_day.get(today - timedelta(days=i), Decimal("0"))}
+        {"date": today - timedelta(days=i), "amount": amt_by_day.get(today - timedelta(days=i), Decimal(0))}
         for i in range(DAY_TREND_DAYS - 1, -1, -1)
     ]
 
@@ -921,7 +921,7 @@ def dashboard(request):
     from datetime import date, timedelta
     from decimal import Decimal
 
-    from django.db.models import Q, Sum
+    from django.db.models import F, Q, Sum
 
     today = timezone.localdate()
 
@@ -949,8 +949,8 @@ def dashboard(request):
     base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
     month_qs = base.filter(occurred_at__gte=month_start, occurred_at__lte=month_end)
 
-    total_expense = month_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal("0")
-    total_income = month_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    total_expense = month_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    total_income = month_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
     balance = total_income - total_expense
 
     # 上月同期数据（用于对比）
@@ -961,7 +961,7 @@ def dashboard(request):
         last_month_start = date(sel_year, sel_month - 1, 1)
         _, last_ld = monthrange(last_month_start.year, last_month_start.month)
         last_month_end = date(last_month_start.year, last_month_start.month, last_ld)
-    last_month_total = base.filter(type="expense", occurred_at__gte=last_month_start, occurred_at__lte=last_month_end).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    last_month_total = base.filter(type="expense", occurred_at__gte=last_month_start, occurred_at__lte=last_month_end).aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
     # ── category breakdown ─────────────────────────────────────────
     cat_spent = defaultdict(Decimal)
@@ -980,10 +980,10 @@ def dashboard(request):
     daily = []
     for d in range(1, last_day + 1):
         day = date(sel_year, sel_month, d)
-        daily.append({"day": d, "amount": daily_agg.get(day, Decimal("0")) or Decimal("0")})
+        daily.append({"day": d, "amount": daily_agg.get(day, Decimal(0)) or Decimal(0)})
 
     # ── recurring total ────────────────────────────────────────────
-    rec_total = RecurringExpense.objects.filter(user=request.user, is_active=True).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    rec_total = RecurringExpense.objects.filter(user=request.user, is_active=True).aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
     # ── upcoming bills (recurring + installment) ───────────────────
     upcoming = []
@@ -995,7 +995,7 @@ def dashboard(request):
 
     # ── budget rate ────────────────────────────────────────────────
     budget_total = Budget.objects.filter(user=request.user, category__isnull=True, month=month_start).first()
-    budget_amount = budget_total.amount if budget_total else Decimal("0")
+    budget_amount = budget_total.amount if budget_total else Decimal(0)
     budget_pct = min(int(total_expense / budget_amount * 100) if budget_amount > 0 else 0, 100)
 
     # ── monthly trend (last 6 months from selected month) ────────────
@@ -1017,13 +1017,13 @@ def dashboard(request):
         out = {}
         for row in base.filter(type=typ, occurred_at__gte=span_start, occurred_at__lte=span_end) \
                 .values("occurred_at__year", "occurred_at__month").annotate(s=Sum("amount")):
-            out[(row["occurred_at__year"], row["occurred_at__month"])] = row["s"] or Decimal("0")
+            out[(row["occurred_at__year"], row["occurred_at__month"])] = row["s"] or Decimal(0)
         return out
     exp_by_month = _sum_by_month("expense")
     inc_by_month = _sum_by_month("income")
     # 12 次查询 → 2 次 GROUP BY
-    monthly_expense = [float(exp_by_month.get((y, m), Decimal("0"))) for (y, m) in months]
-    monthly_income = [float(inc_by_month.get((y, m), Decimal("0"))) for (y, m) in months]
+    monthly_expense = [float(exp_by_month.get((y, m), Decimal(0))) for (y, m) in months]
+    monthly_income = [float(inc_by_month.get((y, m), Decimal(0))) for (y, m) in months]
 
     chart_data = json.dumps({
         "monthlyLabels": monthly_labels,
@@ -1046,19 +1046,19 @@ def dashboard(request):
     if is_current:
         days_passed = today.day
         days_remaining = last_day - today.day
-        daily_avg = total_expense / days_passed if days_passed > 0 else Decimal("0")
+        daily_avg = total_expense / days_passed if days_passed > 0 else Decimal(0)
         predicted_remaining = daily_avg * days_remaining
         predicted_total = total_expense + predicted_remaining
     else:
         days_passed = last_day
         days_remaining = 0
-        daily_avg = total_expense / last_day if last_day > 0 else Decimal("0")
-        predicted_remaining = Decimal("0")
+        daily_avg = total_expense / last_day if last_day > 0 else Decimal(0)
+        predicted_remaining = Decimal(0)
         predicted_total = total_expense
 
     # Identify potential one-time large expenses (> 3x daily avg)
     large_items = []
-    threshold = daily_avg * 3 if daily_avg > 0 else Decimal("999999")
+    threshold = daily_avg * 3 if daily_avg > 0 else Decimal(999999)
     for e in month_qs.filter(type="expense", amount__gte=threshold).order_by("-amount")[:LARGE_ITEM_TOPN]:
         large_items.append({"note": e.note or e.merchant or "未命名", "amount": e.amount})
     # Exclude large items for a conservative estimate
@@ -1085,7 +1085,7 @@ def dashboard(request):
         items = cat_items.get(c.id)
         if not items:
             continue
-        avg = sum((x["amount"] or Decimal("0")) for x in items) / len(items)
+        avg = sum((x["amount"] or Decimal(0)) for x in items) / len(items)
         if avg > 0:
             for e in items:
                 if e["amount"] >= avg * ANOMALY_SPIKE_FACTOR:
@@ -1097,9 +1097,9 @@ def dashboard(request):
                     })
 
     # 2. 当日暴增：今天 > 3x 30 日均（保留原逻辑，已是单次聚合）
-    daily_30 = base.filter(type="expense", occurred_at__gte=today - timedelta(days=DAY_TREND_DAYS)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
-    avg_30 = daily_30 / 30 if daily_30 > 0 else Decimal("0")
-    today_spent = base.filter(type="expense", occurred_at__date=today).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    daily_30 = base.filter(type="expense", occurred_at__gte=today - timedelta(days=DAY_TREND_DAYS)).aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    avg_30 = daily_30 / 30 if daily_30 > 0 else Decimal(0)
+    today_spent = base.filter(type="expense", occurred_at__date=today).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     if avg_30 > 0 and today_spent > avg_30 * ANOMALY_SPIKE_FACTOR:
         anomalies.append({"type": "当日暴增", "detail": f"今天 ¥{today_spent:.0f}，30日均值 ¥{avg_30:.0f}", "date": today})
 
@@ -1117,8 +1117,8 @@ def dashboard(request):
         .values("category").annotate(s=Sum("amount"))
     }
     for c in categories:
-        this_m = float(this_m_by_cat.get(c.id, Decimal("0")) or 0)
-        last_m = float(last_m_by_cat.get(c.id, Decimal("0")) or 0)
+        this_m = float(this_m_by_cat.get(c.id, Decimal(0)) or 0)
+        last_m = float(last_m_by_cat.get(c.id, Decimal(0)) or 0)
         if last_m > 0 and this_m > last_m * CATEGORY_GROWTH_FACTOR:
             anomalies.append({"type": "分类增长", "detail": f"{c.name}: 本月 ¥{this_m:.0f} vs 上月 ¥{last_m:.0f}", "date": today})
 
@@ -1138,6 +1138,13 @@ def dashboard(request):
     week_completed = tasks_all.filter(status="completed", completed_at__date__gte=week_start, completed_at__date__lte=week_end).count()
     week_total = max(week_completed + tasks_all.filter(status__in=["todo", "in_progress"], created_at__date__lte=week_end).count(), 1)
     week_rate = round(week_completed / week_total * 100) if week_total > 0 else 0
+
+    # 本周新建任务数（衡量「规划/输入」活跃度，与完成率互补）
+    week_created = tasks_all.filter(created_at__date__gte=week_start, created_at__date__lte=week_end).count()
+    # 被推迟的任务数：仍在进行中、但创建后超过 1 小时才被改动（视为「推迟/拖延」信号）
+    postpone_count = tasks_all.filter(
+        status__in=["todo", "in_progress"], updated_at__gt=F("created_at") + timedelta(hours=1)
+    ).count()
 
     high_priority_done = tasks_all.filter(status="completed", priority=1).count()
     high_priority_total = max(tasks_all.filter(priority=1).count(), 1)
@@ -1210,7 +1217,7 @@ def dashboard(request):
         for c in categories:
             cat_month = float(month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or 0)
             if cat_month > 0:
-                three_mo = base.filter(type="expense", category=c, occurred_at__gte=today - timedelta(days=90)).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+                three_mo = base.filter(type="expense", category=c, occurred_at__gte=today - timedelta(days=90)).aggregate(s=Sum("amount"))["s"] or Decimal(0)
                 three_avg = float(three_mo) / 3
                 if three_avg > 0 and cat_month > three_avg * CATEGORY_SPIKE_RATIO:
                     pct = round((cat_month - three_avg) / three_avg * 100)
@@ -1306,6 +1313,7 @@ def dashboard(request):
         "overdue_count": overdue_count, "streak": streak,
         "top_task": top_task, "top_done": top_done,
         "week_completed": week_completed,
+        "week_created": week_created, "postpone_count": postpone_count,
         "suggestions": suggest_display,
         "life_suggestions": life_suggestions,
         "last_month_total": last_month_total,
@@ -1325,7 +1333,7 @@ def review(request):
     from datetime import date, timedelta
     from decimal import Decimal
 
-    from django.db.models import Sum
+    from django.db.models import F, Sum
 
     today = timezone.localdate()
     period = request.GET.get("period", "weekly")
@@ -1352,14 +1360,24 @@ def review(request):
     # Generate draft
     base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
     period_qs = base.filter(occurred_at__gte=start, occurred_at__lte=end)
-    total_exp = period_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal("0")
-    total_inc = period_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    total_exp = period_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    total_inc = period_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
     tasks_done = Task.objects.filter(user=request.user, is_deleted=False, status="completed", completed_at__date__gte=start, completed_at__date__lte=end)
     tasks_undone = Task.objects.filter(user=request.user, is_deleted=False, status__in=["todo", "in_progress"], created_at__date__lte=end)
     overdue = tasks_undone.filter(due_at__date__lt=today)
 
     upcoming = Task.objects.filter(user=request.user, is_deleted=False, status__in=["todo", "in_progress"], due_at__date__gte=today).order_by("due_at")[:3]
+
+    # 任务动态：本周期新建数 / 被推迟数（推迟 = 仍在进行中、创建后 >1h 才被改动）
+    period_created = Task.objects.filter(
+        user=request.user, is_deleted=False, created_at__date__gte=start, created_at__date__lte=end
+    ).count()
+    period_postponed = Task.objects.filter(
+        user=request.user, is_deleted=False, status__in=["todo", "in_progress"],
+        created_at__date__gte=start, created_at__date__lte=end,
+        updated_at__gt=F("created_at") + timedelta(hours=1),
+    ).count()
 
     budget = Budget.objects.filter(user=request.user, category__isnull=True, month=date(today.year, today.month, 1)).first()
 
@@ -1379,6 +1397,10 @@ def review(request):
 
 ### 异常提醒
 {chr(10).join(f'- ⚠ {t.title} (逾期)' for t in overdue[:5]) if overdue else '- 无异常'}
+
+### 任务动态
+- 新建: {period_created} 个
+- 被推迟: {period_postponed} 个
 
 ### 下周期待
 {chr(10).join(f'- 📌 {t.title}' for t in upcoming) if upcoming else '- 暂无'}

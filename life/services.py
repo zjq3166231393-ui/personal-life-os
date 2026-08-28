@@ -184,9 +184,9 @@ def home_data(user):
 
     # ── budget summary ──────────────────────────────────────────
     spent = Expense.objects.filter(user=user, type="expense", status="confirmed", is_deleted=False,
-                                   occurred_at__gte=month_start, occurred_at__lte=month_end).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+                                   occurred_at__gte=month_start, occurred_at__lte=month_end).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     budget = Budget.objects.filter(user=user, category__isnull=True, month=month_start).first()
-    budget_amount = budget.amount if budget else Decimal("0")
+    budget_amount = budget.amount if budget else Decimal(0)
     budget_pct = min(int(spent / budget_amount * 100) if budget_amount > 0 else 0, 100)
 
     # ── daily check-ins (今日待打卡) ─────────────────────────────

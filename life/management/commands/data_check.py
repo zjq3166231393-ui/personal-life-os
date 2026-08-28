@@ -63,7 +63,7 @@ class Command(BaseCommand):
             abnormal = Expense.objects.filter(
                 user_id=uid, is_deleted=False,
             ).filter(amount__lte=0) | Expense.objects.filter(
-                user_id=uid, is_deleted=False, amount__gt=Decimal("10000000"),
+                user_id=uid, is_deleted=False, amount__gt=Decimal(10000000),
             )
             for e in abnormal:
                 reason = "负/零金额" if e.amount <= 0 else "金额异常大"
