@@ -8,4 +8,5 @@ staticfiles/
 .pytest_cache/
 logs/
 backups/
+.workbuddy/
 
