@@ -101,14 +101,16 @@ def expense_list(request):
 
     if date_from:
         try:
-            dt = datetime.strptime(date_from, "%Y-%m-%d")
+            # 显式 make_aware：naive datetime 进 DateTimeField 查询会触发 RuntimeWarning，
+            # 且依赖 Django 的隐式时区解释（Asia/Shanghai 无 DST，make_aware 安全）。
+            dt = timezone.make_aware(datetime.strptime(date_from, "%Y-%m-%d"))
             qs = qs.filter(occurred_at__gte=dt)
         except ValueError:
             pass
     if date_to:
         try:
             from datetime import timedelta as _td
-            dt = datetime.strptime(date_to, "%Y-%m-%d") + _td(days=1)
+            dt = timezone.make_aware(datetime.strptime(date_to, "%Y-%m-%d")) + _td(days=1)
             qs = qs.filter(occurred_at__lt=dt)
         except ValueError:
             pass
@@ -265,7 +267,6 @@ def task_list(request):
     # ── 筛选（status / priority）───────────────────────────────
     filt = request.GET.get("filter", "all")     # all / today / week / overdue / completed
     prio = request.GET.get("priority", "")      # 1 / 2 / 3 / '' (全部)
-    show_prio = request.GET.get("show_priority", "")  # 仅作为额外筛选
 
     base = qs_all
     if filt == "today":
@@ -320,7 +321,6 @@ def task_list(request):
 
         # 已完成按"月份"分组，列在最后，全部 line-through
         completed_qs = base.filter(status="completed").order_by("-completed_at")
-        last_year = today.year - 1
         done_buckets = OrderedDict()
         for t in completed_qs:
             mk = (t.completed_at.year if t.completed_at else t.updated_at.year, t.completed_at.month if t.completed_at else t.updated_at.month)
@@ -626,7 +626,7 @@ def budget(request):
 
     from django.db.models import Q, Sum
 
-    today = date.today()
+    today = timezone.localdate()
     month_start = date(today.year, today.month, 1)
     _, last_day = monthrange(today.year, today.month)
     month_end = date(today.year, today.month, last_day)
@@ -786,7 +786,6 @@ def recurring_list(request):
 
 @login_required
 def recurring_create(request):
-    from datetime import date
     if request.method == "POST":
         RecurringExpense.objects.create(
             user=request.user,
@@ -795,7 +794,7 @@ def recurring_create(request):
             amount=request.POST.get("amount", "0"),
             frequency=request.POST.get("frequency", "monthly"),
             due_day=int(request.POST.get("due_day", "1")),
-            start_date=request.POST.get("start_date", date.today().isoformat()),
+            start_date=request.POST.get("start_date", timezone.localdate().isoformat()),
             remind_days_before=int(request.POST.get("remind_days_before", "3")),
         )
         return redirect("recurring_list")
@@ -845,7 +844,6 @@ def installment_list(request):
 
 @login_required
 def installment_create(request):
-    from datetime import date
 
     from django.db.models import Q
     if request.method == "POST":
@@ -856,7 +854,7 @@ def installment_create(request):
             total_amount=request.POST.get("total_amount", "0"),
             installment_amount=request.POST.get("installment_amount", "0"),
             total_periods=int(request.POST.get("total_periods", "1")),
-            next_due_date=request.POST.get("next_due_date", date.today().isoformat()),
+            next_due_date=request.POST.get("next_due_date", timezone.localdate().isoformat()),
         )
         return redirect("installment_list")
     categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
@@ -925,7 +923,7 @@ def dashboard(request):
 
     from django.db.models import Q, Sum
 
-    today = date.today()
+    today = timezone.localdate()
 
     # ── 年/月筛选参数 ───────────────────────────────────────
     try:
@@ -1138,7 +1136,6 @@ def dashboard(request):
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)
     week_completed = tasks_all.filter(status="completed", completed_at__date__gte=week_start, completed_at__date__lte=week_end).count()
-    week_created = tasks_all.filter(created_at__date__gte=week_start, created_at__date__lte=week_end).count()
     week_total = max(week_completed + tasks_all.filter(status__in=["todo", "in_progress"], created_at__date__lte=week_end).count(), 1)
     week_rate = round(week_completed / week_total * 100) if week_total > 0 else 0
 
@@ -1147,9 +1144,6 @@ def dashboard(request):
     high_rate = round(high_priority_done / high_priority_total * 100)
 
     overdue_count = tasks_all.filter(status__in=["todo", "in_progress"], due_at__date__lt=today).count()
-    # Postpone count: tasks where updated_at > created_at and status changed via postpone
-    from django.db.models import F
-    postpone_count = tasks_all.filter(status__in=["todo", "in_progress"], updated_at__gt=F("created_at") + timedelta(hours=1)).count()
 
     # Consecutive days (walk backwards from yesterday)
     streak = 0
@@ -1333,7 +1327,7 @@ def review(request):
 
     from django.db.models import Sum
 
-    today = date.today()
+    today = timezone.localdate()
     period = request.GET.get("period", "weekly")
 
     if period == "weekly":
@@ -1414,10 +1408,10 @@ def suggestion_feedback(request, pk, fb):
 
 @login_required
 def reminder_list(request):
-    from datetime import date, timedelta
+    from datetime import timedelta
     items = Reminder.objects.filter(user=request.user).order_by("event_at")
     # 即将到来 = 未来 30 天的有效提醒（按事件日期算，不管 remind_at）
-    today = date.today()
+    today = timezone.localdate()
     horizon = today + timedelta(days=UPCOMING_HORIZON_DAYS)
     upcoming = []
     for r in items:

@@ -2,9 +2,11 @@ name: Test
 
 on:
   push:
-    branches: [master, main]
+    # 开发实际发生在 release-* / release/** 分支上，原先只监听 master/main
+    # 导致 CI 从未被触发过。此处补齐，让每次推送都跑测试。
+    branches: [master, main, "release-*", "release/**"]
   pull_request:
-    branches: [master, main]
+    branches: [master, main, "release-*", "release/**"]
 
 jobs:
   test:
@@ -21,7 +23,13 @@ jobs:
           pip install -r requirements.txt
       - name: Create .env for CI
         run: cp .env.example .env
+      - name: Lint (ruff, 配置见 pyproject.toml)
+        run: |
+          pip install ruff
+          ruff check .
       - name: Django system check
         run: python manage.py check
       - name: Run tests
+        # CI 运行在 UTC 容器上，正好覆盖 Asia/Shanghai 的时区回归
+        # （date.today() 在 UTC 下会与本地日期错位，已统一改用 timezone.localdate()）
         run: python manage.py test

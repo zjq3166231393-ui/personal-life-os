@@ -15,11 +15,11 @@ import uuid as _uuid
 from django.contrib.auth import get_user_model
 from django.db import connection
 
-logger = logging.getLogger(__name__)
-
 from .ai_provider import get_provider
 from .ai_schema import validate_ai_response
 from .models import ConversationLog, ParseJob
+
+logger = logging.getLogger(__name__)
 from .parser import parse_text
 
 
@@ -315,7 +315,12 @@ def _run_ai_job(job_uuid: str, raw_text: str, user_id=None):
             job.status = "done"
             job.save()
         except Exception:
-            pass
+            # 降级路径也失败（如 DB 不可用）时 job 会停留在 running，前端轮询无结果。
+            # 此处是最后一道防线，必须留下痕迹，否则线上完全无法定位。
+            logger.exception(
+                "ParseJob %s fallback persistence failed; job may remain in 'running'",
+                job_uuid,
+            )
     finally:
         connection.close()
 

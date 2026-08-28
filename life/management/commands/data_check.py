@@ -18,6 +18,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.db.models import Count
+from django.utils import timezone
 
 from life.models import Expense, RecurringExpense
 
@@ -58,7 +59,6 @@ class Command(BaseCommand):
 
     def _check_amounts(self, users, fix):
         issues = 0
-        today = date.today()
         for uid in users:
             abnormal = Expense.objects.filter(
                 user_id=uid, is_deleted=False,
@@ -85,7 +85,7 @@ class Command(BaseCommand):
 
     def _check_dates(self, users, fix):
         issues = 0
-        today = date.today()
+        today = timezone.localdate()
         future_limit = today + timedelta(days=365)
         past_limit = today - timedelta(days=365 * 10)
         for uid in users:
@@ -130,7 +130,7 @@ class Command(BaseCommand):
             recs = RecurringExpense.objects.filter(user_id=uid, is_active=True)
             for r in recs:
                 # Check if there are multiple expenses with the same note this month
-                today = date.today()
+                today = timezone.localdate()
                 month_start = date(today.year, today.month, 1)
                 count = Expense.objects.filter(
                     user_id=uid, is_deleted=False, status="confirmed",

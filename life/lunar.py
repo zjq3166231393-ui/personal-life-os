@@ -7,11 +7,17 @@ re-running for the same day within a single request.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, time
 
+from django.utils import timezone
 from zhdate import ZhDate
 
-__all__ = ["lunar_today", "lunar_for", "format_lunar", "LUNAR_MONTH_NAMES", "SHENGXIAO_BY_YEAR_OFFSET"]
+logger = logging.getLogger(__name__)
+
+# 注意：原名 SHENGXIAO_BY_YEAR_OFFSET 在本模块并不存在（正确名称为 SHENGXIAO_ORDER），
+# 会导致 `from .lunar import *` 抛 AttributeError，已修正。
+__all__ = ["lunar_today", "lunar_for", "format_lunar", "LUNAR_MONTH_NAMES", "SHENGXIAO_ORDER"]
 
 # 农历月份常用表达
 LUNAR_MONTH_NAMES = {
@@ -41,7 +47,9 @@ def _convert(d: date) -> ZhDate:
 
 
 def lunar_today() -> ZhDate:
-    return _convert(date.today())
+    # 用 localdate() 而非 date.today()：后者读操作系统时钟（部署容器多为 UTC），
+    # 会与 Django TIME_ZONE=Asia/Shanghai 差 8 小时，导致农历日期在凌晨时段错位。
+    return _convert(timezone.localdate())
 
 
 def lunar_for(d: date) -> ZhDate:
@@ -67,7 +75,8 @@ def format_lunar(d: date | None = None, *, include_year: bool = True, include_da
             sx = SHENGXIAO_ORDER[offset]
             parts.append(f"{sx}年")
         except Exception:  # pragma: no cover
-            pass
+            # 非关键路径（仅影响生肖后缀），降级为不展示，但记 debug 便于排查。
+            logger.debug("shengxiao lookup failed for %r", z, exc_info=True)
     return " ".join(parts) if parts else ""
 
 

@@ -25,7 +25,9 @@ class FakeProvider(AIProvider):
 
     def _build_response(self, text: str) -> dict:
         import re
-        from datetime import date, timedelta
+        from datetime import timedelta
+
+        from django.utils import timezone
 
         from .parser import _category, _chinese_number_to_arabic, _date
         actions = []
@@ -41,7 +43,7 @@ class FakeProvider(AIProvider):
         seen = set()
         # 日期推导全部交给 parser._date（已含前/昨/明/后/大前/大后 天与绝对日期），
         # 不在此处复制第二套逻辑，避免漂移。
-        today = date.today()
+        today = timezone.localdate()  # 按 Django TIME_ZONE 取「今天」，避免 UTC 容器下凌晨错位
         day = _date(text)
         occurred_default = day.isoformat() + "T12:00:00"
 

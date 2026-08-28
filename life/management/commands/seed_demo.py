@@ -50,7 +50,7 @@ class Command(BaseCommand):
             self.stdout.write(f"User '{username}' already has data. Use --clean first.")
             return
 
-        today = date.today()
+        today = timezone.localdate()
         month_start = date(today.year, today.month, 1)
         _, last_day = monthrange(today.year, today.month)
         days = [(month_start + timedelta(days=i)) for i in range(today.day)]
