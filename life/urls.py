@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import (
     views,
+    views_account,
     views_calendar,
     views_crud,
     views_export,
@@ -24,11 +25,17 @@ urlpatterns = [
     path("import/expense/confirm/", views_import.import_expense_confirm, name="import_expense_confirm"),
     # 日历视图（P1：对标滴答清单日历）
     path("calendar/", views_calendar.calendar_view, name="calendar"),
-    # 标签管理（P1：对标 MoneyWiz / 滴答清单 / flomo 的标签）
+    # 标签管理（P1：对标 MoneyWiz / 滴答清单 / floco 的标签）
     path("tags/", views_tag.tag_list, name="tag_list"),
     path("tags/create/", views_tag.tag_create, name="tag_create"),
     path("tags/<int:pk>/rename/", views_tag.tag_rename, name="tag_rename"),
     path("tags/<int:pk>/delete/", views_tag.tag_delete, name="tag_delete"),
+    # 账户 / 多账本（P1：对标随手记 / MoneyWiz 的资金账户与余额）
+    path("accounts/", views_account.account_list, name="account_list"),
+    path("accounts/create/", views_account.account_create, name="account_create"),
+    path("accounts/<int:pk>/", views_account.account_detail, name="account_detail"),
+    path("accounts/<int:pk>/edit/", views_account.account_edit, name="account_edit"),
+    path("accounts/<int:pk>/delete/", views_account.account_delete, name="account_delete"),
     # 快速记账接口（悬浮按钮）
     path("api/quick-expense/", views.quick_add_expense, name="quick_add_expense"),
     path("api/quick-categories/", views.quick_categories, name="quick_categories"),

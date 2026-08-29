@@ -1,0 +1,74 @@
+{% extends "_base.html" %}
+{% block title %}编辑账户 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">编辑账户</h1>
+    <a href="{% url 'account_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      账户
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <form method="post">
+      {% csrf_token %}
+      <div class="lf-field">
+        <label for="accName" class="lf-label">名称</label>
+        <input type="text" name="name" id="accName" class="lf-input" value="{{ account.name }}" maxlength="50" required>
+      </div>
+
+      <div class="lf-row lf-row--wrap" style="gap:10px;">
+        <div class="lf-field" style="flex:1;min-width:130px;">
+          <label for="accType" class="lf-label">类型</label>
+          <select name="type" id="accType" class="lf-select">
+            {% for val, label in types %}
+              <option value="{{ val }}" {% if account.type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="lf-field" style="flex:1;min-width:100px;">
+          <label for="accIcon" class="lf-label">图标（可选）</label>
+          <input type="text" name="icon" id="accIcon" class="lf-input" value="{{ account.icon }}" maxlength="8" placeholder="{{ account.display_icon }}">
+        </div>
+      </div>
+
+      <div class="lf-field">
+        <label for="accInit" class="lf-label">初始余额</label>
+        <input type="text" name="initial_balance" id="accInit" class="lf-input lf-num" value="{{ account.initial_balance }}" inputmode="decimal">
+        <p class="lf-quick-hint">改初始余额会直接影响推算出的当前余额，请谨慎。</p>
+      </div>
+
+      <div class="lf-field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" name="is_active" {% if account.is_active %}checked{% endif %} style="width:16px;height:16px;">
+          <span class="lf-text-sm">启用中（取消勾选后记账时不再出现在可选列表）</span>
+        </label>
+      </div>
+
+      <div class="lf-modal__foot" style="margin-top:20px;">
+        <button type="submit" class="lf-btn lf-btn--primary">保存</button>
+        <a href="{% url 'account_list' %}" class="lf-btn lf-btn--ghost">取消</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="lf-card lf-card--padded" style="background:var(--surface-2);">
+    <div class="lf-text-xs lf-text-faint" style="line-height:1.7;">
+      <strong style="color:var(--text-2);">当前余额</strong><br>
+      ¥{{ balance|floatformat:2 }}（由流水推算，不可直接编辑）
+    </div>
+  </section>
+
+  <form method="post" action="{% url 'account_delete' account.pk %}" class="lf-mt-3"
+        onsubmit="return confirm('删除账户「{{ account.name|escapejs }}」？\n相关流水会保留，只是账户显示为「未指定」。');">
+    {% csrf_token %}
+    <button type="submit" class="lf-btn lf-btn--ghost" style="color:var(--danger);width:100%;">删除此账户</button>
+  </form>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

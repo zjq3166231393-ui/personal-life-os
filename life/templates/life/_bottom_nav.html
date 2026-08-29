@@ -123,6 +123,10 @@ bottom nav is shown there instead.
     <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
     <span>数据导入</span>
   </a>
+  <a href="{% url 'account_list' %}" class="lf-sidebar__item {% if url_name == 'account_list' or url_name == 'account_detail' or url_name == 'account_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><circle cx="7" cy="14.5" r="1.2" fill="currentColor" stroke="none"/></svg></span>
+    <span>账户</span>
+  </a>
   <div class="lf-sidebar__spacer"></div>
   <div class="lf-sidebar__foot">Personal Life OS · v0.9.0</div>
 </aside>

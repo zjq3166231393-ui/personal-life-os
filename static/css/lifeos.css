@@ -1528,6 +1528,11 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 /* 关键词高亮 */
 .lf-hl{background:rgba(var(--brand-rgb),.16);color:inherit;border-radius:3px;padding:0 1px;font-weight:700}
 
+/* 账户：列表行（在 lf-card 内无缝堆叠，底部细分隔线） */
+.lf-acc-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border-soft)}
+.lf-acc-row:last-child{border-bottom:none}
+.lf-acc-icon{width:34px;height:34px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:18px;background:var(--surface-2);border-radius:10px}
+
 /* Task 状态 badge 映射（与 Task.Status 取值对齐） */
 .lf-badge--todo{background:var(--surface-3);color:var(--text-2)}
 .lf-badge--in_progress{background:var(--info-soft);color:var(--info)}

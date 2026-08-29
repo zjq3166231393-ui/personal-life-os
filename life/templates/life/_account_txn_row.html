@@ -1,0 +1,25 @@
+{% load life_extras %}
+{% comment %}
+单个账户的流水行（被 account_detail.html 包含）。
+上下文变量：e（Expense）、is_in（bool，对本账户是进账）、sign（"+" / "-"）、account。
+
+进账（绿色）：收入、以及转入本账户的转账。
+出账（默认色）：支出、以及从本账户转出的转账。
+{% endcomment %}
+<div class="lf-acc-row">
+  <span class="lf-acc-icon" style="font-size:16px;">{{ e.category.icon|default:"💸" }}</span>
+  <span style="flex:1;min-width:0;">
+    <span class="lf-result-row__title" style="display:block;">{{ e|expense_title }}</span>
+    <span class="lf-result-row__meta" style="margin-top:2px;">
+      <span>{{ e.category.name|default:"未分类" }}</span>
+      {% if e.type == 'transfer' %}
+        {% if is_in %}<span>从 {{ e.account.display_icon|default:"" }} {{ e.account.name|default:"未指定" }} 转入</span>
+        {% else %}<span>转给 {{ e.transfer_to_account.display_icon|default:"" }} {{ e.transfer_to_account.name|default:"未指定" }}</span>{% endif %}
+      {% endif %}
+      <span>{{ e.occurred_at|date:"m-d H:i" }}</span>
+    </span>
+  </span>
+  <span class="lf-result-row__amount lf-num {% if is_in %}is-income{% else %}is-expense{% endif %}">
+    {{ sign }}{{ e.amount|floatformat:2 }}
+  </span>
+</div>

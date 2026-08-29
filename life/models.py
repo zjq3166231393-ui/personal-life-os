@@ -1,4 +1,5 @@
 import uuid as _uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -57,6 +58,16 @@ class Expense(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default="confirmed")
     raw_text = models.TextField(blank=True)
     tags = models.ManyToManyField("Tag", blank=True, related_name="expenses")
+    account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="transactions",
+        help_text="资金变动的账户：支出时从该账户扣减，收入时计入该账户",
+    )
+    transfer_to_account = models.ForeignKey(
+        "Account", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="incoming_transfers",
+        help_text="仅 type=transfer 时有值：转入的目标账户",
+    )
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -185,6 +196,84 @@ class Tag(models.Model):
 
     def __str__(self):
         return f"#{self.name}"
+
+
+class Account(models.Model):
+    """账户 / 资金池：现金、银行卡、支付宝、微信、信用卡等。
+
+    账户与分类是**正交**的两个维度：
+    - 分类回答「钱花在哪」（餐饮、交通…）——用于支出结构分析
+    - 账户回答「钱从哪出」（支付宝、招行卡…）——用于资金分布与余额
+
+    一笔「用支付宝付的餐费」，分类是餐饮，账户是支付宝。
+    """
+
+    class Type(models.TextChoices):
+        CASH = "cash", "现金"
+        BANK = "bank", "银行卡"
+        ALIPAY = "alipay", "支付宝"
+        WECHAT = "wechat", "微信"
+        CREDIT = "credit", "信用卡"
+        OTHER = "other", "其他"
+
+    # 各类型的默认图标，用户可覆盖
+    DEFAULT_ICONS = {
+        "cash": "💵", "bank": "🏦", "alipay": "🅰️",
+        "wechat": "💬", "credit": "💳", "other": "💰",
+    }
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="accounts")
+    name = models.CharField(max_length=50)
+    type = models.CharField(max_length=20, choices=Type.choices, default="cash")
+    icon = models.CharField(max_length=8, blank=True, help_text="留空则用类型默认图标")
+    initial_balance = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00"),
+        help_text="启用时的初始余额；之后由流水推算",
+    )
+    is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-is_active", "type", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="unique_account_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "is_deleted", "is_active"]),
+        ]
+
+    def __str__(self):
+        return f"{self.icon or self.DEFAULT_ICONS.get(self.type, '💰')} {self.name}"
+
+    @property
+    def display_icon(self):
+        return self.icon or self.DEFAULT_ICONS.get(self.type, "💰")
+
+    @property
+    def balance(self):
+        """当前余额 = 初始余额 + 收入 − 支出 − 转出 + 转入。
+
+        只统计 status=confirmed 的流水：待确认的 AI 草稿不应影响真实余额。
+        """
+        from django.db.models import Sum
+
+        zero = Decimal("0")
+        base = self.initial_balance or zero
+
+        def _sum(qs, **kw):
+            return qs.filter(is_deleted=False, status="confirmed", **kw).aggregate(s=Sum("amount"))["s"] or zero
+
+        income = _sum(self.transactions, type="income")
+        expense = _sum(self.transactions, type="expense")
+        # 转出：本账户减少
+        out_transfer = _sum(self.transactions, type="transfer")
+        # 转入：本账户增加
+        in_transfer = _sum(self.incoming_transfers, type="transfer")
+
+        return base + income - expense - out_transfer + in_transfer
 
 
 class Note(models.Model):

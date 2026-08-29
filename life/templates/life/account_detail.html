@@ -1,0 +1,53 @@
+{% extends "_base.html" %}
+{% load life_extras %}
+{% block title %}{{ account.name }} · 账户明细{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{{ account.display_icon }} {{ account.name }}</h1>
+    <a href="{% url 'account_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      账户
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--padded lf-mb-3" style="background:linear-gradient(135deg,rgba(var(--brand-rgb),.08),transparent);">
+    <div class="lf-text-xs lf-text-faint">当前余额</div>
+    <div class="lf-amount lf-amount--lg lf-num lf-mt-1">¥{{ balance|floatformat:2 }}</div>
+    <div class="lf-text-xs lf-text-faint lf-mt-1">
+      {{ account.get_type_display }}
+      · 初始 ¥{{ account.initial_balance|floatformat:2 }}
+      · 共 {{ items|length }} 笔流水
+    </div>
+  </section>
+
+  {% if items %}
+    {% for e in items %}
+      {% comment %}判断这笔流水对本账户是进还是出{% endcomment %}
+      {% if e.type == 'income' or e.transfer_to_account_id == account.id %}
+        {% with is_in=True sign="+" %}
+          {% include "life/_account_txn_row.html" %}
+        {% endwith %}
+      {% else %}
+        {% with is_in=False sign="-" %}
+          {% include "life/_account_txn_row.html" %}
+        {% endwith %}
+      {% endif %}
+    {% endfor %}
+    {% if items|length >= 200 %}
+      <p class="lf-text-xs lf-text-faint lf-mt-2">仅显示最近 200 笔。</p>
+    {% endif %}
+  {% else %}
+    <div class="lf-card lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <p class="lf-empty__text">这个账户还没有流水</p>
+      <p class="lf-text-xs lf-text-faint">记账时选择这个账户，流水就会出现在这里。</p>
+    </div>
+  {% endif %}
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
