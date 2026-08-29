@@ -316,3 +316,95 @@ def confirm_actions(request):
     })
 
 
+@login_required
+@require_POST
+def quick_add_expense(request):
+    """悬浮按钮的「快速记账」接口。
+
+    目标：3 秒内完成一笔记录——只填金额，分类可选，备注可选。
+    与首页 AI 输入互补：AI 适合自然语言，这里适合「我已经知道金额」的场景。
+
+    接受 JSON: {"amount": "18.5", "type": "expense"|"income",
+                "category_id": 可选, "note": 可选}
+    """
+    from django.db.models import Q
+
+    from .models import Category
+
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"ok": False, "error": "请求格式无效。"}, status=400)
+
+    raw_amount = str(payload.get("amount", "")).strip()
+    type_ = payload.get("type", "expense")
+    note = str(payload.get("note", "")).strip()[:500]
+
+    if type_ not in ("expense", "income"):
+        return JsonResponse({"ok": False, "error": "类型只能是支出或收入。"}, status=400)
+
+    try:
+        amount = Decimal(raw_amount)
+    except (InvalidOperation, ValueError):
+        return JsonResponse({"ok": False, "error": "请输入有效的金额。"}, status=400)
+    if amount <= 0:
+        return JsonResponse({"ok": False, "error": "金额必须大于 0。"}, status=400)
+    if amount.as_tuple().exponent < -2:
+        return JsonResponse({"ok": False, "error": "金额最多保留两位小数。"}, status=400)
+
+    # 分类必须属于当前用户或是全局分类，且类型匹配——防止越权引用他人分类
+    category = None
+    cat_id = payload.get("category_id")
+    if cat_id:
+        category = Category.objects.filter(
+            Q(user=request.user) | Q(user__isnull=True),
+            pk=cat_id, type=type_, is_active=True,
+        ).first()
+
+    expense = Expense.objects.create(
+        user=request.user,
+        type=type_,
+        amount=amount,
+        category=category,
+        note=note,
+        occurred_at=timezone.now(),
+        status="confirmed",
+        source="manual",
+    )
+    record(request.user, "expense.create", expense.pk, f"快速记账: {note or '未命名'} ¥{amount}")
+
+    return JsonResponse({
+        "ok": True,
+        "id": expense.pk,
+        "amount": str(expense.amount),
+        "type": expense.type,
+        "type_display": expense.get_type_display(),
+        "note": expense.note,
+        "category": expense.category.name if expense.category else "",
+        "occurred_at": expense.occurred_at.strftime("%Y-%m-%d %H:%M"),
+    })
+
+
+@login_required
+def quick_categories(request):
+    """快速记账面板用的分类列表。
+
+    按需懒加载（面板首次打开时才请求），避免给每个页面都增加一次查询。
+    返回当前用户自建分类 + 全局分类（user 为空的），按类型过滤。
+    """
+    from django.db.models import Q
+
+    from .models import Category
+
+    type_ = request.GET.get("type", "expense")
+    if type_ not in ("expense", "income"):
+        type_ = "expense"
+
+    cats = Category.objects.filter(
+        Q(user=request.user) | Q(user__isnull=True),
+        type=type_, is_active=True,
+    ).order_by("name").values("id", "name")
+
+    return JsonResponse({"ok": True, "type": type_, "categories": list(cats)})
+
+

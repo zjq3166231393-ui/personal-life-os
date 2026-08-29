@@ -52,7 +52,7 @@
   };
 })();
 </script>
-<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=7">
+<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=8">
 <style>
 /* 密码可见性切换按钮（眼睛图标） */
 .lf-field--pw{position:relative}
@@ -84,6 +84,52 @@
 {% endif %}
 {% block body %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
+
+{% comment %}
+全站「快速记账」悬浮按钮（FAB）。
+目标：3 秒记一笔——只填金额即可提交，分类与备注都可选。
+仅已登录的应用页显示（DOM 中存在 .lf-bottom-nav / .lf-sidebar 才显示，
+登录页等静态页自动豁免，与 onboardModal 同一套判定逻辑）。
+{% endcomment %}
+<button type="button" id="quickFab" class="lf-fab is-hidden" aria-label="快速记账" title="快速记账（按 N 键）">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<div id="quickModal" class="lf-modal" aria-hidden="true">
+  <div class="lf-modal__mask" data-qclose></div>
+  <div class="lf-modal__panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
+    <div class="lf-modal__head">
+      <h3 id="quickTitle" class="lf-modal__title">快速记账</h3>
+      <button type="button" class="lf-modal__x" data-qclose aria-label="关闭">×</button>
+    </div>
+
+    <div class="lf-quick-seg" role="group" aria-label="收支类型">
+      <button type="button" class="lf-quick-seg__btn is-active" data-qtype="expense">支出</button>
+      <button type="button" class="lf-quick-seg__btn" data-qtype="income">收入</button>
+    </div>
+
+    <div style="margin-top:12px;">
+      <input type="text" id="quickAmount" class="lf-quick-amount" inputmode="decimal"
+             placeholder="0.00" autocomplete="off" aria-label="金额">
+    </div>
+
+    <div class="lf-quick-cats" id="quickCats" style="margin-top:10px;">
+      <span class="lf-text-xs lf-text-faint">分类加载中…</span>
+    </div>
+
+    <div style="margin-top:10px;">
+      <input type="text" id="quickNote" class="lf-input" placeholder="备注（可选）" autocomplete="off" maxlength="100">
+    </div>
+
+    <div class="lf-quick-err" id="quickErr"></div>
+    <p class="lf-quick-hint">只填金额即可保存，分类与备注都可以留空。按 Esc 关闭。</p>
+
+    <div class="lf-modal__foot">
+      <button type="button" class="lf-btn lf-btn--ghost" data-qclose>取消</button>
+      <button type="button" class="lf-btn lf-btn--primary" id="quickSave">保存</button>
+    </div>
+  </div>
+</div>
 {% comment %}新用户首次引导弹窗：localStorage 'lifeos-onboarded' 控制只弹一次；仅已登录 app 页（DOM 中存在 .lf-bottom-nav/.lf-sidebar）弹出，login 等静态页自动豁免。{% endcomment %}
 <div id="onboardModal" class="lf-modal" aria-hidden="true">
   <div class="lf-modal__mask" data-close></div>
@@ -155,6 +201,197 @@ if ('serviceWorker' in navigator) {
     if (closers.forEach) closers.forEach(function(el){ el.addEventListener('click', close); });
     document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
   } catch(e){}
+})();
+</script>
+<script>
+// ── 全站快速记账（FAB）────────────────────────────────────────────
+// 只在已登录的应用页激活（DOM 里存在 .lf-bottom-nav / .lf-sidebar）。
+// 分类按需懒加载：面板首次打开时才请求 /api/quick-categories/，
+// 避免给每个页面都加一次数据库查询。
+(function(){
+  var fab = document.getElementById('quickFab');
+  var modal = document.getElementById('quickModal');
+  if(!fab || !modal) return;
+  // 静态页（登录/注册等）没有导航，直接跳过且不显示按钮
+  if(!document.querySelector('.lf-bottom-nav, .lf-sidebar')) return;
+
+  var amountEl = document.getElementById('quickAmount');
+  var noteEl = document.getElementById('quickNote');
+  var catsEl = document.getElementById('quickCats');
+  var errEl = document.getElementById('quickErr');
+  var saveBtn = document.getElementById('quickSave');
+  var typeBtns = modal.querySelectorAll('[data-qtype]');
+
+  var currentType = 'expense';
+  var currentCatId = null;
+  var catsLoadedFor = null;   // 缓存：记录已加载过哪个类型的分类
+  var submitting = false;
+
+  fab.classList.remove('is-hidden');
+
+  function csrf(){
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function showErr(msg){
+    if(!errEl) return;
+    errEl.textContent = msg || '';
+    errEl.classList.toggle('is-shown', !!msg);
+  }
+
+  function open(){
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    showErr('');
+    loadCats(currentType);
+    if(amountEl) setTimeout(function(){ amountEl.focus(); amountEl.select(); }, 60);
+  }
+
+  function close(){
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    if(amountEl) amountEl.value = '';
+    if(noteEl) noteEl.value = '';
+    currentCatId = null;
+    showErr('');
+  }
+
+  function loadCats(type){
+    if(catsLoadedFor === type && catsEl && catsEl.dataset.ready === '1') return;
+    if(!catsEl) return;
+    catsEl.innerHTML = '<span class="lf-text-xs lf-text-faint">分类加载中…</span>';
+    fetch('/api/quick-categories/?type=' + encodeURIComponent(type), {credentials:'same-origin'})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data.ok || !data.categories.length){
+          catsEl.innerHTML = '<span class="lf-text-xs lf-text-faint">暂无可用分类，可先到「分类」页添加</span>';
+          return;
+        }
+        catsEl.innerHTML = '';
+        data.categories.forEach(function(c){
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'lf-quick-cat';
+          b.textContent = c.name;
+          b.setAttribute('data-cid', c.id);
+          b.addEventListener('click', function(){
+            catsEl.querySelectorAll('.lf-quick-cat').forEach(function(x){ x.classList.remove('is-active'); });
+            b.classList.add('is-active');
+            currentCatId = c.id;
+          });
+          catsEl.appendChild(b);
+        });
+        catsEl.dataset.ready = '1';
+        catsLoadedFor = type;
+      })
+      .catch(function(){
+        catsEl.innerHTML = '<span class="lf-text-xs lf-text-faint">分类加载失败，可跳过</span>';
+      });
+  }
+
+  function setType(t){
+    currentType = t;
+    currentCatId = null;
+    if(typeBtns.forEach) typeBtns.forEach(function(b){ b.classList.toggle('is-active', b.getAttribute('data-qtype') === t); });
+    if(catsEl) catsEl.dataset.ready = '0';
+    loadCats(t);
+  }
+
+  function toast(msg){
+    var stack = document.getElementById('lf-toast-stack');
+    if(!stack){
+      stack = document.createElement('div');
+      stack.id = 'lf-toast-stack';
+      stack.className = 'lf-toast-stack';
+      document.body.appendChild(stack);
+    }
+    var t = document.createElement('div');
+    t.className = 'lf-toast lf-toast--success';
+    t.setAttribute('role', 'status');
+    t.textContent = msg;
+    stack.appendChild(t);
+    setTimeout(function(){
+      t.classList.add('is-leaving');
+      setTimeout(function(){ t.remove(); }, 240);
+    }, 2200);
+  }
+
+  function submit(){
+    if(submitting) return;
+    var raw = (amountEl && amountEl.value || '').trim();
+    if(!raw){ showErr('请输入金额'); if(amountEl) amountEl.focus(); return; }
+    // 前端先做一次轻量校验，避免无谓请求；真正的校验以后端为准
+    if(!/^\d+(\.\d{1,2})?$/.test(raw)){ showErr('金额格式不对，最多两位小数'); if(amountEl) amountEl.focus(); return; }
+
+    submitting = true;
+    if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = '保存中…'; }
+    showErr('');
+
+    fetch('/api/quick-expense/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify({
+        amount: raw,
+        type: currentType,
+        category_id: currentCatId,
+        note: noteEl ? noteEl.value.trim() : ''
+      })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {status: r.status, data: d}; }); })
+    .then(function(res){
+      if(!res.data.ok){
+        showErr(res.data.error || '保存失败，请重试');
+        return;
+      }
+      var d = res.data;
+      toast('已记录 ' + d.type_display + ' ¥' + d.amount + (d.note ? ' · ' + d.note : ''));
+      close();
+    })
+    .catch(function(){
+      showErr('网络异常，请重试');
+    })
+    .then(function(){
+      submitting = false;
+      if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = '保存'; }
+    });
+  }
+
+  fab.addEventListener('click', open);
+  if(saveBtn) saveBtn.addEventListener('click', submit);
+  if(typeBtns.forEach) typeBtns.forEach(function(b){ b.addEventListener('click', function(){ setType(b.getAttribute('data-qtype')); }); });
+  if(amountEl) amountEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); submit(); }
+  });
+  if(noteEl) noteEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); submit(); }
+  });
+  var qclosers = modal.querySelectorAll('[data-qclose]');
+  if(qclosers.forEach) qclosers.forEach(function(el){ el.addEventListener('click', close); });
+  function isTyping(e){
+    var tag = (e.target && e.target.tagName || '').toLowerCase();
+    if(tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!(e.target && e.target.isContentEditable);
+  }
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && modal.classList.contains('is-open')){ close(); return; }
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(isTyping(e)) return;
+    if(modal.classList.contains('is-open')) return;
+
+    if(e.key === 'n' || e.key === 'N'){
+      // N：快速记账
+      e.preventDefault();
+      open();
+    } else if(e.key === '/'){
+      // /：打开搜索（已在搜索页则聚焦输入框并全选）
+      var si = document.getElementById('searchInput');
+      if(si){ e.preventDefault(); si.focus(); si.select(); }
+      else { e.preventDefault(); window.location.href = '/search/'; }
+    }
+  });
 })();
 </script>
 <script>

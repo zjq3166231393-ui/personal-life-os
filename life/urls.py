@@ -1,10 +1,17 @@
 from django.urls import path
 
-from . import views, views_crud, views_pwa
+from . import views, views_crud, views_export, views_pwa, views_search
 
 urlpatterns = [
     path("", views.home, name="home"),
     path("appearance/", views.appearance, name="appearance"),
+    # 全局搜索与数据导出（2026-08-29：竞品对标 P0）
+    path("search/", views_search.search, name="search"),
+    path("export/", views_export.export_index, name="export_index"),
+    path("export/<str:kind>/", views_export.export_csv, name="export_csv"),
+    # 快速记账接口（悬浮按钮）
+    path("api/quick-expense/", views.quick_add_expense, name="quick_add_expense"),
+    path("api/quick-categories/", views.quick_categories, name="quick_categories"),
     path("api/parse/", views.parse_entry, name="parse_entry"),
     path("api/parse-status/<str:job_uuid>/", views.parse_status, name="parse_status"),
     path("api/confirm-actions/", views.confirm_actions, name="confirm_actions"),

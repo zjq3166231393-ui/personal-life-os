@@ -1,0 +1,157 @@
+{% extends "_base.html" %}
+{% load life_extras %}
+{% block title %}{% if q %}“{{ q }}” 的搜索结果{% else %}搜索{% endif %} · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">搜索</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  {# ───── 搜索框 ───── #}
+  <section class="lf-card lf-mb-3">
+    <form method="get" action="{% url 'search' %}" class="lf-search-form">
+      <div class="lf-search-form__box">
+        <svg class="lf-search-form__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input
+          type="search" name="q" id="searchInput" class="lf-search-form__input"
+          value="{{ q }}" placeholder="搜索账目、任务、随心记、提醒…"
+          autocomplete="off" autofocus>
+        {% if q %}<button type="button" class="lf-search-form__clear" id="searchClear" aria-label="清空">×</button>{% endif %}
+      </div>
+      <button type="submit" class="lf-btn lf-btn--primary">搜索</button>
+    </form>
+
+    {% if has_query %}
+      <div class="lf-row lf-row--wrap lf-mt-2" style="gap:6px;">
+        <a href="{% url 'search' %}?q={{ q|urlencode }}"
+           class="lf-chip {% if not only %}is-active{% endif %}">全部 {{ total }}</a>
+        {% for g in results %}
+          <a href="{% url 'search' %}?q={{ q|urlencode }}&type={{ g.key }}"
+             class="lf-chip {% if only == g.key %}is-active{% endif %}">{{ g.label }} {{ g.count }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </section>
+
+  {% if not has_query %}
+    <div class="lf-card lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <p class="lf-empty__text">输入关键词开始搜索</p>
+      <p class="lf-text-xs lf-text-faint">
+        支持搜索：账目备注/商家、任务标题/描述、随心记、提醒、倒计时
+      </p>
+    </div>
+
+  {% elif total == 0 %}
+    <div class="lf-card lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <p class="lf-empty__text">没有找到「{{ q }}」相关的内容</p>
+      <p class="lf-text-xs lf-text-faint">换个关键词试试，或检查一下是否有错别字。</p>
+    </div>
+
+  {% else %}
+    {% for g in results %}
+      {% if g.count %}
+        <div class="lf-note-group-header">
+          <span>{{ g.label }}</span>
+          <span>{{ g.count }} 条{% if g.has_more %}+{% endif %}</span>
+        </div>
+
+        {% for item in g.items %}
+          {% if g.key == 'expense' %}
+            <a href="{% url 'expense_detail' item.pk %}" class="lf-result-row">
+              <div class="lf-result-row__main">
+                <div class="lf-result-row__title">{{ item.note|default:item.merchant|default:'未命名'|highlight:q }}</div>
+                <div class="lf-result-row__meta">
+                  <span>{{ item.occurred_at|date:"n月j日 H:i" }}</span>
+                  {% if item.category %}<span>{{ item.category.name }}</span>{% endif %}
+                  <span>{{ item.get_type_display }}</span>
+                </div>
+              </div>
+              <div class="lf-result-row__amount lf-num {% if item.type == 'income' %}is-income{% else %}is-expense{% endif %}">
+                {% if item.type == 'income' %}+{% else %}-{% endif %}{{ item.amount }}
+              </div>
+            </a>
+
+          {% elif g.key == 'task' %}
+            <a href="{% url 'task_detail' item.pk %}" class="lf-result-row">
+              <div class="lf-result-row__main">
+                <div class="lf-result-row__title">{{ item.title|highlight:q }}</div>
+                {% if item.description %}<div class="lf-result-row__desc">{{ item.description|truncatechars:80|highlight:q }}</div>{% endif %}
+                <div class="lf-result-row__meta">
+                  <span class="lf-badge lf-badge--{{ item.status }}">{{ item.get_status_display }}</span>
+                  {% if item.due_at %}<span>截止 {{ item.due_at|date:"n月j日" }}</span>{% endif %}
+                </div>
+              </div>
+            </a>
+
+          {% elif g.key == 'note' %}
+            <a href="{% url 'note_detail' item.pk %}" class="lf-result-row">
+              <div class="lf-result-row__main">
+                <div class="lf-result-row__title">{{ item.title|highlight:q }}</div>
+                {% if item.raw_text %}<div class="lf-result-row__desc">{{ item.raw_text|truncatechars:100|highlight:q }}</div>{% endif %}
+                <div class="lf-result-row__meta">
+                  <span>{{ item.created_at|date:"n月j日 H:i" }}</span>
+                </div>
+              </div>
+            </a>
+
+          {% elif g.key == 'reminder' %}
+            <a href="{% url 'reminder_edit' item.pk %}" class="lf-result-row">
+              <div class="lf-result-row__main">
+                <div class="lf-result-row__title">🔔 {{ item.title|highlight:q }}</div>
+                <div class="lf-result-row__meta">
+                  <span>{{ item.get_reminder_type_display }}</span>
+                  <span>{{ item.event_at|date:"n月j日" }}</span>
+                  <span>{{ item.event_at|lunar_date }}</span>
+                </div>
+              </div>
+            </a>
+
+          {% elif g.key == 'countdown' %}
+            <a href="{% url 'countdown_edit' item.pk %}" class="lf-result-row">
+              <div class="lf-result-row__main">
+                <div class="lf-result-row__title">{{ item.title|highlight:q }}</div>
+                <div class="lf-result-row__meta">
+                  <span>{{ item.target_date|date:"Y年n月j日" }}</span>
+                </div>
+              </div>
+            </a>
+          {% endif %}
+        {% endfor %}
+
+        {% if g.has_more %}
+          <div class="lf-text-xs lf-text-faint lf-mt-2" style="margin-bottom:10px;">
+            仅显示前 {{ limit }} 条，<a href="{% url g.list_url_name %}" class="lf-link">去「{{ g.label }}」列表查看全部</a>
+          </div>
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var clear = document.getElementById('searchClear');
+  var input = document.getElementById('searchInput');
+  if (clear && input) {
+    clear.addEventListener('click', function(){
+      input.value = '';
+      input.focus();
+      clear.remove();
+    });
+  }
+})();
+</script>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
