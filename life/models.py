@@ -543,6 +543,16 @@ class Suggestion(models.Model):
         return f"💡 {self.title}"
 
 
+def _default_parse_job_uuid():
+    """ParseJob.uuid 的默认值工厂（必须是可调用对象）。
+
+    写成 default=uuid.uuid4().hex 会在类定义时求值一次并固化为常量，
+    与 unique=True 冲突（同进程内第二条记录即违反唯一约束），
+    且每次 makemigrations 都会因默认值变化而生成多余的迁移。
+    """
+    return _uuid.uuid4().hex
+
+
 class ParseJob(models.Model):
     """AI 解析异步任务表。
 
@@ -558,7 +568,7 @@ class ParseJob(models.Model):
         ("error", "失败"),
     ]
 
-    uuid = models.CharField(max_length=32, unique=True, db_index=True, default=_uuid.uuid4().hex,
+    uuid = models.CharField(max_length=32, unique=True, db_index=True, default=_default_parse_job_uuid,
                             help_text="对外暴露的任务标识，用于轮询，无业务含义")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="parse_jobs")
     raw_text = models.TextField(help_text="待解析的原始文本")

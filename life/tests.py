@@ -17,6 +17,7 @@ from .models import (
     Expense,
     InstallmentPlan,
     Note,
+    ParseJob,
     ParseResult,
     ProposedAction,
     RecurringExpense,
@@ -1129,6 +1130,31 @@ class DataCheckTests(TestCase):
         out = StringIO()
         call_command("data_check", "--check=deleted", stdout=out)
         self.assertIn("deleted but still confirmed", out.getvalue())
+
+
+class ParseJobUuidTests(TestCase):
+    """ParseJob.uuid 的默认值必须是「每次调用返回不同值」的可调用对象。
+
+    回归：曾写成 default=uuid.uuid4().hex（类定义时立即求值），默认值固化为常量，
+    与 unique=True 冲突——同进程内创建第二条记录即违反唯一约束；
+    且每次 makemigrations 都会因默认值变化而生成多余迁移。
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("pj", password="passPJ")
+
+    def test_tc_job_001_default_uuid_unique_per_instance(self):
+        """TC-JOB-001 两条未显式指定 uuid 的记录必须获得不同值且不报错。"""
+        a = ParseJob.objects.create(user=self.user, raw_text="第一条")
+        b = ParseJob.objects.create(user=self.user, raw_text="第二条")
+        self.assertNotEqual(a.uuid, b.uuid)
+        self.assertEqual(len(a.uuid), 32)
+
+    def test_tc_job_002_default_must_be_callable(self):
+        """TC-JOB-002 字段默认值必须是可调用对象，而不是常量。"""
+        field = ParseJob._meta.get_field("uuid")
+        self.assertTrue(callable(field.default), "uuid 的 default 必须是可调用对象，不能是常量")
 
 
 class AIParseModelTests(TestCase):

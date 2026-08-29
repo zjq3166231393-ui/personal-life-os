@@ -242,11 +242,16 @@ def home_data(user):
     cd_pinned = next((x for x in cd_cards if x["obj"].pinned), None)
 
     # ── 用户配置的「提醒默认时间」（AI 解析未指定时刻时使用）──
-    default_reminder_time = (
-        user.profile.default_reminder_time.strftime("%H:%M")
-        if hasattr(user, "profile") and user.profile.default_reminder_time
-        else "10:00"
-    )
+    # 注意：UserProfile.default_reminder_time 的 default 是字符串 "10:00"，Django 只在
+    # 从数据库读取时才转成 time；内存中刚创建的实例（如 post_save 信号里新建的）仍是 str，
+    # 直接 .strftime() 会抛 AttributeError。因此两种类型都要正确归一化。
+    _remind = getattr(getattr(user, "profile", None), "default_reminder_time", None)
+    if hasattr(_remind, "strftime"):
+        default_reminder_time = _remind.strftime("%H:%M")
+    elif isinstance(_remind, str) and _remind:
+        default_reminder_time = _remind[:5]  # 兼容 "10:00" 与 "10:00:00"
+    else:
+        default_reminder_time = "10:00"
 
     return {
         "today": today, "top_tasks": top_tasks, "due_today": due_today,

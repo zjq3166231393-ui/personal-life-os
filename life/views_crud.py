@@ -1229,7 +1229,9 @@ def dashboard(request):
             if cat_month > 0:
                 three_mo = base.filter(type="expense", category=c, occurred_at__gte=aware_day_start(today - timedelta(days=90))).aggregate(s=Sum("amount"))["s"] or Decimal(0)
                 three_avg = float(three_mo) / 3
-                if three_avg > 0 and cat_month > three_avg * CATEGORY_SPIKE_RATIO:
+                # three_avg/cat_month 为 float（用于比值与百分比展示），而 CATEGORY_SPIKE_RATIO
+                # 是 Decimal 金额类常量，float * Decimal 会抛 TypeError，故显式转 float。
+                if three_avg > 0 and cat_month > three_avg * float(CATEGORY_SPIKE_RATIO):
                     pct = round((cat_month - three_avg) / three_avg * 100)
                     Suggestion.objects.create(user=request.user, title=f"{c.name}支出偏高", evidence=f"本月 ¥{cat_month:.0f}，比近3月月均 ¥{three_avg:.0f} 高 {pct}%", category="spending")
         # Overdue tasks
