@@ -232,7 +232,7 @@ def expense_delete(request, pk):
         expense.is_deleted = True
         expense.deleted_at = timezone.now()
         expense.save()
-        _disp = expense.note or expense.merchant or "未命名"
+        _disp = expense.display_title
         record(request.user, "expense.delete", expense.pk, f"删除支出: {_disp}")
         messages.success(request, f"已删除支出「{_disp}」")
         return redirect("expense_list")
@@ -1068,7 +1068,7 @@ def dashboard(request):
     large_items = []
     threshold = daily_avg * 3 if daily_avg > 0 else Decimal(999999)
     for e in month_qs.filter(type="expense", amount__gte=threshold).order_by("-amount")[:LARGE_ITEM_TOPN]:
-        large_items.append({"note": e.note or e.merchant or "未命名", "amount": e.amount})
+        large_items.append({"note": e.display_title, "amount": e.amount})
     # Exclude large items for a conservative estimate
     excluded = sum(item["amount"] for item in large_items)
     conservative_total = predicted_total - excluded if excluded else predicted_total
@@ -1247,7 +1247,7 @@ def dashboard(request):
     for e in month_qs.filter(type="expense", amount__gte=threshold_large).order_by("-amount")[:LARGE_ITEM_TOPN]:
         life_suggestions.append({
             "icon": "wallet",
-            "title": f"本月大额支出：{e.note or e.merchant or '未命名'}",
+            "title": f"本月大额支出：{e.display_title}",
             "detail": f"¥{e.amount:.0f}，{e.occurred_at.strftime('%m/%d')} {e.category.name if e.category else '未分类'}。占总支出 {round(e.amount / total_expense * 100) if total_expense else 0}%",
             "tone": "warning",
         })

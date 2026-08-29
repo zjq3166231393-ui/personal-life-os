@@ -17,7 +17,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from .models import Category, Expense, Note, Reminder, Task
-from .templatetags.life_extras import highlight
+from .templatetags.life_extras import expense_title, highlight
 
 
 def _mkuser(name):
@@ -94,6 +94,32 @@ class SearchTests(TestCase):
     def test_tc_s009_highlight_empty_query_passthrough(self):
         self.assertEqual(highlight("原文", ""), "原文")
         self.assertEqual(highlight("原文", None), "原文")
+
+    def test_tc_s010_search_type_alias_zhangmu_returns_all_expenses(self):
+        """搜「账目」这种类型别名，应返回自己的所有 Expense，而不是 0 结果。"""
+        Expense.objects.create(user=self.u, amount=Decimal("30.00"), note="",
+                               merchant="", category=_cat(self.u, "交通"),
+                               occurred_at=timezone.now())
+        r = self.client.get("/search/?q=账目")
+        self.assertContains(r, "麻辣烫")
+        self.assertContains(r, "交通")
+        self.assertNotContains(r, "午饭 别人吃的")
+
+    def test_tc_s011_search_category_name_returns_unnamed_expense(self):
+        """没有备注的支出，搜分类名应能被搜到。"""
+        Expense.objects.create(user=self.u, amount=Decimal("20.00"), note="",
+                               merchant="", category=_cat(self.u, "交通"),
+                               occurred_at=timezone.now())
+        r = self.client.get("/search/?q=交通")
+        self.assertContains(r, "交通")
+
+    def test_tc_s012_expense_title_prefers_category(self):
+        """无备注无商家时，expense_title 应返回分类名而非未命名。"""
+        cat = _cat(self.u, "交通")
+        e = Expense.objects.create(user=self.u, amount=Decimal("20.00"), note="",
+                                   merchant="", category=cat,
+                                   occurred_at=timezone.now())
+        self.assertEqual(expense_title(e), "交通")
 
 
 class ExportTests(TestCase):

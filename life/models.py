@@ -72,9 +72,14 @@ class Expense(models.Model):
             models.Index(fields=["user", "is_deleted", "category"]),
         ]
 
+    @property
+    def display_title(self):
+        """给这笔账起个最合适的名字：备注 > 商家 > 分类名 > 未命名。"""
+        return self.note or self.merchant or (self.category.name if self.category else None) or "未命名"
+
     def __str__(self):
         sign = "+" if self.type == "income" else "-"
-        return f"{'收入' if self.type == 'income' else '支出'}：{self.note or self.merchant or '未命名'} {sign}¥{self.amount}"
+        return f"{'收入' if self.type == 'income' else '支出'}：{self.display_title} {sign}¥{self.amount}"
 
 
 class Task(models.Model):

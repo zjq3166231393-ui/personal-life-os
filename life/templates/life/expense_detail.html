@@ -18,7 +18,7 @@
   <section class="lf-card lf-card--padded lf-mb-3">
     <div class="lf-row lf-row--between" style="gap:12px;">
       <div style="min-width:0;">
-        <h1 class="lf-page-header__title lf-truncate" style="font-size:20px;">{{ expense.note|default:expense.merchant|default:'未命名' }}</h1>
+        <h1 class="lf-page-header__title lf-truncate" style="font-size:20px;">{{ expense|expense_title }}</h1>
         <div class="lf-text-xs lf-text-faint lf-num lf-mt-1">{{ expense.occurred_at|date:'Y-m-d H:i' }}</div>
       </div>
       <div class="lf-amount lf-amount--lg {% if expense.type == 'income' %}lf-text-success{% else %}lf-text-1{% endif %}">{% if expense.type == 'income' %}+{% else %}-{% endif %}¥{{ expense.amount }}</div>

@@ -20,6 +20,27 @@ SEARCH_LIMIT_PER_TYPE = 20
 # 搜索入口支持的类型。key 用于模板分组，label 是中文名。
 SEARCH_TYPES = ("expense", "task", "note", "reminder", "countdown")
 
+# 类型别名：用户搜这些词时，返回对应类型的全部记录。
+# 例如搜"账目"或"支出"都能把所有 Expense 列出来，避免用户想"看看账目"时 0 结果。
+TYPE_ALIASES = {
+    "expense": ("账目", "支出", "收入", "expense", "income"),
+    "task": ("任务", "待办", "todo", "task"),
+    "note": ("随心记", "笔记", "note", "notes"),
+    "reminder": ("提醒", "reminders", "提醒事项"),
+    "countdown": ("倒计时", "纪念日", "countdown", "countdowns"),
+}
+
+
+def _alias_for_key(q):
+    """如果 q 是某个类型的别名，返回该类型 key，否则返回 None。"""
+    q = (q or "").lower().strip()
+    if not q:
+        return None
+    for key, aliases in TYPE_ALIASES.items():
+        if q in aliases:
+            return key
+    return None
+
 
 def _build_cond(q, fields):
     cond = Q()
@@ -49,44 +70,68 @@ def search(request):
     user = request.user
     groups = []
 
+    # 当 q 是某个类型的中文别名时，对该类型返回全部记录（其余类型仍做文本匹配）。
+    # 例如搜"账目"会列出所有 Expense；搜"水电费"则只匹配文本命中的那几条。
+    alias_for = _alias_for_key(q)
+
     if not only or only == "expense":
-        qs = Expense.objects.filter(
-            user=user, is_deleted=False
-        ).filter(
-            _build_cond(q, ["note", "merchant", "raw_text", "category__name"])
-        ).select_related("category")[:SEARCH_LIMIT_PER_TYPE + 1]
+        if alias_for == "expense":
+            qs = Expense.objects.filter(user=user, is_deleted=False).order_by("-occurred_at")
+        else:
+            qs = Expense.objects.filter(
+                user=user, is_deleted=False
+            ).filter(
+                _build_cond(q, ["note", "merchant", "raw_text", "category__name"])
+            )
+        qs = qs.select_related("category")[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("expense", "账目", "expense_list", qs))
 
     if not only or only == "task":
-        qs = Task.objects.filter(
-            user=user, is_deleted=False
-        ).filter(
-            _build_cond(q, ["title", "description", "raw_text"])
-        )[:SEARCH_LIMIT_PER_TYPE + 1]
+        if alias_for == "task":
+            qs = Task.objects.filter(user=user, is_deleted=False).order_by("-created_at")
+        else:
+            qs = Task.objects.filter(
+                user=user, is_deleted=False
+            ).filter(
+                _build_cond(q, ["title", "description", "raw_text"])
+            )
+        qs = qs[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("task", "任务", "task_list", qs))
 
     if not only or only == "note":
-        qs = Note.objects.filter(
-            user=user, is_deleted=False
-        ).filter(
-            _build_cond(q, ["title", "raw_text"])
-        )[:SEARCH_LIMIT_PER_TYPE + 1]
+        if alias_for == "note":
+            qs = Note.objects.filter(user=user, is_deleted=False).order_by("-created_at")
+        else:
+            qs = Note.objects.filter(
+                user=user, is_deleted=False
+            ).filter(
+                _build_cond(q, ["title", "raw_text"])
+            )
+        qs = qs[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("note", "随心记", "note_list", qs))
 
     if not only or only == "reminder":
-        qs = Reminder.objects.filter(
-            user=user
-        ).filter(
-            _build_cond(q, ["title"])
-        )[:SEARCH_LIMIT_PER_TYPE + 1]
+        if alias_for == "reminder":
+            qs = Reminder.objects.filter(user=user).order_by("remind_at")
+        else:
+            qs = Reminder.objects.filter(
+                user=user
+            ).filter(
+                _build_cond(q, ["title"])
+            )
+        qs = qs[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("reminder", "提醒", "reminder_list", qs))
 
     if not only or only == "countdown":
-        qs = Countdown.objects.filter(
-            user=user
-        ).filter(
-            _build_cond(q, ["title", "note"])
-        )[:SEARCH_LIMIT_PER_TYPE + 1]
+        if alias_for == "countdown":
+            qs = Countdown.objects.filter(user=user).order_by("target_date")
+        else:
+            qs = Countdown.objects.filter(
+                user=user
+            ).filter(
+                _build_cond(q, ["title", "note"])
+            )
+        qs = qs[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("countdown", "倒计时", "countdown_list", qs))
 
     ctx["results"] = groups

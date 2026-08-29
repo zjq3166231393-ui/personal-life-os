@@ -371,7 +371,7 @@ def quick_add_expense(request):
         status="confirmed",
         source="manual",
     )
-    record(request.user, "expense.create", expense.pk, f"快速记账: {note or '未命名'} ¥{amount}")
+    record(request.user, "expense.create", expense.pk, f"快速记账: {expense.display_title} ¥{amount}")
 
     return JsonResponse({
         "ok": True,

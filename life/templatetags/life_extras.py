@@ -29,6 +29,31 @@ def lunar_date(value):
 
 
 @register.filter
+def expense_title(e):
+    """返回一条记录最合适的显示名称。
+
+    对 Expense：备注 > 商家 > 分类名 > 未命名。
+    对 Task/Note/Reminder/Countdown：优先 title，没有则 fallback。
+    用于账目列表、搜索结果、删除确认等所有需要「给这条记录起个名字」的地方。
+    """
+    if not e:
+        return "未命名"
+    # Expense
+    if getattr(e, "note", None):
+        return e.note
+    if getattr(e, "merchant", None):
+        return e.merchant
+    if getattr(e, "category", None) and e.category:
+        return e.category.name
+    # 其余模型（Task/Note/Reminder/Countdown）
+    if getattr(e, "title", None):
+        return e.title
+    if getattr(e, "name", None):
+        return e.name
+    return "未命名"
+
+
+@register.filter
 def highlight(value, query):
     """把文本中命中搜索词的片段用 <mark> 包起来。
 

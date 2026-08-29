@@ -67,7 +67,7 @@
           {% if g.key == 'expense' %}
             <a href="{% url 'expense_detail' item.pk %}" class="lf-result-row">
               <div class="lf-result-row__main">
-                <div class="lf-result-row__title">{{ item.note|default:item.merchant|default:'未命名'|highlight:q }}</div>
+                <div class="lf-result-row__title">{{ item|expense_title|highlight:q }}</div>
                 <div class="lf-result-row__meta">
                   <span>{{ item.occurred_at|date:"n月j日 H:i" }}</span>
                   {% if item.category %}<span>{{ item.category.name }}</span>{% endif %}

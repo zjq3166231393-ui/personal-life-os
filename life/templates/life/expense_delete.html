@@ -13,7 +13,7 @@
   </header>
 
   <section class="lf-card lf-card--padded">
-    <p class="lf-text-sm lf-mb-1">确定要删除「<strong>{{ expense.note|default:expense.merchant|default:'未命名' }}</strong>」（¥{{ expense.amount }}）吗？</p>
+    <p class="lf-text-sm lf-mb-1">确定要删除「<strong>{{ expense|expense_title }}</strong>」（¥{{ expense.amount }}）吗？</p>
     <p class="lf-text-xs lf-text-faint lf-mb-4">数据会保留在数据库中，可追溯。</p>
     <form method="post" class="lf-row" style="gap:8px;">{% csrf_token %}
       <button type="submit" class="lf-btn lf-btn--danger">确认删除</button>

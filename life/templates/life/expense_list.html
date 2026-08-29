@@ -204,7 +204,7 @@
           <span class="lf-badge {% if e.type == 'income' %}lf-badge--success{% elif e.type == 'transfer' %}lf-badge--info{% else %}lf-badge--outline{% endif %}">{{ e.get_type_display }}</span>
           {% if e.category %}<span class="lf-badge lf-badge--outline">{{ e.category.icon }} {{ e.category.name }}</span>{% endif %}
         </div>
-        <a href="{% url 'expense_detail' e.pk %}" class="lf-text-1" style="display:block;margin-top:4px;text-decoration:none;">{{ e.note|default:e.merchant|default:'未命名' }}</a>
+        <a href="{% url 'expense_detail' e.pk %}" class="lf-text-1" style="display:block;margin-top:4px;text-decoration:none;">{{ e|expense_title }}</a>
         <div class="lf-text-xs lf-text-faint lf-mt-1 lf-num">{{ e.occurred_at|date:"m/d H:i" }}</div>
       </div>
       <div class="lf-row" style="gap:8px;">
