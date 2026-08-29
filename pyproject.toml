@@ -1,0 +1,42 @@
+# Ruff 配置（固化，避免换机器/换版本后 lint 结果漂移，也让 CI 可复现）
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+# 迁移文件由 Django 生成、测试文件允许宽松写法，均不参与 lint
+exclude = [
+    ".venv",
+    "staticfiles",
+    "*/migrations/*",
+    "*/tests*.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E4",   # pycodestyle: 导入相关
+    "E7",   # pycodestyle: 语法/缩进
+    "E9",   # pycodestyle: 运行时错误（语法错误等）
+    "F",    # pyflakes: 未用 import/变量、未定义名
+    "I",    # isort: import 排序
+    "S110", # bandit: try-except-pass 静默吞异常
+    "DTZ",  # 时区：禁止 date.today()/naive datetime（本项目 TIME_ZONE=Asia/Shanghai）
+]
+
+ignore = [
+    # 本项目刻意按「功能区块就近 import」与「函数内延迟 import」组织代码
+    # （accounts/views.py、life/views_crud.py），强行上提会破坏可读性并可能触发循环导入。
+    "E402",
+    # 单行多语句（如 `if x: y = 1`）为既有风格，属可读性偏好而非正确性缺陷。
+    "E701",
+    "E702",
+    # 本项目的 strptime 均已配合 timezone.make_aware() 或 .date() 使用，
+    # ruff 无法识别 make_aware(strptime(...)) 这一正确范式，故按误报忽略。
+    # 真正要守的时区规则是 DTZ011（date.today）与 DTZ001（naive datetime 构造）。
+    "DTZ007",
+    # Django 模型类级属性（Meta.ordering、UniqueConstraint、choices 列表、default=list 等）
+    # 是可变字面量，ruff 误报为「可变类属性默认值」。这是 Django 的标准写法，应忽略。
+    "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 管理命令与一次性脚本允许 blind except（失败即中止，无需精细处理）
+"life/management/commands/*.py" = ["S110"]

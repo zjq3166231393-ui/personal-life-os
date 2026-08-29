@@ -6,8 +6,11 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "unsafe-development-key-change-before-deploy")
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(50)
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if os.getenv("DJANGO_ALLOWED_HOSTS") else []
 
 INSTALLED_APPS = [
@@ -19,15 +22,12 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "life",
     "accounts",
-    "finance",
-    "planning",
-    "notes",
-    "capture",
     "common",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -35,6 +35,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "life.middleware.LoginRateLimitMiddleware",
+    "life.middleware.ApiRateLimitMiddleware",
+    "life.middleware.NoBrowserCacheMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -51,17 +53,15 @@ TEMPLATES = [{
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-if os.getenv("MYSQL_DATABASE") and os.getenv("MYSQL_USER"):
-    DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": os.getenv("MYSQL_DATABASE"), "USER": os.getenv("MYSQL_USER"), "PASSWORD": os.getenv("MYSQL_PASSWORD"), "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"), "PORT": os.getenv("MYSQL_PORT", "3306"), "OPTIONS": {"charset": "utf8mb4"}}}
-else:
-    DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
-
 AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = "zh-hans"
 TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
+# 头像等用户上传文件（2026-08-24）
+MEDIA_URL = "media/"
+MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "/accounts/login/"
@@ -69,21 +69,63 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 DEFAULT_FROM_EMAIL = "lifeos@localhost"
 
-# Session: auto-expire after 2 hours idle, 24 hours max
-SESSION_COOKIE_AGE = 7200  # 2 hours
+# Session: 持久化登录，避免 iOS Safari / PWA 关闭后会话丢失导致首页打不开。
+# 关闭浏览器不再登出；最长 14 天无活动才过期（SESSION_SAVE_EVERY_REQUEST 每次请求刷新过期时间）。
+SESSION_COOKIE_AGE = 1209600  # 14 天
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
-# Cache for rate limiting (use local memory cache in dev, Redis in production)
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "lifeos",
+# Cache for rate limiting.
+# In production set REDIS_URL (e.g. redis://127.0.0.1:6379/1) to share the
+# cache across workers; otherwise fall back to process-local memory (fine for
+# single-process dev servers, but each worker keeps its own counters).
+REDIS_URL = os.getenv("REDIS_URL")
+if REDIS_URL:
+    # Django's RedisCache imports redis-py lazily, so a missing package would
+    # only surface as a runtime ImportError on the first cache hit. Degrade to
+    # LocMem with a loud warning instead of taking the whole app down.
+    try:
+        import redis  # noqa: F401
+    except ImportError:
+        import logging
+        logging.getLogger("django").warning(
+            "REDIS_URL is set but the 'redis' package is missing; rate limiting "
+            "falls back to LocMemCache (NOT shared across workers). Run: pip install redis"
+        )
+        REDIS_URL = None
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "lifeos",
+        }
+    }
 
 # ── Production security ──────────────────────────────────────────
 ENVIRONMENT = os.getenv("DJANGO_ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production":
+    if not os.getenv("DJANGO_SECRET_KEY"):
+        raise RuntimeError("DJANGO_SECRET_KEY must be set in .env for production mode")
+    # 生产环境 fail-fast：禁止把开发用 .env（DEBUG=true / ALLOWED_HOSTS=*）直接上线，
+    # 否则会泄露调试栈、允许任意 Host 头（Web 缓存投毒 / 密码重置投毒）。
+    if DEBUG:
+        raise RuntimeError("DJANGO_DEBUG 必须为 false（DJANGO_ENVIRONMENT=production 时）。")
+    if not ALLOWED_HOSTS or "*" in ALLOWED_HOSTS:
+        raise RuntimeError(
+            "生产环境 DJANGO_ALLOWED_HOSTS 必须设为具体域名，禁止使用 '*'。"
+        )
+
+# Trust Nginx X-Forwarded-Proto. Safe to always set: the actual redirect
+# is controlled by SECURE_SSL_REDIRECT inside the production block below.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 if ENVIRONMENT == "production" or not DEBUG:
     # HTTPS / SSL
@@ -113,8 +155,15 @@ if ENVIRONMENT == "production" or not DEBUG:
     ]
 
 # ── Production DB ───────────────────────────────────────────────
-if os.getenv("MYSQL_DATABASE") and os.getenv("MYSQL_USER"):
-    DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": os.getenv("MYSQL_DATABASE"), "USER": os.getenv("MYSQL_USER"), "PASSWORD": os.getenv("MYSQL_PASSWORD"), "HOST": os.getenv("MYSQL_HOST", "127.0.0.1"), "PORT": os.getenv("MYSQL_PORT", "3306"), "OPTIONS": {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"}}}
+# 同时识别自管变量（MYSQL_*）与 Railway MySQL 插件注入变量（MYSQL* 无下划线），
+# 挂上插件即自动切换 MySQL，无需手写映射。
+_db_name = os.getenv("MYSQL_DATABASE") or os.getenv("MYSQLDATABASE")
+_db_user = os.getenv("MYSQL_USER") or os.getenv("MYSQLUSER")
+_db_pass = os.getenv("MYSQL_PASSWORD") or os.getenv("MYSQLPASSWORD")
+_db_host = os.getenv("MYSQL_HOST") or os.getenv("MYSQLHOST", "127.0.0.1")
+_db_port = os.getenv("MYSQL_PORT") or os.getenv("MYSQLPORT", "3306")
+if _db_name and _db_user:
+    DATABASES = {"default": {"ENGINE": "django.db.backends.mysql", "NAME": _db_name, "USER": _db_user, "PASSWORD": _db_pass, "HOST": _db_host, "PORT": _db_port, "OPTIONS": {"charset": "utf8mb4", "init_command": "SET sql_mode='STRICT_TRANS_TABLES'"}}}
 else:
     DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 
@@ -161,3 +210,10 @@ LOGGING = {
 # ── Static files ────────────────────────────────────────────────
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+# WhiteNoise 直接由 Django 服务压缩静态文件（生产无 nginx 时必需）。
+# 用 CompressedStaticFilesStorage（不做文件名哈希），避免 Manifest 在测试渲染期
+# 因找不到 manifest entry 而抛错；模板已用 ?v=N 查询串做缓存失效。
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}

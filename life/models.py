@@ -1,38 +1,7 @@
+import uuid as _uuid
+
 from django.conf import settings
 from django.db import models
-
-
-class Entry(models.Model):
-    class Kind(models.TextChoices):
-        EXPENSE = "expense", "支出"
-        TASK = "task", "待办"
-        NOTE = "note", "随心记"
-
-    class Category(models.TextChoices):
-        FOOD = "餐饮", "餐饮"
-        TRANSPORT = "交通", "交通"
-        HOUSING = "住房", "住房"
-        UTILITIES = "生活缴费", "生活缴费"
-        SHOPPING = "购物", "购物"
-        OTHER = "其他", "其他"
-
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entries", null=True, blank=True)
-    kind = models.CharField(max_length=20, choices=Kind.choices)
-    title = models.CharField(max_length=200)
-    raw_text = models.TextField(blank=True)
-    category = models.CharField(max_length=20, choices=Category.choices, blank=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    occurred_on = models.DateField(null=True, blank=True)
-    due_at = models.DateTimeField(null=True, blank=True)
-    priority = models.PositiveSmallIntegerField(default=2, help_text="1 高，2 中，3 低")
-    completed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"{self.get_kind_display()}：{self.title}"
 
 
 class Category(models.Model):
@@ -94,6 +63,14 @@ class Expense(models.Model):
 
     class Meta:
         ordering = ["-occurred_at", "-created_at"]
+        indexes = [
+            # 列表/看板高频：filter(user, is_deleted=False, occurred_at__range)
+            models.Index(fields=["user", "is_deleted", "occurred_at"]),
+            # 类型/状态筛选 + 时间排序
+            models.Index(fields=["user", "is_deleted", "type", "status"]),
+            # 按分类聚合（预算/分析页 values("category").annotate(Sum)）
+            models.Index(fields=["user", "is_deleted", "category"]),
+        ]
 
     def __str__(self):
         sign = "+" if self.type == "income" else "-"
@@ -113,6 +90,7 @@ class Task(models.Model):
         TEXT = "text", "文本"
         MANUAL = "manual", "手动"
         AI = "ai", "AI"
+        RULE = "rule", "规则"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tasks")
     title = models.CharField(max_length=200)
@@ -134,6 +112,11 @@ class Task(models.Model):
 
     class Meta:
         ordering = ["status", "-priority", "due_at"]
+        indexes = [
+            # 今日/本周/逾期任务：filter(user, is_deleted=False, status__in=[...], due_at__date...)
+            models.Index(fields=["user", "is_deleted", "due_at"]),
+            models.Index(fields=["user", "is_deleted", "status"]),
+        ]
 
     def __str__(self):
         return f"[{self.get_status_display()}] {self.title}"
@@ -180,6 +163,10 @@ class Note(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_deleted", "created_at"]),
+            models.Index(fields=["user", "is_deleted", "occurred_on"]),
+        ]
 
     def __str__(self):
         return f"随心记：{self.title}"
@@ -199,6 +186,11 @@ class Budget(models.Model):
         ordering = ["-month", "category"]
         constraints = [
             models.UniqueConstraint(fields=["user", "category", "month"], name="unique_budget_per_user_category_month"),
+        ]
+        indexes = [
+            # 预算/分析页按月拉取：filter(user, month...) 及按分类聚合
+            models.Index(fields=["user", "month"]),
+            models.Index(fields=["user", "category"]),
         ]
 
     def __str__(self):
@@ -230,6 +222,10 @@ class RecurringExpense(models.Model):
 
     class Meta:
         ordering = ["is_active", "due_day"]
+        indexes = [
+            # scan_reminders / 固定支出列表：filter(user, is_active=True/False)
+            models.Index(fields=["user", "is_active"]),
+        ]
 
     def __str__(self):
         freq = dict(self.Frequency.choices).get(self.frequency, self.frequency)
@@ -259,6 +255,9 @@ class InstallmentPlan(models.Model):
 
     class Meta:
         ordering = ["-status", "next_due_date"]
+        indexes = [
+            models.Index(fields=["user", "status"]),
+        ]
 
     def remaining_amount(self):
         return self.total_amount - (self.installment_amount * self.paid_periods)
@@ -300,9 +299,122 @@ class Reminder(models.Model):
 
     class Meta:
         ordering = ["remind_at"]
+        indexes = [
+            # 首页/扫描提醒高频：filter(user, is_enabled=True, remind_at__range)
+            models.Index(fields=["user", "is_enabled", "remind_at"]),
+            models.Index(fields=["user", "is_enabled", "event_at"]),
+        ]
 
     def __str__(self):
         return f"🔔 {self.title} ({self.get_reminder_type_display()})"
+
+
+class Countdown(models.Model):
+    """倒计时 / 纪念日 — iOS Day Matters 风格模块。
+
+    关键差异（vs Reminder）：
+    - 用户视角：「生日还有 86 天」「考研还有 213 天」——主要是 **距离** 时间
+    - 可选自动同步到 Reminder（提前 N 天在首页高亮）
+    - 隐私：默认每个用户独立，没参与日历通用事件共享
+    """
+
+    class Direction(models.TextChoices):
+        DOWN = "down", "倒计时（向目标日期倒数）"
+        UP = "up", "纪念日（从过去日期数已经多少天）"
+
+    class Recurrence(models.TextChoices):
+        NONE = "none", "不重复"
+        YEARLY = "yearly", "每年"
+        MONTHLY = "monthly", "每月"
+        WEEKLY = "weekly", "每周"
+        DAILY = "daily", "每天"
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="countdowns")
+    title = models.CharField(max_length=80)
+    target_date = models.DateField(help_text="目标日期")
+    direction = models.CharField(max_length=8, choices=Direction.choices, default=Direction.DOWN)
+    recurrence = models.CharField(max_length=10, choices=Recurrence.choices, default=Recurrence.NONE)
+
+    # 显示 / 个性化
+    emoji = models.CharField(max_length=8, blank=True, default="", help_text="1-4 chars 可含 emoji")
+    color = models.CharField(max_length=16, blank=True, default="", help_text="Hex color e.g. #5b8def")
+    note = models.TextField(blank=True, max_length=500)
+    show_on_home = models.BooleanField(default=True, help_text="是否在首页小板块显示")
+
+    # 联动日历提醒（可选）
+    sync_to_reminder = models.BooleanField(default=False, help_text="同步为日历提醒，提前 N 天提醒")
+    reminder = models.OneToOneField(
+        "Reminder", on_delete=models.SET_NULL, null=True, blank=True, related_name="countdown",
+        help_text="已同步的日历提醒（删除 Countdown 时不会级联删除 Reminder）",
+    )
+
+    pinned = models.BooleanField(default=False, help_text="首页置顶")
+    is_active = models.BooleanField(default=True, help_text="软删除开关")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["pinned", "-created_at"]
+        indexes = [
+            models.Index(fields=["user", "is_active", "target_date"]),
+        ]
+
+    def __str__(self):
+        arrow = "⏳" if self.direction == self.Direction.DOWN else "🎉"
+        return f"{arrow} {self.title} → {self.target_date.isoformat()}"
+
+    # ── 展示 helper ──────────────────────────────────────────────────
+    def next_occurrence(self, today=None):
+        """Return the next / current occurrence date based on recurrence.
+
+        For DOWN direction + YEARLY recurrence, if today is past target_date,
+        roll forward to next year (so the countdown never shows negative days).
+        """
+        from datetime import timedelta
+        today = today or timezone_now_localdate()
+        d = self.target_date
+        if self.recurrence == self.Recurrence.NONE:
+            return d
+        if self.recurrence == self.Recurrence.YEARLY:
+            # jump forward year-by-year until >= today
+            try:
+                while d < today:
+                    d = d.replace(year=d.year + 1)
+            except ValueError:  # 2/29 in non-leap year
+                d = d.replace(year=d.year + 1, day=28)
+            return d
+        if self.recurrence == self.Recurrence.MONTHLY:
+            while d < today:
+                y, m = (d.year, d.month + 1) if d.month < 12 else (d.year + 1, 1)
+                try:
+                    d = d.replace(year=y, month=m)
+                except ValueError:
+                    d = d.replace(year=y, month=m, day=28)
+            return d
+        if self.recurrence == self.Recurrence.WEEKLY:
+            while d < today:
+                d = d + timedelta(days=7)
+            return d
+        if self.recurrence == self.Recurrence.DAILY:
+            # for daily, target_date is just the start day; next = today
+            return today
+        return d
+
+    def days_diff(self, today=None):
+        """Return signed day count (negative = past)."""
+        today = today or timezone_now_localdate()
+        target = self.next_occurrence(today) if self.direction == self.Direction.DOWN else self.target_date
+        return (target - today).days
+
+    @property
+    def accent_color(self):
+        return self.color or "#5b8def"  # default brand blue
+
+
+def timezone_now_localdate():
+    """Small helper — avoid importing timezone at module load time."""
+    from django.utils import timezone
+    return timezone.localdate()
 
 
 # ── AI Conversation models ──────────────────────────────────────────
@@ -333,6 +445,9 @@ class ConversationLog(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+        ]
 
     def __str__(self):
         snippet = self.raw_text[:60] + "…" if len(self.raw_text) > 60 else self.raw_text
@@ -363,6 +478,8 @@ class ProposedAction(models.Model):
         CREATE_TASK = "create_task", "新建任务"
         CREATE_REMINDER = "create_reminder", "新建提醒"
         CREATE_NOTE = "create_note", "新建记事"
+        CREATE_RECURRING_EXPENSE = "create_recurring_expense", "新建固定账单"
+        CREATE_DAILY_REMINDER = "create_daily_reminder", "新建每日提醒"
 
     parse_result = models.ForeignKey(ParseResult, on_delete=models.CASCADE, related_name="proposed_actions")
     action_type = models.CharField(max_length=30, choices=ActionType.choices)
@@ -401,6 +518,9 @@ class Review(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["user", "period", "period_start"], name="unique_review_per_user_period"),
         ]
+        indexes = [
+            models.Index(fields=["user", "period_start"]),
+        ]
 
     def __str__(self):
         return f"{self.get_period_display()}复盘 {self.period_start}"
@@ -421,3 +541,46 @@ class Suggestion(models.Model):
 
     def __str__(self):
         return f"💡 {self.title}"
+
+
+def _default_parse_job_uuid():
+    """ParseJob.uuid 的默认值工厂（必须是可调用对象）。
+
+    写成 default=uuid.uuid4().hex 会在类定义时求值一次并固化为常量，
+    与 unique=True 冲突（同进程内第二条记录即违反唯一约束），
+    且每次 makemigrations 都会因默认值变化而生成多余的迁移。
+    """
+    return _uuid.uuid4().hex
+
+
+class ParseJob(models.Model):
+    """AI 解析异步任务表。
+
+    解析文本时，规则解析同步返回；需要 AI 时改为后台线程执行并写入本表，
+    前端通过 ``/api/parse-status/<uuid>/`` 轮询结果，避免 AI 调用（最长 ~30s）
+    阻塞 Web worker。仅单用户量级的本地辅助表，不做复杂约束。
+    """
+
+    STATUS = [
+        ("pending", "等待中"),
+        ("running", "解析中"),
+        ("done", "已完成"),
+        ("error", "失败"),
+    ]
+
+    uuid = models.CharField(max_length=32, unique=True, db_index=True, default=_default_parse_job_uuid,
+                            help_text="对外暴露的任务标识，用于轮询，无业务含义")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="parse_jobs")
+    raw_text = models.TextField(help_text="待解析的原始文本")
+    status = models.CharField(max_length=10, choices=STATUS, default="pending")
+    result = models.JSONField(null=True, blank=True, help_text="解析结果（与 route_parse 返回结构一致）")
+    error = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "status", "-created_at"], name="parsejob_user_status_idx")]
+
+    def __str__(self):
+        return f"ParseJob[{self.uuid}] {self.status}"

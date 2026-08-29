@@ -1,0 +1,182 @@
+{% load static %}<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}Personal Life OS{% endblock %}</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2b56d8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Life OS">
+<link rel="apple-touch-icon" href="/pwa-icon/192/">
+{% comment %}
+字体走系统栈（PingFang SC / system-ui / Noto Sans SC fallback），不依赖 Google Fonts CDN：
+离线/PWA 友好，外网不可达时不阻塞渲染，也避免隐私泄露。见 static/css/lifeos.css 的 --font-sans。
+{% endcomment %}
+{# 主题防闪烁：在 CSS 加载前就定好 data-theme / data-accent，避免白屏闪烁 #}
+<script>
+(function(){
+  var root = document.documentElement;
+  var THEME_KEY = 'lifeos-theme', ACCENT_KEY = 'lifeos-accent';
+  var ACCENT_HEX = { blue:'#2b56d8', teal:'#0d9488', violet:'#7c3aed', rose:'#e11d48', amber:'#d97706', green:'#16a34a' };
+  function resolveTheme(pref){
+    if(pref === 'auto' || !pref){ return (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; }
+    return pref === 'dark' ? 'dark' : 'light';
+  }
+  function applyTheme(pref){
+    var t = resolveTheme(pref);
+    root.setAttribute('data-theme', t);
+    var meta = document.querySelector('meta[name=theme-color]');
+    if(meta){ meta.setAttribute('content', t === 'dark' ? '#0e131a' : (ACCENT_HEX[localStorage.getItem(ACCENT_KEY)||'blue'] || '#2b56d8')); }
+  }
+  function applyAccent(name){
+    if(name) root.setAttribute('data-accent', name); else root.removeAttribute('data-accent');
+    var meta = document.querySelector('meta[name=theme-color]');
+    if(meta && (localStorage.getItem(THEME_KEY)||'auto') !== 'dark'){ meta.setAttribute('content', ACCENT_HEX[name] || '#2b56d8'); }
+  }
+  var themePref = localStorage.getItem(THEME_KEY) || 'auto';
+  var accent = localStorage.getItem(ACCENT_KEY) || 'blue';
+  applyAccent(accent);
+  applyTheme(themePref);
+  if(window.matchMedia){
+    var mq = matchMedia('(prefers-color-scheme: dark)');
+    var onMq = function(){ if((localStorage.getItem(THEME_KEY)||'auto') === 'auto') applyTheme('auto'); };
+    if(mq.addEventListener) mq.addEventListener('change', onMq); else if(mq.addListener) mq.addListener(onMq);
+  }
+  window.__lifeos = {
+    themePref: function(){ return localStorage.getItem(THEME_KEY) || 'auto'; },
+    setTheme: function(p){ localStorage.setItem(THEME_KEY, p); applyTheme(p); },
+    accent: function(){ return localStorage.getItem(ACCENT_KEY) || 'blue'; },
+    setAccent: function(n){ localStorage.setItem(ACCENT_KEY, n); applyAccent(n); }
+  };
+})();
+</script>
+<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=7">
+<style>
+/* 密码可见性切换按钮（眼睛图标） */
+.lf-field--pw{position:relative}
+.lf-input--pw{padding-right:42px}
+.lf-pw-toggle{position:absolute;top:50%;right:10px;transform:translateY(-50%);width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--text-faint,#9aa0aa);cursor:pointer;padding:0;border-radius:8px}
+.lf-pw-toggle:hover{color:var(--text-2,#4b5563);background:rgba(127,127,127,.12)}
+.lf-pw-toggle svg{width:20px;height:20px}
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% if messages %}
+<div id="lf-toast-stack" class="lf-toast-stack">
+  {% for m in messages %}
+    <div class="lf-toast lf-toast--{{ m.tags|default:'info' }}" role="status" data-auto-dismiss="true">{{ m }}</div>
+  {% endfor %}
+</div>
+<script>
+(function(){
+  var toasts=document.querySelectorAll('.lf-toast[data-auto-dismiss="true"]');
+  toasts.forEach(function(t){
+    setTimeout(function(){
+      t.classList.add('is-leaving');
+      setTimeout(function(){t.remove()},240);
+    },2600);
+  });
+})();
+</script>
+{% endif %}
+{% block body %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+{% comment %}新用户首次引导弹窗：localStorage 'lifeos-onboarded' 控制只弹一次；仅已登录 app 页（DOM 中存在 .lf-bottom-nav/.lf-sidebar）弹出，login 等静态页自动豁免。{% endcomment %}
+<div id="onboardModal" class="lf-modal" aria-hidden="true">
+  <div class="lf-modal__mask" data-close></div>
+  <div class="lf-modal__panel" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+    <div class="lf-modal__head">
+      <h3 id="obTitle" class="lf-modal__title">👋 欢迎使用 Personal Life OS</h3>
+      <button type="button" class="lf-modal__x" data-close aria-label="关闭">×</button>
+    </div>
+    <p class="lf-modal__sub">这是你的「个人生活管家」——记账、待办、提醒、打卡、随心记、倒计时，都在一个首页里搞定。在首页输入框用一句话说「午饭 18 元」「提醒我明天交话费」，AI 会自动帮你记好。</p>
+    <div class="lf-modal__foot">
+      <button type="button" class="lf-btn lf-btn--primary" id="obStart">开始使用</button>
+    </div>
+  </div>
+</div>
+{% block scripts %}{% endblock %}
+<script src="{% static 'js/i18n.js' %}?v=2" defer></script>
+<script>
+// Smart back: any link with [data-back="history"] uses the browser's history
+// stack when the previous page belongs to this app (same-origin), and falls
+// back to the link's href otherwise. This is how Notion / Apple Notes /
+// Bear all behave: edit pages always bring you back where you came from.
+(function(){
+  document.addEventListener('click', function(ev){
+    var a = ev.target.closest && ev.target.closest('a[data-back="history"]');
+    if(!a) return;
+    var href = a.getAttribute('href');
+    if(!href || href === '#') return;
+    try {
+      // Came from inside this app? Go back. Otherwise follow the link target.
+      var ref = document.referrer;
+      if(ref && ref.indexOf(window.location.origin) === 0){
+        ev.preventDefault();
+        if(window.history.length > 1){ window.history.back(); }
+        else { window.location.href = href; }
+      }
+    } catch(e) { /* ignore — let the link do its default thing */ }
+  });
+})();
+</script>
+<script>
+// Register the PWA service worker (network-first: always fresh HTML, offline-capable shell).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('/sw.js').catch(function (e) { console.warn('SW register failed:', e); });
+  });
+}
+</script>
+<script>
+// First-visit onboarding: show once (localStorage 'lifeos-onboarded'), only on
+// authenticated app pages (those that render .lf-bottom-nav / .lf-sidebar).
+// Login & static pages are auto-skipped because they have no such nav in the DOM.
+(function(){
+  try {
+    if (localStorage.getItem('lifeos-onboarded')) return;
+    var nav = document.querySelector('.lf-bottom-nav, .lf-sidebar');
+    if (!nav) return;
+    var modal = document.getElementById('onboardModal');
+    if (!modal) return;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    function close(){
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden', 'true');
+      try { localStorage.setItem('lifeos-onboarded', '1'); } catch(e){}
+    }
+    var start = document.getElementById('obStart');
+    if (start) start.addEventListener('click', close);
+    var closers = modal.querySelectorAll('[data-close]');
+    if (closers.forEach) closers.forEach(function(el){ el.addEventListener('click', close); });
+    document.addEventListener('keydown', function(e){ if (e.key === 'Escape') close(); });
+  } catch(e){}
+})();
+</script>
+<script>
+// 密码可见性切换：点击眼睛图标在 password / text 之间切换，便于核对输入
+(function(){
+  var EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYEOFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  function bind(btn){
+    btn.innerHTML = EYE;
+    btn.setAttribute('aria-label','显示密码');
+    btn.addEventListener('click', function(){
+      var sel = btn.getAttribute('data-target');
+      var input = sel ? document.getElementById(sel) : btn.previousElementSibling;
+      if(!input || input.type !== 'password' && input.type !== 'text') return;
+      var showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.setAttribute('aria-label', showing ? '显示密码' : '隐藏密码');
+      btn.innerHTML = showing ? EYE : EYEOFF;
+    });
+  }
+  document.querySelectorAll('.lf-pw-toggle').forEach(bind);
+})();
+</script>
+</body>
+</html>

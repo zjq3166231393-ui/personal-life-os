@@ -1,0 +1,49 @@
+{% extends "_base.html" %}
+{% block title %}{% if item %}编辑{% else %}新增{% endif %}每日提醒 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{% if item %}编辑每日提醒{% else %}新增每日提醒{% endif %}</h1>
+    <a href="{% url 'daily_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+  </header>
+
+  <form method="post" class="lf-card">
+    {% csrf_token %}
+
+    <label class="lf-row" style="gap:10px;align-items:center;margin-bottom:14px;">
+      <span style="flex:0 0 80px;font-size:13px;color:var(--text-3);">图标</span>
+      <input class="lf-input" name="icon" maxlength="4" value="{{ item.icon|default:'📌' }}" placeholder="📌" style="font-size:22px;text-align:center;max-width:60px;">
+      <span class="lf-text-xs lf-text-faint">选一个 emoji，例如 📚🎤💪🔥</span>
+    </label>
+
+    <label class="lf-row" style="gap:10px;align-items:center;margin-bottom:14px;">
+      <span style="flex:0 0 80px;font-size:13px;color:var(--text-3);">名称</span>
+      <input class="lf-input" name="title" maxlength="100" required value="{{ item.title|default:'' }}" placeholder="例如：百词斩背单词">
+    </label>
+
+    <label class="lf-block" style="margin-bottom:18px;">
+      <span class="lf-text-sm lf-text-faint" style="display:block;margin-bottom:6px;">备注（可选）</span>
+      <textarea class="lf-input" name="note" rows="3" placeholder="例如：每天早上 8 点前完成，连续 30 天奖励自己一杯奶茶">{{ item.note|default:'' }}</textarea>
+    </label>
+
+    <div class="lf-row" style="gap:10px;">
+      <button type="submit" class="lf-btn lf-btn--primary">{% if item %}保存{% else %}添加{% endif %}</button>
+      <a href="{% url 'daily_list' %}" class="lf-btn lf-btn--ghost">取消</a>
+    </div>
+  </form>
+  {% if item %}
+  <form method="post" action="{% url 'daily_delete' item.pk %}" style="margin-top:10px;">
+    {% csrf_token %}
+    <button type="submit" class="lf-btn lf-btn--ghost" style="color:var(--danger);" onclick="return confirm('确定删除这条每日提醒？此操作不可恢复。');">删除</button>
+  </form>
+  {% endif %}
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

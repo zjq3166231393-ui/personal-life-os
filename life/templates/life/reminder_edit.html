@@ -1,16 +1,85 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><title>{% if reminder %}编辑{% else %}新增{% endif %}提醒</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}</style></head>
-<body><main class="container py-3 py-md-4" style="max-width:540px">
-<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between"><h1 class="h5 fw-bold mb-0">{% if reminder %}编辑{% else %}新增{% endif %}提醒</h1><a href="{% url 'reminder_list' %}" class="text-white text-decoration-none small">← 返回</a></section>
-<section class="card shadow-sm p-4"><form method="post">{% csrf_token %}
-<div class="mb-3"><label class="form-label">标题</label><input type="text" name="title" class="form-control" value="{{ reminder.title|default:'' }}" maxlength="200" placeholder="如：姐姐生日" required></div>
-<div class="row mb-3">
-  <div class="col-md-6"><label class="form-label">类型</label><select name="reminder_type" class="form-select"><option value="birthday" {% if reminder.reminder_type == 'birthday' %}selected{% endif %}>🎂 生日</option><option value="bill" {% if reminder.reminder_type == 'bill' %}selected{% endif %}>💳 账单</option><option value="custom" {% if reminder.reminder_type == 'custom' %}selected{% endif %}>📌 自定义</option><option value="task" {% if reminder.reminder_type == 'task' %}selected{% endif %}>✅ 任务</option></select></div>
-  <div class="col-md-6"><label class="form-label">重复</label><select name="recurrence_rule" class="form-select"><option value="none" {% if reminder.recurrence_rule == 'none' %}selected{% endif %}>不重复</option><option value="monthly" {% if reminder.recurrence_rule == 'monthly' %}selected{% endif %}>每月</option><option value="yearly" {% if reminder.recurrence_rule == 'yearly' %}selected{% endif %}>每年</option></select></div>
-</div>
-<div class="mb-3"><label class="form-label">事件日期</label><input type="datetime-local" name="event_at" class="form-control" value="{% if reminder %}{{ reminder.event_at|date:'Y-m-d\TH:i' }}{% endif %}" required></div>
-<div class="mb-3"><label class="form-label">提前提醒（天）</label><input type="text" name="remind_days_before" class="form-control" value="{{ reminder.remind_days_before|default:'1' }}" placeholder="如：1,7,15"></div>
-{% if reminder %}<div class="mb-3 form-check"><input type="checkbox" name="is_enabled" id="id_is_enabled" class="form-check-input" {% if reminder.is_enabled %}checked{% endif %}><label class="form-check-label" for="id_is_enabled">启用</label></div>{% endif %}
-<button type="submit" class="btn btn-dark">保存</button></form></section>
-</main></body></html>
+{% extends "_base.html" %}
+{% load life_extras %}
+{% block title %}{% if reminder %}编辑提醒{% else %}新增提醒{% endif %} · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{% if reminder %}编辑提醒{% else %}新增提醒{% endif %}</h1>
+    <a href="{% url 'reminder_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--padded">
+    <form method="post">{% csrf_token %}
+      <div class="lf-field">
+        <label class="lf-label">标题</label>
+        <input type="text" name="title" class="lf-input" value="{{ reminder.title|default:'' }}" maxlength="200" placeholder="如：姐姐生日" required>
+      </div>
+      <div class="lf-row" style="gap:12px;">
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">类型</label>
+          <select name="reminder_type" class="lf-select">
+            <option value="birthday" {% if reminder.reminder_type == 'birthday' %}selected{% endif %}>生日</option>
+            <option value="bill" {% if reminder.reminder_type == 'bill' %}selected{% endif %}>账单</option>
+            <option value="custom" {% if reminder.reminder_type == 'custom' %}selected{% endif %}>自定义</option>
+            <option value="task" {% if reminder.reminder_type == 'task' %}selected{% endif %}>任务</option>
+          </select>
+        </div>
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">重复</label>
+          <select name="recurrence_rule" class="lf-select">
+            <option value="none" {% if reminder.recurrence_rule == 'none' %}selected{% endif %}>不重复</option>
+            <option value="monthly" {% if reminder.recurrence_rule == 'monthly' %}selected{% endif %}>每月</option>
+            <option value="yearly" {% if reminder.recurrence_rule == 'yearly' %}selected{% endif %}>每年</option>
+          </select>
+        </div>
+      </div>
+      <div class="lf-field">
+        <label class="lf-label">事件日期</label>
+        <input type="datetime-local" name="event_at" id="id_event_at" class="lf-input" value="{% if reminder %}{{ reminder.event_at|date:'Y-m-d\TH:i' }}{% endif %}" required>
+        <p class="lf-text-xs lf-text-faint lf-mt-1" id="eventLunar">{% if reminder %}农历{{ reminder.event_at|lunar_date }}{% endif %}</p>
+      </div>
+      <div class="lf-field">
+        <label class="lf-label">提前提醒（天）</label>
+        <input type="text" name="remind_days_before" class="lf-input lf-num" value="{{ reminder.remind_days_before|default:'1' }}" placeholder="如：1,7,15">
+      </div>
+      {% if reminder %}
+      <label class="lf-checkbox lf-mt-2">
+        <input type="checkbox" name="is_enabled" id="id_is_enabled" {% if reminder.is_enabled %}checked{% endif %}>
+        启用
+      </label>
+      {% endif %}
+      <div class="lf-row lf-mt-6" style="gap:8px;">
+        <button type="submit" class="lf-btn lf-btn--primary">保存</button>
+        <a href="{% url 'reminder_list' %}" class="lf-btn lf-btn--ghost">取消</a>
+      </div>
+    </form>
+  </section>
+
+<script>
+(function(){
+  var el = document.getElementById('id_event_at');
+  var out = document.getElementById('eventLunar');
+  if(!el || !out) return;
+  function update(){
+    var v = el.value || '';
+    var d = v.slice(0, 10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ out.textContent = ''; return; }
+    fetch('/api/lunar/?date=' + encodeURIComponent(d))
+      .then(function(r){ return r.json(); })
+      .then(function(j){ out.textContent = j.ok ? '农历' + j.lunar : ''; })
+      .catch(function(){ out.textContent = ''; });
+  }
+  el.addEventListener('change', update);
+  el.addEventListener('input', update);
+  update();
+})();
+</script>
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

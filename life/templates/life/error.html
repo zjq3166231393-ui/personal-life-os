@@ -1,0 +1,12 @@
+{% extends "_base.html" %}
+{% block title %}{{ title }} · Personal Life OS{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:420px;padding-top:64px;">
+  <section class="lf-card lf-card--padded lf-text-center">
+    <div style="font-size:48px;margin-bottom:8px;">{{ icon }}</div>
+    <h1 class="lf-page-header__title lf-mb-2">{{ title }}</h1>
+    <p class="lf-text-sm lf-text-faint lf-mb-4">{{ message }}</p>
+    {% if action_url %}<a href="{{ action_url }}" class="lf-btn lf-btn--primary lf-btn--block">{{ action_label }}</a>{% endif %}
+  </section>
+</main>
+{% endblock %}

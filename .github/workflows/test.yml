@@ -2,9 +2,11 @@ name: Test
 
 on:
   push:
-    branches: [master, main]
+    # 开发实际发生在 release-* / release/** 分支上，原先只监听 master/main
+    # 导致 CI 从未被触发过。此处补齐，让每次推送都跑测试。
+    branches: [master, main, "release-*", "release/**"]
   pull_request:
-    branches: [master, main]
+    branches: [master, main, "release-*", "release/**"]
 
 jobs:
   test:
@@ -21,7 +23,37 @@ jobs:
           pip install -r requirements.txt
       - name: Create .env for CI
         run: cp .env.example .env
+      - name: Lint (ruff, 配置见 pyproject.toml)
+        run: |
+          pip install ruff
+          ruff check .
       - name: Django system check
         run: python manage.py check
+      - name: Check for missing migrations
+        # 模型改了却没生成迁移时，makemigrations --check 会非 0 退出。
+        # 曾因 ParseJob.uuid 的默认值被写成「立即求值」，导致模型与迁移长期漂移无人发现，
+        # 每次 makemigrations 还会冒出一条含随机默认值的多余迁移。
+        run: python manage.py makemigrations --check --dry-run
       - name: Run tests
+        # CI 运行在 UTC 容器上，正好覆盖 Asia/Shanghai 的时区回归
+        # （date.today() 在 UTC 下会与本地日期错位，已统一改用 timezone.localdate()）
         run: python manage.py test
+
+  security:
+    # 依赖漏洞审计。沙箱/本地若 PyPI 镜像不全可能跑不起来，但真实 GitHub runner 有完整 PyPI，
+    # 能真正扫描。每次 push 自动跑，发现已知 CVE 即让检查变红。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Dependency vulnerability audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt

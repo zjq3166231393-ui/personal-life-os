@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+db.sqlite3
+staticfiles/
+logs/
+backups/
+docs/
+verify_shots/
+.git/
+.github/

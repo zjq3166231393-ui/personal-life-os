@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from .models import AuditLog, NotificationLog, PushSubscription
 
@@ -24,6 +25,7 @@ def notification_list(request):
 
 
 @login_required
+@require_POST
 def notification_mark_read(request, pk):
     notif = get_object_or_404(NotificationLog, pk=pk, user=request.user)
     notif.status = "read"
@@ -33,6 +35,7 @@ def notification_mark_read(request, pk):
 
 
 @login_required
+@require_POST
 def notification_ignore(request, pk):
     notif = get_object_or_404(NotificationLog, pk=pk, user=request.user)
     notif.status = "ignored"
@@ -45,6 +48,7 @@ def privacy(request):
 
 
 @login_required
+@require_POST
 def push_subscribe(request):
     """Save browser push subscription."""
     import json
@@ -75,6 +79,7 @@ def push_subscribe(request):
 
 
 @login_required
+@require_POST
 def push_unsubscribe(request):
     """Deactivate a push subscription."""
     import json
@@ -96,6 +101,7 @@ def push_unsubscribe(request):
 def vapid_public_key(request):
     """Return the VAPID public key so the client can subscribe."""
     import os
+
     from django.http import JsonResponse
     key = os.getenv("VAPID_PUBLIC_KEY", "")
     return JsonResponse({"publicKey": key})

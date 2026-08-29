@@ -17,9 +17,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Sum
+from django.db.models import Count
+from django.utils import timezone
 
 from life.models import Expense, RecurringExpense
+from life.services import aware_day_start
 
 
 class Command(BaseCommand):
@@ -58,12 +60,11 @@ class Command(BaseCommand):
 
     def _check_amounts(self, users, fix):
         issues = 0
-        today = date.today()
         for uid in users:
             abnormal = Expense.objects.filter(
                 user_id=uid, is_deleted=False,
             ).filter(amount__lte=0) | Expense.objects.filter(
-                user_id=uid, is_deleted=False, amount__gt=Decimal("10000000"),
+                user_id=uid, is_deleted=False, amount__gt=Decimal(10000000),
             )
             for e in abnormal:
                 reason = "负/零金额" if e.amount <= 0 else "金额异常大"
@@ -85,9 +86,10 @@ class Command(BaseCommand):
 
     def _check_dates(self, users, fix):
         issues = 0
-        today = date.today()
-        future_limit = today + timedelta(days=365)
-        past_limit = today - timedelta(days=365 * 10)
+        today = timezone.localdate()
+        # occurred_at 是 DateTimeField：边界须感知时区，否则触发 naive datetime 告警
+        future_limit = aware_day_start(today + timedelta(days=365))
+        past_limit = aware_day_start(today - timedelta(days=365 * 10))
         for uid in users:
             bad = Expense.objects.filter(user_id=uid, is_deleted=False).filter(
                 occurred_at__gt=future_limit,
@@ -98,7 +100,7 @@ class Command(BaseCommand):
                 label = "未来日期" if e.occurred_at and e.occurred_at.date() > today else "过于久远"
                 self.stdout.write(f"  [date] user={uid} id={e.pk} {e.occurred_at.date() if e.occurred_at else 'NULL'} — {label}")
                 if fix and label == "未来日期":
-                    e.occurred_at = today
+                    e.occurred_at = aware_day_start(today)
                     e.status = "pending"
                     e.save(update_fields=["occurred_at", "status"])
             issues += bad.count()
@@ -130,11 +132,11 @@ class Command(BaseCommand):
             recs = RecurringExpense.objects.filter(user_id=uid, is_active=True)
             for r in recs:
                 # Check if there are multiple expenses with the same note this month
-                today = date.today()
+                today = timezone.localdate()
                 month_start = date(today.year, today.month, 1)
                 count = Expense.objects.filter(
                     user_id=uid, is_deleted=False, status="confirmed",
-                    note__icontains=r.name, occurred_at__gte=month_start,
+                    note__icontains=r.name, occurred_at__gte=aware_day_start(month_start),
                 ).count()
                 if count > 1:
                     self.stdout.write(f"  [recurring] user={uid} '{r.name}' — 本月 {count} 条匹配记录(suspected dup)")

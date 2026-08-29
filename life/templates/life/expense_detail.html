@@ -1,17 +1,70 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><title>账目详情</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}</style></head>
-<body><main class="container py-4" style="max-width:540px">
-<section class="hero p-4 shadow-sm mb-4 d-flex justify-content-between"><div><h1 class="h5 fw-bold mb-0">{{ expense.note|default:expense.merchant|default:'未命名' }}</h1><p class="mb-0 opacity-75 small">{{ expense.occurred_at|date:'Y-m-d H:i' }}</p></div><a href="{% url 'expense_list' %}" class="text-white text-decoration-none small">← 返回</a></section>
-<section class="card shadow-sm p-4">
-  <p><strong>类型：</strong>{{ expense.get_type_display }}</p>
-  <p><strong>金额：</strong>¥{{ expense.amount }}</p>
-  {% if expense.category %}<p><strong>分类：</strong>{{ expense.category.icon }} {{ expense.category.name }}</p>{% endif %}
-  {% if expense.merchant %}<p><strong>商户：</strong>{{ expense.merchant }}</p>{% endif %}
-  <p><strong>备注：</strong>{{ expense.note|default:'无' }}</p>
-  <p><strong>来源：</strong>{{ expense.get_source_display }}</p>
-  <p><strong>状态：</strong>{{ expense.get_status_display }}</p>
-  <p class="text-secondary small">创建于 {{ expense.created_at|date:'Y-m-d H:i' }}</p>
-  <div class="mt-3"><a href="{% url 'expense_edit' expense.pk %}" class="btn btn-primary btn-sm">编辑</a><a href="{% url 'expense_delete' expense.pk %}" class="btn btn-outline-danger btn-sm ms-2">删除</a></div>
-</section>
-</main></body></html>
+{% extends "_base.html" %}
+{% block title %}账目详情 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <a href="{% url 'expense_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      账目
+    </a>
+    <div class="lf-row" style="gap:8px;">
+      <a href="{% url 'expense_edit' expense.pk %}" class="lf-btn lf-btn--primary lf-btn--sm">编辑</a>
+      <form method="post" action="{% url 'expense_delete' expense.pk %}" style="display:inline;">{% csrf_token %}<button type="submit" class="lf-btn lf-btn--danger lf-btn--sm">删除</button></form>
+    </div>
+  </header>
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <div class="lf-row lf-row--between" style="gap:12px;">
+      <div style="min-width:0;">
+        <h1 class="lf-page-header__title lf-truncate" style="font-size:20px;">{{ expense.note|default:expense.merchant|default:'未命名' }}</h1>
+        <div class="lf-text-xs lf-text-faint lf-num lf-mt-1">{{ expense.occurred_at|date:'Y-m-d H:i' }}</div>
+      </div>
+      <div class="lf-amount lf-amount--lg {% if expense.type == 'income' %}lf-text-success{% else %}lf-text-1{% endif %}">{% if expense.type == 'income' %}+{% else %}-{% endif %}¥{{ expense.amount }}</div>
+    </div>
+  </section>
+
+  <section class="lf-card lf-card--flush">
+    <div class="lf-list">
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">类型</span>
+        <span class="lf-badge {% if expense.type == 'income' %}lf-badge--success{% elif expense.type == 'transfer' %}lf-badge--info{% else %}lf-badge--outline{% endif %}">{{ expense.get_type_display }}</span>
+      </div>
+      {% if expense.category %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">分类</span>
+        <span class="lf-text-sm">{{ expense.category.icon }} {{ expense.category.name }}</span>
+      </div>
+      {% endif %}
+      {% if expense.merchant %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">商户</span>
+        <span class="lf-text-sm">{{ expense.merchant }}</span>
+      </div>
+      {% endif %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">来源</span>
+        <span class="lf-text-sm">{{ expense.get_source_display }}</span>
+      </div>
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">状态</span>
+        <span class="lf-badge lf-badge--outline">{{ expense.get_status_display }}</span>
+      </div>
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">创建于</span>
+        <span class="lf-num lf-text-faint lf-text-xs">{{ expense.created_at|date:'Y-m-d H:i' }}</span>
+      </div>
+    </div>
+  </section>
+
+  {% if expense.note %}
+  <section class="lf-card lf-card--padded lf-mt-3">
+    <div class="lf-section-title">备注</div>
+    <p class="lf-text-sm lf-mb-0" style="white-space:pre-wrap;">{{ expense.note }}</p>
+  </section>
+  {% endif %}
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

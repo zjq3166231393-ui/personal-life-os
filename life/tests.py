@@ -2,14 +2,28 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from common.models import NotificationLog
+
 from .ai_provider import FakeProvider, get_provider, set_provider
-from .ai_router import route_parse, _rule_confidence, _detect_multi_intent
+from .ai_router import _detect_multi_intent, _rule_confidence, route_parse
 from .ai_schema import validate_ai_response
-from .models import Budget, Category, ConversationLog, Entry, Expense, InstallmentPlan, Note, ParseResult, ProposedAction, RecurringExpense, Reminder, Task
-from django.urls import reverse
+from .models import (
+    Budget,
+    Category,
+    ConversationLog,
+    Expense,
+    InstallmentPlan,
+    Note,
+    ParseJob,
+    ParseResult,
+    ProposedAction,
+    RecurringExpense,
+    Reminder,
+    Task,
+)
 from .parser import parse_text
 
 
@@ -90,11 +104,85 @@ class ParserTests(SimpleTestCase):
 
     def test_shopping_category(self):
         draft = parse_text("淘宝买衣服 299 元")
-        self.assertEqual(draft["category"], "购物")
+        self.assertEqual(draft["category"], "服饰")
 
     def test_rent_expense(self):
         draft = parse_text("交房租 3000 元")
         self.assertEqual(draft["category"], "住房")
+
+    # ── 中文数字 + 新场景（2026-08-24 增强）────────────────────
+
+    def test_chinese_number_30_for_grocery(self):
+        """「三十」= 30 元，识别为餐饮支出。"""
+        draft = parse_text("今天买菜花费三十元")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["type"], "expense")
+        self.assertEqual(draft["category"], "餐饮")
+        self.assertEqual(draft["amount"], "30")
+
+    def test_chinese_number_25(self):
+        """「二十五」= 25。"""
+        draft = parse_text("打车花了二十五块")
+        self.assertEqual(draft["amount"], "25")
+        self.assertEqual(draft["category"], "交通")
+
+    def test_expense_intent_without_amount(self):
+        """明确消费场景但金额模糊时仍归 expense（兜底）。"""
+        draft = parse_text("刚刚买了一杯咖啡")
+        self.assertEqual(draft["kind"], "expense")
+        self.assertEqual(draft["category"], "餐饮")
+
+    def test_recurring_bare_amount(self):
+        """「固定房租1500」无单位也算 recurring_expense。"""
+        draft = parse_text("固定房租1500")
+        self.assertEqual(draft["kind"], "recurring_expense")
+        self.assertEqual(draft["amount"], "1500")
+        self.assertEqual(draft["category"], "住房")
+        self.assertEqual(draft["frequency"], "monthly")
+
+    def test_recurring_broadband_monthly(self):
+        """「固定宽带每月60」识别为月度周期账单。"""
+        draft = parse_text("固定宽带每月60")
+        self.assertEqual(draft["kind"], "recurring_expense")
+        self.assertEqual(draft["amount"], "60")
+        self.assertEqual(draft["category"], "生活缴费")
+        self.assertEqual(draft["frequency"], "monthly")
+
+    def test_recurring_with_chinese_number(self):
+        """「每个月房租两千」中文数字+固定周期识别。"""
+        draft = parse_text("每个月房租两千")
+        self.assertEqual(draft["kind"], "recurring_expense")
+        self.assertEqual(draft["amount"], "2000")
+        self.assertEqual(draft["frequency"], "monthly")
+
+    def test_note_cue_casual_record(self):
+        """「随心记录：」前缀归类为 note 并清洗掉引导词。"""
+        draft = parse_text("随心记录：今天天气真好")
+        self.assertEqual(draft["kind"], "note")
+        self.assertNotIn("随心记录", draft["title"])
+        self.assertIn("天气真好", draft["title"])
+
+    def test_note_cue_inspiration(self):
+        """「灵感：」前缀识别为 note。"""
+        draft = parse_text("灵感：想到了一个好点子")
+        self.assertEqual(draft["kind"], "note")
+        self.assertNotIn("灵感", draft["title"])
+        self.assertIn("好点子", draft["title"])
+
+    def test_note_cue_random_record(self):
+        """「随机记录」识别为 note。"""
+        draft = parse_text("随机记录周末爬山")
+        self.assertEqual(draft["kind"], "note")
+
+    def test_task_reminder_still_works(self):
+        """确保 task 检测没被新增的 expense_cue 误伤。"""
+        draft = parse_text("记得明天交房租")
+        self.assertEqual(draft["kind"], "task")
+
+    def test_task_future_meeting_still_works(self):
+        """未来时间+动作动词 = task。"""
+        draft = parse_text("明天开会")
+        self.assertEqual(draft["kind"], "task")
 
 
 class CategoryTests(TestCase):
@@ -213,7 +301,6 @@ class ExpenseTests(TestCase):
         self.assertEqual(income.type, "income")
 
     def test_amount_must_be_positive(self):
-        from django.core.exceptions import ValidationError
         if Decimal("-1") < 0:
             pass  # Negative amounts exist — model layer accepts them
         expense = Expense(
@@ -315,15 +402,23 @@ class NoteTests(TestCase):
 
 
 class DataMigrationTests(TestCase):
+    """确认 0005 已把历史 Entry 数据迁入新模型（Expense/Task/Note）。
+
+    Entry 模型本身已在 v0.9.1 删除；这里只校验新模型链路仍可用，
+    不再依赖已废弃的 Entry 表。
+    """
+
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("migrate", password="pass")
 
-    def test_entry_still_works_after_migration(self):
-        Entry.objects.create(user=self.user, kind="expense", title="测试", amount=Decimal("100"))
-        Entry.objects.create(user=self.user, kind="task", title="任务")
-        Entry.objects.create(user=self.user, kind="note", title="笔记")
-        self.assertEqual(Entry.objects.count(), 3)
+    def test_new_models_accept_records(self):
+        Expense.objects.create(user=self.user, type="expense", amount=Decimal("100"), note="测试", occurred_at=timezone.now())
+        Task.objects.create(user=self.user, title="任务")
+        Note.objects.create(user=self.user, title="笔记")
+        self.assertEqual(Expense.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Task.objects.filter(user=self.user).count(), 1)
+        self.assertEqual(Note.objects.filter(user=self.user).count(), 1)
 
 
 class BudgetTests(TestCase):
@@ -386,6 +481,26 @@ class BudgetTests(TestCase):
         r = self.client.get("/budget/")
         # Only confirmed 200 counted, not pending 300
         self.assertContains(r, "200.00")
+
+    def test_spent_includes_last_day_of_month(self):
+        """回归：月末当天（非午夜）的支出必须计入本月总额。
+
+        历史 bug：用 date 过滤 occurred_at（DateTimeField）时，__lte=月末 会被 Django
+        补成当天 00:00，导致当月最后一天的记录被整日排除，预算/统计/复盘全部少算一天。
+        """
+        from calendar import monthrange
+        from datetime import datetime
+
+        from django.utils import timezone
+        today = timezone.localdate()
+        _, last_day = monthrange(today.year, today.month)
+        # 当月最后一天 15:30 —— 旧逻辑下会被 __lte=月末(00:00) 排除
+        last_day_afternoon = timezone.make_aware(datetime(today.year, today.month, last_day, 15, 30))
+        Expense.objects.create(user=self.user, category=self.cat, type="expense", status="confirmed",
+                               amount=Decimal("777"), occurred_at=last_day_afternoon)
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        self.assertEqual(r.context["spent_total"], Decimal("777"))
 
     def test_overspent_detection(self):
         Budget.objects.create(user=self.user, month=self.month, amount=Decimal("100"))
@@ -550,13 +665,40 @@ class InstallmentPlanTests(TestCase):
         self.assertIsInstance(self.plan.installment_amount, Decimal)
 
 
+class GetMutateTests(TestCase):
+    """Verify GET requests to state-mutating views return 405."""
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.task = Task.objects.create(user=cls.user, title="测试任务")
+        cls.reminder = Reminder.objects.create(user=cls.user, title="测试提醒", event_at=timezone.now(), remind_at=timezone.now())
+
+    def setUp(self):
+        self.client.login(username="alice", password="passA")
+
+    def test_task_complete_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/complete/").status_code, 405)
+
+    def test_task_postpone_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/postpone/").status_code, 405)
+
+    def test_task_cancel_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/cancel/").status_code, 405)
+
+    def test_task_archive_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/archive/").status_code, 405)
+
+    def test_task_renew_get_405(self):
+        self.assertEqual(self.client.get(f"/tasks/{self.task.pk}/renew/").status_code, 405)
+
+
 class TaskViewTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user("alice", password="passA")
         cls.t1 = Task.objects.create(user=cls.user, title="今天的任务", priority=1, due_at=timezone.now().replace(hour=12, minute=0, second=0, microsecond=0))
         cls.t2 = Task.objects.create(user=cls.user, title="下周的任务", priority=2, due_at=timezone.now().replace(hour=12, minute=0, second=0, microsecond=0) + timezone.timedelta(days=8))
-        cls.t3 = Task.objects.create(user=cls.user, title="已完成任务", priority=3, status="completed", completed_at=timezone.now())
+        cls.t3 = Task.objects.create(user=cls.user, title="已完成的旧任务", priority=3, status="completed", completed_at=timezone.now())
 
     def setUp(self):
         self.client.login(username="alice", password="passA")
@@ -565,7 +707,8 @@ class TaskViewTests(TestCase):
         r = self.client.get("/tasks/?filter=all")
         self.assertContains(r, "今天的任务")
         self.assertContains(r, "下周的任务")
-        self.assertNotContains(r, "已完成任务")
+        # 全部视图现在也展示已完成任务（分组在底部、划线），符合"显示所有任务"诉求
+        self.assertContains(r, "已完成的旧任务")
 
     def test_filter_today(self):
         t = Task.objects.create(user=self.user, title="today-task", priority=1, due_at=timezone.now())
@@ -579,7 +722,7 @@ class TaskViewTests(TestCase):
 
     def test_filter_completed(self):
         r = self.client.get("/tasks/?filter=completed")
-        self.assertContains(r, "已完成任务")
+        self.assertContains(r, "已完成的旧任务")
         self.assertNotContains(r, "今天的任务")
 
     def test_filter_by_priority(self):
@@ -588,24 +731,24 @@ class TaskViewTests(TestCase):
         self.assertNotContains(r, "下周的任务")
 
     def test_complete_action(self):
-        self.client.get(f"/tasks/{self.t1.pk}/complete/")
+        self.client.post(f"/tasks/{self.t1.pk}/complete/")
         self.t1.refresh_from_db()
         self.assertEqual(self.t1.status, "completed")
         self.assertIsNotNone(self.t1.completed_at)
 
     def test_postpone_action(self):
         old = self.t1.due_at
-        self.client.get(f"/tasks/{self.t1.pk}/postpone/")
+        self.client.post(f"/tasks/{self.t1.pk}/postpone/")
         self.t1.refresh_from_db()
         self.assertTrue(self.t1.due_at > old)
 
     def test_cancel_action(self):
-        self.client.get(f"/tasks/{self.t1.pk}/cancel/")
+        self.client.post(f"/tasks/{self.t1.pk}/cancel/")
         self.t1.refresh_from_db()
         self.assertEqual(self.t1.status, "cancelled")
 
     def test_archive_action(self):
-        self.client.get(f"/tasks/{self.t3.pk}/archive/")
+        self.client.post(f"/tasks/{self.t3.pk}/archive/")
         self.t3.refresh_from_db()
         self.assertEqual(self.t3.status, "archived")
 
@@ -644,21 +787,21 @@ class ReminderTests(TestCase):
         self.assertEqual(item.remind_days_before, "1,7")
 
     def test_toggle_disables(self):
-        self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.client.post(f"/reminders/{self.r.pk}/toggle/")
         self.r.refresh_from_db()
         self.assertFalse(self.r.is_enabled)
 
     def test_toggle_reenables(self):
         self.r.is_enabled = False
         self.r.save()
-        self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        self.client.post(f"/reminders/{self.r.pk}/toggle/")
         self.r.refresh_from_db()
         self.assertTrue(self.r.is_enabled)
 
     def test_other_user_cannot_toggle(self):
         User.objects.create_user("bob", password="passB")
         self.client.login(username="bob", password="passB")
-        r = self.client.get(f"/reminders/{self.r.pk}/toggle/")
+        r = self.client.post(f"/reminders/{self.r.pk}/toggle/")
         self.assertEqual(r.status_code, 404)
 
 
@@ -692,7 +835,7 @@ class RecurrenceTests(TestCase):
         t = Task.objects.create(user=self.user, title="每周回顾", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="weekly", status="completed")
         count_before = Task.objects.count()
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         self.assertEqual(Task.objects.count(), count_before + 1)
         new_task = Task.objects.latest("id")
         self.assertEqual(new_task.status, "todo")
@@ -701,14 +844,14 @@ class RecurrenceTests(TestCase):
     def test_renew_does_not_duplicate(self):
         t = Task.objects.create(user=self.user, title="日报", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="daily", status="completed")
-        self.client.get(f"/tasks/{t.pk}/renew/")
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         self.assertEqual(Task.objects.filter(title="日报", status="todo").count(), 1)
 
     def test_deleting_rule_keeps_history(self):
         t = Task.objects.create(user=self.user, title="父任务", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="monthly", recurrence_day=15, status="completed")
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         child = Task.objects.get(title="父任务", status="todo")
         self.assertIsNotNone(child)
         t.recurrence_rule = "none"
@@ -718,7 +861,7 @@ class RecurrenceTests(TestCase):
     def test_completed_instance_does_not_affect_next(self):
         t = Task.objects.create(user=self.user, title="模板任务", due_at="2026-08-15T10:00:00Z",
                                 recurrence_rule="monthly", recurrence_day=15, status="completed")
-        self.client.get(f"/tasks/{t.pk}/renew/")
+        self.client.post(f"/tasks/{t.pk}/renew/")
         child = Task.objects.get(title="模板任务", status="todo")
         child.status = "completed"
         child.save()
@@ -744,6 +887,7 @@ class ScanRemindersTests(TestCase):
 
     def test_command_creates_notification(self):
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("scan_reminders", stdout=out)
@@ -752,7 +896,6 @@ class ScanRemindersTests(TestCase):
         self.assertIsNotNone(log)
 
     def test_command_no_duplicate(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders")
         first_count = NotificationLog.objects.count()
@@ -763,13 +906,13 @@ class ScanRemindersTests(TestCase):
         self.reminder.is_enabled = False
         self.reminder.save()
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("scan_reminders", stdout=out)
         self.assertIn("0 new notification", out.getvalue())
 
     def test_notification_fields(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders")
         log = NotificationLog.objects.first()
@@ -778,14 +921,12 @@ class ScanRemindersTests(TestCase):
         self.assertEqual(log.status, "pending")
 
     def test_dry_run_creates_nothing(self):
-        from io import StringIO
         from django.core.management import call_command
         count_before = NotificationLog.objects.count()
         call_command("scan_reminders", "--dry-run")
         self.assertEqual(NotificationLog.objects.count(), count_before)
 
     def test_scan_tasks_creates_notification(self):
-        from io import StringIO
         from django.core.management import call_command
         Task.objects.create(user=self.user, title="今日任务", due_at=timezone.now(), status="todo")
         call_command("scan_reminders", "--type=task")
@@ -793,12 +934,160 @@ class ScanRemindersTests(TestCase):
         self.assertIsNotNone(log)
 
     def test_scan_does_not_duplicate(self):
-        from io import StringIO
         from django.core.management import call_command
         call_command("scan_reminders", "--type=reminder")
         first_count = NotificationLog.objects.filter(notification_type="reminder").count()
         call_command("scan_reminders", "--type=reminder")
         self.assertEqual(NotificationLog.objects.filter(notification_type="reminder").count(), first_count)
+
+
+class CSRFTests(TestCase):
+    def test_home_template_has_csrf_input(self):
+        """CSRF token must be in hidden input, not just cookie, for HttpOnly compatibility."""
+        User.objects.create_user("test", password="pass")
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/")
+        self.assertContains(r, 'csrfmiddlewaretoken')
+        self.assertContains(r, 'type="hidden"')
+        # Verify JS reads from input, not cookie
+        self.assertContains(r, "querySelector('input[name=csrfmiddlewaretoken]')")
+
+    def test_csrf_middleware_enabled(self):
+        from django.conf import settings
+        self.assertIn('django.middleware.csrf.CsrfViewMiddleware', settings.MIDDLEWARE)
+
+
+class PWACacheTests(SimpleTestCase):
+    def test_sw_never_caches_user_pages(self):
+        from django.test import RequestFactory
+
+        from life.views_pwa import service_worker
+        sw = service_worker(RequestFactory().get('/sw.js')).content.decode()
+        self.assertIn('/expenses/', sw)
+        self.assertIn('/tasks/', sw)
+        self.assertIn('/dashboard/', sw)
+        self.assertIn('NO_CACHE', sw)
+        self.assertIn('lifeos-v3', sw)
+        self.assertNotIn("'/',", sw)  # '/' as STATIC_URL list item
+
+    def test_sw_has_offline_fallback(self):
+        from django.test import RequestFactory
+
+        from life.views_pwa import service_worker
+        sw = service_worker(RequestFactory().get('/sw.js')).content.decode()
+        self.assertIn('offline.html', sw)
+        self.assertIn('navigate', sw)
+
+
+class ProductionSettingsTests(SimpleTestCase):
+    def test_proxy_ssl_header_configured(self):
+        """SECURE_PROXY_SSL_HEADER must be set for Nginx reverse proxy."""
+        from django.conf import settings
+        header = getattr(settings, 'SECURE_PROXY_SSL_HEADER', None)
+        self.assertIsNotNone(header, "SECURE_PROXY_SSL_HEADER must be configured")
+        self.assertEqual(header[0], 'HTTP_X_FORWARDED_PROTO')
+        self.assertEqual(header[1], 'https')
+
+
+class SettingsTests(SimpleTestCase):
+    def test_secret_key_is_not_hardcoded(self):
+        from django.conf import settings
+        self.assertNotEqual(settings.SECRET_KEY, "unsafe-development-key-change-before-deploy")
+        self.assertGreater(len(settings.SECRET_KEY), 50)
+
+
+class ExportPermissionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+
+    def test_export_requires_login(self):
+        r = self.client.get("/accounts/export/")
+        self.assertEqual(r.status_code, 302)
+
+    def test_export_json_returns_own_data(self):
+        self.client.login(username="alice", password="passA")
+        Expense.objects.create(user=self.user, type="expense", amount=Decimal("50"), occurred_at=timezone.now(), note="导出测试")
+        r = self.client.get("/accounts/export/?format=json")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("导出测试", r.content.decode())
+
+    def test_export_csv_returns_own_data(self):
+        self.client.login(username="alice", password="passA")
+        Expense.objects.create(user=self.user, type="expense", amount=Decimal("100"), occurred_at=timezone.now(), note="CSV测试")
+        r = self.client.get("/accounts/export/?format=csv")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("CSV测试", r.content.decode())
+
+    def test_export_excludes_other_users(self):
+        self.client.login(username="alice", password="passA")
+        other = User.objects.create_user("bob", password="passB")
+        Expense.objects.create(user=other, type="expense", amount=Decimal("999"), occurred_at=timezone.now(), note="Bob的秘密")
+        r = self.client.get("/accounts/export/?format=json")
+        self.assertNotIn("Bob的秘密", r.content.decode())
+
+
+class DeleteAccountTests(TestCase):
+    def test_delete_page_requires_login(self):
+        r = self.client.get("/accounts/delete-account/")
+        self.assertEqual(r.status_code, 302)
+
+    def test_delete_requires_confirm_word(self):
+        user = User.objects.create_user("alice", password="passA")
+        self.client.login(username="alice", password="passA")
+        r = self.client.post("/accounts/delete-account/", {"confirm": "WRONG"})
+        self.assertEqual(r.status_code, 200)  # Re-renders form
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)  # Not deactivated
+
+    def test_delete_deactivates_user(self):
+        user = User.objects.create_user("alice", password="passA")
+        self.client.login(username="alice", password="passA")
+        r = self.client.post("/accounts/delete-account/", {"confirm": "DELETE"})
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+
+
+class ReminderDedupTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("alice", password="passA")
+        cls.reminder = Reminder.objects.create(user=cls.user, title="去重测试", event_at=timezone.now(), remind_at=timezone.now(), reminder_type="custom")
+
+    def test_scan_twice_does_not_duplicate(self):
+        from django.core.management import call_command
+        call_command("scan_reminders")
+        first = NotificationLog.objects.filter(user=self.user).count()
+        call_command("scan_reminders")
+        self.assertEqual(NotificationLog.objects.filter(user=self.user).count(), first)
+
+
+class SeedDemoTests(TestCase):
+    def test_seed_creates_demo_user(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        out = StringIO()
+        call_command("seed_demo", "--clean", stdout=out)
+        call_command("seed_demo", stdout=out)
+        self.assertTrue(User.objects.filter(username="demo").exists())
+
+    def test_seed_creates_expenses(self):
+        from django.core.management import call_command
+        call_command("seed_demo", "--clean")
+        call_command("seed_demo")
+        user = User.objects.get(username="demo")
+        self.assertGreater(Expense.objects.filter(user=user).count(), 5)
+
+    def test_seed_does_not_overwrite_real_user(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+        real = User.objects.create_user("realuser", password="pass")
+        Expense.objects.create(user=real, type="expense", amount=Decimal("10"), occurred_at=timezone.now())
+        out = StringIO()
+        call_command("seed_demo", "--username=realuser", stdout=out)
+        self.assertIn("already has data", out.getvalue())
 
 
 class DataCheckTests(TestCase):
@@ -808,6 +1097,7 @@ class DataCheckTests(TestCase):
 
     def test_command_runs_without_errors(self):
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", stdout=out)
@@ -817,6 +1107,7 @@ class DataCheckTests(TestCase):
     def test_detects_negative_amount(self):
         Expense.objects.create(user=self.user, type="expense", amount=Decimal("-50"), occurred_at=timezone.now(), note="负金额")
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", "--check=amount", stdout=out)
@@ -825,6 +1116,7 @@ class DataCheckTests(TestCase):
     def test_detects_missing_category(self):
         Expense.objects.create(user=self.user, type="expense", amount=Decimal("10"), occurred_at=timezone.now(), note="无分类")
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", "--check=category", stdout=out)
@@ -833,10 +1125,36 @@ class DataCheckTests(TestCase):
     def test_detects_deleted_confirmed(self):
         Expense.objects.create(user=self.user, type="expense", amount=Decimal("10"), occurred_at=timezone.now(), note="删除但已确认", is_deleted=True, status="confirmed")
         from io import StringIO
+
         from django.core.management import call_command
         out = StringIO()
         call_command("data_check", "--check=deleted", stdout=out)
         self.assertIn("deleted but still confirmed", out.getvalue())
+
+
+class ParseJobUuidTests(TestCase):
+    """ParseJob.uuid 的默认值必须是「每次调用返回不同值」的可调用对象。
+
+    回归：曾写成 default=uuid.uuid4().hex（类定义时立即求值），默认值固化为常量，
+    与 unique=True 冲突——同进程内创建第二条记录即违反唯一约束；
+    且每次 makemigrations 都会因默认值变化而生成多余迁移。
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("pj", password="passPJ")
+
+    def test_tc_job_001_default_uuid_unique_per_instance(self):
+        """TC-JOB-001 两条未显式指定 uuid 的记录必须获得不同值且不报错。"""
+        a = ParseJob.objects.create(user=self.user, raw_text="第一条")
+        b = ParseJob.objects.create(user=self.user, raw_text="第二条")
+        self.assertNotEqual(a.uuid, b.uuid)
+        self.assertEqual(len(a.uuid), 32)
+
+    def test_tc_job_002_default_must_be_callable(self):
+        """TC-JOB-002 字段默认值必须是可调用对象，而不是常量。"""
+        field = ParseJob._meta.get_field("uuid")
+        self.assertTrue(callable(field.default), "uuid 的 default 必须是可调用对象，不能是常量")
 
 
 class AIParseModelTests(TestCase):
@@ -1075,8 +1393,99 @@ class ConfirmActionsTests(TestCase):
         self.assertIsNotNone(exp)
         self.assertEqual(exp.amount, Decimal("99.99"))
 
+    # ── 任务去重（2026-08-24）─
+    # 语音解析「线上面试」两次 → 第二次因同标题+同日+同 due_at 视为重复，跳过创建。
+    def test_task_dedup_by_title_and_due_at_window(self):
+        # 第一次：语音解析「线上面试 08/25 10:00」
+        r1 = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_task", "title": "线上面试", "due_at": "2026-08-25T10:00:00"}],
+            "raw_text": "线上面试",
+        }, content_type="application/json")
+        self.assertEqual(r1.status_code, 200)
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 1)
+
+        # 第二次：同一时间点 ±3 分钟内再来一条
+        r2 = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_task", "title": "线上面试", "due_at": "2026-08-25T10:03:00"}],
+            "raw_text": "线上面试",
+        }, content_type="application/json")
+        self.assertEqual(r2.status_code, 200)
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 1, "重复任务应被去重，不创建第二条")
+        body = r2.json()
+        # saved 应包含 deduped 标记，count 为 0（不计入 saved 数）
+        self.assertEqual(body["count"], 0)
+        self.assertTrue(any(s.get("deduped") for s in body.get("saved", [])))
+
+    def test_task_dedup_different_title_not_blocked(self):
+        # 不同标题 + 同 due_at 不应去重
+        for title in ["线上面试", "笔试"]:
+            r = self.client.post(reverse("confirm_actions"), {
+                "actions": [{"intent": "create_task", "title": title, "due_at": "2026-08-25T10:00:00"}],
+                "raw_text": title,
+            }, content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 1)
+        self.assertEqual(Task.objects.filter(title="笔试").count(), 1)
+
+    def test_task_dedup_same_day_no_due_at(self):
+        """未指定时间的任务，按「同日同标题」去重（防止一天内多次语音输入同一任务）。"""
+        from datetime import timedelta
+
+        from django.utils import timezone as _tz
+        # 用一个未来的 due_at（不立即过期），同一标题、同日重复提交
+        future = (_tz.now() + timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+        for _ in range(3):
+            r = self.client.post(reverse("confirm_actions"), {
+                "actions": [{"intent": "create_task", "title": "买菜"}],
+                "raw_text": "买菜",
+            }, content_type="application/json")
+            self.assertEqual(r.status_code, 200)
+        # 3 次提交，但只有 1 条任务
+        self.assertEqual(Task.objects.filter(title="买菜").count(), 1)
+
+    def test_completed_task_not_blocked_by_dedup(self):
+        """已完成的同名任务不应阻止新建同标题任务（用户可能想做下一轮）。"""
+        from datetime import datetime
+
+        from django.utils import timezone as _tz
+        due = _tz.make_aware(datetime(2026, 8, 25, 10, 0))
+        Task.objects.create(user=self.user, title="线上面试", due_at=due, status="completed")
+        r = self.client.post(reverse("confirm_actions"), {
+            "actions": [{"intent": "create_task", "title": "线上面试", "due_at": "2026-08-25T10:00:00"}],
+            "raw_text": "线上面试",
+        }, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        # 已完成的同名任务不被去重，应有 2 条
+        self.assertEqual(Task.objects.filter(title="线上面试").count(), 2)
+
 
 class ParserEvalTests(SimpleTestCase):
+    def test_clean_daily_title_strips_canonical_scaffolding(self):
+        """The new cleaner should drop 我/每天/打卡 scaffolding."""
+        from life.parser import _clean_daily_title
+        cases = [
+            ("我要每天背单词", "背单词"),
+            ("我每天练口语", "每天练口语"),  # 「每天」用作核心时是 OK content
+            ("快手签到", "快手签到"),
+            ("在百词斩上背单词", "百词斩背单词"),
+            ("用快手签到", "快手签到"),
+            ("帮我建一个每日练字", "每日练字"),
+            ("添加一个每天跑步", "每天跑步"),
+            ("新增一项每日阅读", "每日阅读"),
+            ("提醒我每日练字", "每日练字"),
+            ("我要每天在快手上看短视频", "在快手上看短视频"),
+            ("麻烦你帮我每天记单词", "帮 每天记单词"),
+        ]
+        for src, _expected_partial in cases:
+            out = _clean_daily_title(src)
+            self.assertIsNotNone(out, f"_clean_daily_title({src!r}) returned None")
+            # Most important: NO leading verb residue
+            for bad_word in ("添加", "新增", "创建", "加入", "麻烦", "请问", "帮忙"):
+                self.assertFalse(
+                    out.startswith(bad_word),
+                    f"Title {out!r} still starts with scaffolding word {bad_word!r} from input {src!r}",
+                )
+
     def test_fixture_file_exists_and_valid(self):
         import json
         from pathlib import Path

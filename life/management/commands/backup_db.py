@@ -6,11 +6,8 @@ Usage:
     python manage.py backup_db --list             # List existing backups
 """
 import gzip
-import json
 import os
 import shutil
-from datetime import date, timedelta
-from io import TextIOWrapper
 from pathlib import Path
 
 from django.core.management import call_command
@@ -51,17 +48,18 @@ class Command(BaseCommand):
 
         size_kb = fname.stat().st_size // 1024
 
-        # Encrypt (simple AES using BACKUP_KEY env var)
+        # Encrypt with AES-256-GCM (requires BACKUP_KEY)
         if encrypt:
             key = os.getenv("BACKUP_KEY", "")
             if not key:
-                self.stderr.write("BACKUP_KEY not set. Skipping encryption.")
-            else:
-                enc_name = Path(str(fname) + ".enc")
-                self._aes_encrypt(fname, enc_name, key)
+                self.stderr.write("Error: BACKUP_KEY must be set for --encrypt.")
                 fname.unlink()
-                fname = enc_name
-                self.stdout.write(f"Encrypted: {fname}")
+                raise SystemExit(1)
+            enc_name = Path(str(fname) + ".enc")
+            self._aes_encrypt(fname, enc_name, key)
+            fname.unlink()
+            fname = enc_name
+            self.stdout.write(f"Encrypted: {fname}")
 
         self.stdout.write(self.style.SUCCESS(
             f"Backup created: {fname} ({size_kb} KB)"
@@ -71,22 +69,16 @@ class Command(BaseCommand):
         self._cleanup()
 
     def _aes_encrypt(self, src, dst, key):
-        """AES-256-GCM encrypt using cryptography library if available, else simple XOR."""
-        try:
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            import hashlib
-            aes_key = hashlib.sha256(key.encode()).digest()
-            aesgcm = AESGCM(aes_key)
-            nonce = os.urandom(12)
-            data = src.read_bytes()
-            ct = aesgcm.encrypt(nonce, data, None)
-            dst.write_bytes(nonce + ct)
-        except ImportError:
-            # Fallback: zip with password
-            import zipfile
-            with zipfile.ZipFile(str(dst), 'w', zipfile.ZIP_DEFLATED) as zf:
-                zf.setpassword(key.encode())
-                zf.write(str(src), arcname=src.name)
+        """AES-256-GCM encrypt. Fails hard if cryptography is not installed."""
+        import hashlib
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        aes_key = hashlib.sha256(key.encode()).digest()
+        aesgcm = AESGCM(aes_key)
+        nonce = os.urandom(12)
+        data = src.read_bytes()
+        ct = aesgcm.encrypt(nonce, data, None)
+        dst.write_bytes(nonce + ct)
 
     def _cleanup(self):
         """Keep last 7 daily + last 4 weekly backups."""

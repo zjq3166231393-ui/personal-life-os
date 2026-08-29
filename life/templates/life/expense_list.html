@@ -1,51 +1,237 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>账目记录</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}.income{color:#22c55e}.expense{color:#ef4444}.filter-bar{font-size:.875rem}@media(max-width:576px){.filter-bar .row>div{margin-bottom:.5rem}}</style></head>
-<body><main class="container py-3 py-md-4" style="max-width:860px">
-<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between align-items-center"><div><h1 class="h5 fw-bold mb-0">账目记录</h1><span class="opacity-75 small">{{ page_obj.paginator.count }} 条</span></div><a href="{% url 'home' %}" class="text-white text-decoration-none small">← 首页</a></section>
+{% extends "_base.html" %}
+{% block title %}账目 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
 
-<!-- filter bar -->
-<section class="card shadow-sm p-3 mb-3 filter-bar">
-  <div class="d-flex justify-content-between align-items-center mb-2"><span class="fw-bold small">筛选</span><a href="{% url 'expense_list' %}" class="text-decoration-none small">清除</a></div>
-  <form method="get" class="row g-2">
-    <div class="col-6 col-md-3"><input type="date" name="date_from" class="form-control form-control-sm" value="{{ filters.date_from }}" placeholder="开始日期"></div>
-    <div class="col-6 col-md-3"><input type="date" name="date_to" class="form-control form-control-sm" value="{{ filters.date_to }}" placeholder="结束日期"></div>
-    <div class="col-6 col-md-2"><select name="type" class="form-select form-select-sm"><option value="">全部类型</option><option value="expense" {% if filters.type == 'expense' %}selected{% endif %}>支出</option><option value="income" {% if filters.type == 'income' %}selected{% endif %}>收入</option><option value="transfer" {% if filters.type == 'transfer' %}selected{% endif %}>转账</option></select></div>
-    <div class="col-6 col-md-2"><select name="category" class="form-select form-select-sm"><option value="">全部分类</option>{% for c in categories %}<option value="{{ c.pk }}" {% if filters.category == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>{% endfor %}</select></div>
-    <div class="col-4 col-md-1"><input type="number" name="amount_min" class="form-control form-control-sm" value="{{ filters.amount_min }}" placeholder="¥起" step="0.01"></div>
-    <div class="col-4 col-md-1"><input type="number" name="amount_max" class="form-control form-control-sm" value="{{ filters.amount_max }}" placeholder="¥止" step="0.01"></div>
-    <div class="col-8 col-md-3"><input type="text" name="q" class="form-control form-control-sm" value="{{ filters.q }}" placeholder="搜索备注/商户"></div>
-    <div class="col-4 col-md-2"><button type="submit" class="btn btn-sm btn-dark w-100">筛选</button></div>
-  </form>
-</section>
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">账目 <span class="lf-text-sm lf-text-faint lf-num">{{ page_obj.paginator.count }} 条</span></h1>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <a href="{% url 'export_data' %}?type=expense&format=csv" class="lf-btn lf-btn--ghost lf-btn--sm" download title="导出当前账目为 CSV（Excel 直接打开）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        CSV
+      </a>
+      <a href="{% url 'export_data' %}?type=expense&format=json" class="lf-btn lf-btn--ghost lf-btn--sm" download title="导出当前账目为 JSON（结构化数据）">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        JSON
+      </a>
+      <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        首页
+      </a>
+    </div>
+  </header>
 
-<!-- result list -->
-<section class="card shadow-sm p-0">
-{% for e in page_obj %}
-<div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-  <div class="text-truncate me-2">
-    <span class="badge {% if e.type == 'income' %}text-bg-success{% elif e.type == 'transfer' %}text-bg-info{% else %}text-bg-secondary{% endif %} me-1">{{ e.get_type_display }}</span>
-    {% if e.category %}<span class="badge text-bg-light me-1 d-none d-md-inline-block">{{ e.category.icon }} {{ e.category.name }}</span>{% endif %}
-    <a href="{% url 'expense_detail' e.pk %}" class="text-decoration-none">{{ e.note|default:e.merchant|default:'未命名' }}</a>
-    <span class="text-secondary small ms-1 d-none d-md-inline">{{ e.occurred_at|date:'m/d H:i' }}</span>
-  </div>
-  <div class="text-end text-nowrap">
-    <strong class="{% if e.type == 'income' %}income{% else %}expense{% endif %}">{% if e.type == 'income' %}+{% endif %}¥{{ e.amount }}</strong>
-    <a href="{% url 'expense_edit' e.pk %}" class="btn btn-sm btn-outline-secondary ms-1 d-none d-md-inline-block">编辑</a>
-  </div>
-</div>
-{% empty %}
-<div class="px-3 py-4 text-center text-secondary">没有符合条件的记录</div>
-{% endfor %}
-</section>
+  {# ───── 时段 selector（顶置）+ 高级筛选（点击展开） ───── #}
+  <section class="lf-card lf-mb-3">
+    <form method="get" class="lf-row lf-row--between" style="align-items:center;">
+      <div class="lf-field" style="margin:0;min-width:140px;">
+        <label for="periodSel" class="lf-label">时段</label>
+        <select name="period" id="periodSel" class="lf-select" onchange="this.form.submit()">
+          <option value="3"   {% if period == '3'   %}selected{% endif %}>近 3 天</option>
+          <option value="7"   {% if period == '7'   %}selected{% endif %}>近 1 周</option>
+          <option value="30"  {% if period == '30'  %}selected{% endif %}>近 1 月</option>
+          <option value="all" {% if period == 'all' %}selected{% endif %}>全部</option>
+        </select>
+      </div>
+      <span class="lf-text-xs lf-text-faint lf-num">{{ page_obj.paginator.count }} 条 · {{ kpi.count }} 笔</span>
+    </form>
+  </section>
 
-<!-- pagination -->
-{% if page_obj.paginator.num_pages > 1 %}
-<nav class="mt-3 d-flex justify-content-center"><ul class="pagination pagination-sm mb-0">
-  {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?{% for k,v in filters.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">&laquo;</a></li>{% endif %}
-  {% for num in page_obj.paginator.page_range %}{% if num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}<li class="page-item {% if num == page_obj.number %}active{% endif %}"><a class="page-link" href="?{% for k,v in filters.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a></li>{% endif %}{% endfor %}
-  {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?{% for k,v in filters.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">&raquo;</a></li>{% endif %}
-</ul></nav>
-{% endif %}
-{% include 'life/_bottom_nav.html' %}</main></body></html>
+  {# ───── 高级筛选（默认折叠，点击展开） ───── #}
+  <details class="lf-filter-card lf-mb-3">
+    <summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;">
+      <strong class="lf-text-sm lf-text-bold">高级筛选</strong>
+      <span class="lf-text-xs lf-text-faint">点击展开 ⌄</span>
+    </summary>
+
+    <form method="get" class="lf-mt-3">
+      <div class="lf-row lf-row--wrap">
+        <div class="lf-field" style="min-width:140px;">
+          <label class="lf-label">开始</label>
+          <input type="date" name="date_from" class="lf-input" value="{{ filters.date_from }}">
+        </div>
+        <div class="lf-field" style="min-width:140px;">
+          <label class="lf-label">结束</label>
+          <input type="date" name="date_to" class="lf-input" value="{{ filters.date_to }}">
+        </div>
+        <div class="lf-field" style="min-width:140px;">
+          <label class="lf-label">分类</label>
+          <select name="category" class="lf-select">
+            <option value="">全部分类</option>
+            {% for c in categories %}<option value="{{ c.pk }}" {% if filters.category == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="lf-field" style="min-width:110px;">
+          <label class="lf-label">金额起</label>
+          <input type="number" name="amount_min" class="lf-input lf-num" step="0.01" min="0" value="{{ filters.amount_min }}">
+        </div>
+        <div class="lf-field" style="min-width:110px;">
+          <label class="lf-label">金额止</label>
+          <input type="number" name="amount_max" class="lf-input lf-num" step="0.01" min="0" value="{{ filters.amount_max }}">
+        </div>
+        <div class="lf-field" style="min-width:160px;">
+          <label class="lf-label">搜索</label>
+          <input type="text" name="q" class="lf-input" placeholder="备注/商户" value="{{ filters.q }}">
+        </div>
+      </div>
+      <div class="lf-row lf-row--end" style="margin-top:12px;gap:8px;">
+        <button type="submit" class="lf-btn lf-btn--primary lf-btn--sm">应用筛选</button>
+        <a href="{% url 'expense_list' %}" class="lf-btn lf-btn--ghost lf-btn--sm">清空</a>
+      </div>
+    </form>
+  </details>
+
+  {# ───── KPI 卡 + 分类分布 ───── #}
+  <section class="lf-card lf-mb-3">
+    <div class="lf-stat-grid">
+      <div class="lf-stat-mini">
+        <div class="lf-stat-mini__label">总支出</div>
+        <div class="lf-stat-mini__value lf-num {% if kpi.diff_pct > 15 %}lf-text-danger{% elif kpi.diff_pct < -15 %}lf-text-success{% endif %}">¥{{ kpi.total|floatformat:0 }}</div>
+        {% if period != 'all' and kpi.last_total %}
+          <div class="lf-stat-mini__hint lf-num {% if kpi.diff_pct > 15 %}lf-text-danger{% elif kpi.diff_pct < -15 %}lf-text-success{% else %}lf-text-faint{% endif %}">
+            {% if kpi.diff_pct > 0 %}↑ {{ kpi.diff_pct }}%{% elif kpi.diff_pct < 0 %}↓ {{ kpi.diff_pct|cut:'-' }}%{% else %}— 持平{% endif %} vs 上周
+          </div>
+        {% endif %}
+      </div>
+      <div class="lf-stat-mini">
+        <div class="lf-stat-mini__label">笔数</div>
+        <div class="lf-stat-mini__value lf-num">{{ kpi.count }}</div>
+        <div class="lf-stat-mini__hint lf-text-faint lf-num">日均 ¥{{ kpi.daily_avg|floatformat:0 }}</div>
+      </div>
+      <div class="lf-stat-mini">
+        <div class="lf-stat-mini__label">最高单笔</div>
+        <div class="lf-stat-mini__value lf-num">¥{{ kpi.max_single|floatformat:0 }}</div>
+        <div class="lf-stat-mini__hint lf-text-faint">收入 ¥{{ kpi.income|floatformat:0 }}</div>
+      </div>
+    </div>
+
+    {% if cat_breakdown %}
+    <div class="lf-mt-3">
+      <div class="lf-text-xs lf-text-faint lf-mb-2">分类分布</div>
+      <div class="lf-cat-bar">
+        {% for cb in cat_breakdown %}
+        <span class="lf-cat-bar__seg" style="width:{% if cb.pct > 0 %}{{ cb.pct }}{% else %}0{% endif %}%;background:{{ cb.color }};" title="{{ cb.name }} ¥{{ cb.amount|floatformat:0 }}"></span>
+        {% endfor %}
+      </div>
+      <div class="lf-row lf-row--wrap lf-mt-2" style="gap:8px 12px;">
+        {% for cb in cat_breakdown %}
+        <span class="lf-row lf-text-xs" style="gap:4px;align-items:center;">
+          <span style="width:8px;height:8px;border-radius:50%;background:{{ cb.color }};display:inline-block;flex-shrink:0;"></span>
+          <span>{{ cb.icon }} {{ cb.name }}</span>
+          <span class="lf-text-faint lf-num">{{ cb.pct }}%</span>
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ───── 高级筛选（折叠在下方，用户手动调整） ───── #}
+  <section class="lf-card lf-mb-3">
+    <details>
+      <summary class="lf-row lf-row--between" style="cursor:pointer;list-style:none;">
+        <h3 class="lf-section-title lf-mb-0">高级筛选</h3>
+        <span class="lf-text-xs lf-text-faint">点击展开 →</span>
+      </summary>
+      <form method="get" class="lf-mt-3">
+        <input type="hidden" name="period" value="{{ period }}">
+        <div class="lf-row lf-row--wrap" style="gap:8px;">
+          <input type="date" name="date_from" class="lf-input" style="flex:1;min-width:140px;" value="{{ filters.date_from }}">
+          <input type="date" name="date_to" class="lf-input" style="flex:1;min-width:140px;" value="{{ filters.date_to }}">
+          {# ───── 支出分类：日常 / 固定（互斥筛选，跟账目在一起时一目了然） ───── #}
+      <div class="lf-field" style="min-width:140px;">
+        <label for="recurringSel" class="lf-label">类型</label>
+        <select name="recurring" id="recurringSel" class="lf-select" onchange="this.form.submit()">
+          <option value=""        {% if request.GET.recurring == '' or not request.GET.recurring %}selected{% endif %}>全部</option>
+          <option value="daily"   {% if request.GET.recurring == 'daily'   %}selected{% endif %}>日常支出</option>
+          <option value="fixed"   {% if request.GET.recurring == 'fixed'   %}selected{% endif %}>固定支出</option>
+        </select>
+      </div>
+      {# ───── 收支类型 ───── #}
+      <div class="lf-field" style="min-width:120px;">
+        <label for="typeSel" class="lf-label">收支</label>
+        <select name="type" id="typeSel" class="lf-select" onchange="this.form.submit()">
+          <option value=""        {% if request.GET.type == ''        or not request.GET.type %}selected{% endif %}>全部</option>
+          <option value="expense" {% if request.GET.type == 'expense' %}selected{% endif %}>支出</option>
+          <option value="income"  {% if request.GET.type == 'income'  %}selected{% endif %}>收入</option>
+          <option value="transfer"{% if request.GET.type == 'transfer'%}selected{% endif %}>转账</option>
+        </select>
+      </div>
+      <div class="lf-field" style="flex:1;min-width:160px;">
+        <label for="dateFromSel" class="lf-label">开始</label>
+        <input type="date" name="date_from" id="dateFromSel" class="lf-input" value="{{ filters.date_from }}">
+      </div>
+      <div class="lf-field" style="flex:1;min-width:160px;">
+        <label for="dateToSel" class="lf-label">结束</label>
+        <input type="date" name="date_to" id="dateToSel" class="lf-input" value="{{ filters.date_to }}">
+      </div>
+      <div class="lf-field" style="flex:1;min-width:140px;">
+        <label for="categorySel" class="lf-label">分类</label>
+        <select name="category" id="categorySel" class="lf-select" onchange="this.form.submit()">
+          <option value="">全部分类</option>
+          {% for c in categories %}<option value="{{ c.pk }}" {% if filters.category == c.pk|stringformat:'s' %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="lf-field" style="width:120px;">
+        <label for="amountMinSel" class="lf-label">金额起</label>
+        <input type="number" name="amount_min" id="amountMinSel" class="lf-input lf-num" value="{{ filters.amount_min }}" step="0.01" placeholder="¥" onchange="this.form.submit()">
+      </div>
+      <div class="lf-field" style="width:120px;">
+        <label for="amountMaxSel" class="lf-label">金额止</label>
+        <input type="number" name="amount_max" id="amountMaxSel" class="lf-input lf-num" value="{{ filters.amount_max }}" step="0.01" placeholder="¥" onchange="this.form.submit()">
+      </div>
+      <div class="lf-field" style="flex:1;min-width:180px;">
+        <label for="qSel" class="lf-label">搜索</label>
+        <input type="text" name="q" id="qSel" class="lf-input" value="{{ filters.q }}" placeholder="备注/商户">
+      </div>
+      <button type="submit" class="lf-btn lf-btn--primary">应用</button>
+      {% if filters.date_from or filters.date_to or filters.type or filters.category or filters.amount_min or filters.amount_max or filters.q or request.GET.recurring %}
+      <a href="?period={{ period }}" class="lf-btn lf-btn--ghost lf-btn--sm">清除</a>
+      {% endif %}
+    </form>
+  </section>
+        </div>
+      </form>
+    </details>
+  </section>
+
+  <section class="lf-card lf-card--flush">
+    {% for e in page_obj %}
+    <article class="lf-list-item lf-list-item--hover">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-row" style="gap:6px;">
+          <span class="lf-badge {% if e.type == 'income' %}lf-badge--success{% elif e.type == 'transfer' %}lf-badge--info{% else %}lf-badge--outline{% endif %}">{{ e.get_type_display }}</span>
+          {% if e.category %}<span class="lf-badge lf-badge--outline">{{ e.category.icon }} {{ e.category.name }}</span>{% endif %}
+        </div>
+        <a href="{% url 'expense_detail' e.pk %}" class="lf-text-1" style="display:block;margin-top:4px;text-decoration:none;">{{ e.note|default:e.merchant|default:'未命名' }}</a>
+        <div class="lf-text-xs lf-text-faint lf-mt-1 lf-num">{{ e.occurred_at|date:"m/d H:i" }}</div>
+      </div>
+      <div class="lf-row" style="gap:8px;">
+        <span class="lf-amount lf-num {% if e.type == 'income' %}lf-text-success{% endif %}" style="font-size:16px;">{% if e.type == 'income' %}+{% endif %}¥{{ e.amount }}</span>
+        <a href="{% url 'expense_edit' e.pk %}" class="lf-btn lf-btn--ghost lf-btn--icon lf-btn--sm" title="编辑">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </a>
+      </div>
+    </article>
+    {% empty %}
+    <div class="lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <p class="lf-empty__text">当前时段还没有账目记录。回首页说"午饭 18 元"试试。</p>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav class="lf-row lf-row--between lf-mt-4">
+    <div class="lf-text-xs lf-text-faint">第 {{ page_obj.number }} / {{ page_obj.paginator.num_pages }} 页</div>
+    <div class="lf-row" style="gap:6px;">
+      {% if page_obj.has_previous %}<a href="?{% for k,v in filters.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}period={{ period }}&page={{ page_obj.previous_page_number }}" class="lf-btn lf-btn--ghost lf-btn--sm">← 上一页</a>{% endif %}
+      {% if page_obj.has_next %}<a href="?{% for k,v in filters.items %}{% if v %}{{ k }}={{ v }}&{% endif %}{% endfor %}period={{ period }}&page={{ page_obj.next_page_number }}" class="lf-btn lf-btn--ghost lf-btn--sm">下一页 →</a>{% endif %}
+    </div>
+  </nav>
+  {% endif %}
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

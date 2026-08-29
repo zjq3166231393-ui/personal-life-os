@@ -81,17 +81,13 @@ class Command(BaseCommand):
 
     def _decrypt(self, fpath, key):
         out = Path(str(fpath).replace(".enc", ""))
-        try:
-            from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-            import hashlib
-            aes_key = hashlib.sha256(key.encode()).digest()
-            aesgcm = AESGCM(aes_key)
-            data = fpath.read_bytes()
-            nonce, ct = data[:12], data[12:]
-            pt = aesgcm.decrypt(nonce, ct, None)
-            out.write_bytes(pt)
-        except ImportError:
-            import zipfile
-            with zipfile.ZipFile(str(fpath), 'r') as zf:
-                zf.extractall(path=BACKUP_DIR, pwd=key.encode())
+        import hashlib
+
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        aes_key = hashlib.sha256(key.encode()).digest()
+        aesgcm = AESGCM(aes_key)
+        data = fpath.read_bytes()
+        nonce, ct = data[:12], data[12:]
+        pt = aesgcm.decrypt(nonce, ct, None)
+        out.write_bytes(pt)
         return out

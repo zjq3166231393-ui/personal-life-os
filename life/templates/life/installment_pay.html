@@ -1,16 +1,34 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><title>还一期 - Personal Life OS</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}</style></head>
-<body><main class="container py-4" style="max-width:480px">
-<section class="hero p-4 shadow-sm mb-4"><h1 class="h5 fw-bold mb-0">确认还款</h1></section>
-<section class="card shadow-sm p-4">
-{% if error %}<div class="alert alert-warning">{{ error }}</div>{% endif %}
-<p>计划：<strong>{{ plan.name }}</strong></p>
-<p>每期金额：<strong>¥{{ plan.installment_amount }}</strong></p>
-<p>当前进度：<strong>{{ plan.paid_periods }}/{{ plan.total_periods }} 期</strong></p>
-<p>剩余：<strong>¥{{ plan.remaining_amount }} ({{ plan.remaining_periods }} 期)</strong></p>
-{% if not error and plan.status == 'active' %}
-<form method="post">{% csrf_token %}<button type="submit" class="btn btn-success">确认还 ¥{{ plan.installment_amount }}（第 {{ plan.paid_periods|add:'1' }} 期）</button><a href="{% url 'installment_list' %}" class="btn btn-outline-secondary ms-2">取消</a></form>
-{% else %}<a href="{% url 'installment_list' %}" class="btn btn-outline-secondary">返回</a>{% endif %}
-</section>
-</main></body></html>
+{% extends "_base.html" %}
+{% block title %}还一期 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:480px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">确认还款</h1>
+    <a href="{% url 'installment_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--padded">
+    {% if error %}<div class="lf-alert lf-alert--warning">{{ error }}</div>{% endif %}
+    <div class="lf-stack-sm lf-mb-4">
+      <div class="lf-row lf-row--between"><span class="lf-text-muted lf-text-sm">计划</span><span class="lf-text-sm lf-text-bold">{{ plan.name }}</span></div>
+      <div class="lf-row lf-row--between"><span class="lf-text-muted lf-text-sm">每期金额</span><span class="lf-amount">¥{{ plan.installment_amount }}</span></div>
+      <div class="lf-row lf-row--between"><span class="lf-text-muted lf-text-sm">当前进度</span><span class="lf-text-sm lf-num">{{ plan.paid_periods }}/{{ plan.total_periods }} 期</span></div>
+      <div class="lf-row lf-row--between"><span class="lf-text-muted lf-text-sm">剩余</span><span class="lf-text-sm lf-num lf-text-faint">¥{{ plan.remaining_amount }}（{{ plan.remaining_periods }} 期）</span></div>
+    </div>
+    {% if not error and plan.status == 'active' %}
+    <form method="post">{% csrf_token %}
+      <button type="submit" class="lf-btn lf-btn--secondary lf-btn--block">确认还 ¥{{ plan.installment_amount }}（第 {{ plan.paid_periods|add:'1' }} 期）</button>
+    </form>
+    {% else %}
+    <a href="{% url 'installment_list' %}" class="lf-btn lf-btn--ghost lf-btn--block">返回</a>
+    {% endif %}
+  </section>
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

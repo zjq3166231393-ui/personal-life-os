@@ -1,29 +1,48 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>通知中心</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}.notif-unread{border-left:3px solid #2563eb;background:#f0f5ff}.notif-ignored{opacity:.5}</style></head>
-<body><main class="container py-3 py-md-4" style="max-width:640px">
-<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between align-items-center"><div><h1 class="h5 fw-bold mb-0">通知中心</h1>{% if unread_count > 0 %}<span class="badge bg-danger ms-1">{{ unread_count }}</span>{% endif %}</div><a href="{% url 'home' %}" class="text-white text-decoration-none small">← 首页</a></section>
-<section class="card shadow-sm p-0">
-{% for n in notifications %}
-<div class="px-3 py-2 border-bottom {% if n.status == 'pending' or n.status == 'delivered' %}notif-unread{% elif n.status == 'ignored' %}notif-ignored{% endif %}">
-  <div class="d-flex justify-content-between align-items-start">
+{% extends "_base.html" %}
+{% block title %}通知中心 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:640px;">
+
+  <header class="lf-page-header">
     <div>
-      <span class="badge {% if n.status == 'pending' %}text-bg-warning{% elif n.status == 'read' %}text-bg-light{% elif n.status == 'ignored' %}text-bg-secondary{% else %}text-bg-info{% endif %} me-1">{{ n.get_status_display }}</span>
-      <strong>{{ n.title }}</strong>
-      {% if n.body %}<p class="text-secondary small mb-0 mt-1">{{ n.body }}</p>{% endif %}
-      <small class="text-secondary">{{ n.created_at|date:'n/j H:i' }}</small>
+      <h1 class="lf-page-header__title">通知中心</h1>
+      {% if unread_count > 0 %}<div class="lf-text-xs lf-text-faint lf-mt-1">{{ unread_count }} 条未读</div>{% endif %}
     </div>
-    <div class="text-nowrap actions">
-      {% if n.status != 'read' and n.status != 'ignored' %}
-      <a href="{% url 'notification_mark_read' n.pk %}" class="btn btn-sm btn-outline-primary">已读</a>
-      {% endif %}
-      {% if n.status != 'ignored' %}
-      <a href="{% url 'notification_ignore' n.pk %}" class="btn btn-sm btn-outline-secondary ms-1">忽略</a>
-      {% endif %}
+    <a href="{% url 'home' %}" class="lf-page-header__back">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--flush">
+    {% for n in notifications %}
+    <article class="lf-list-item" style="align-items:flex-start;{% if n.status == 'pending' or n.status == 'delivered' %}background:var(--brand-soft);border-left:3px solid var(--brand);{% elif n.status == 'ignored' %}opacity:.5;{% endif %}">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-row lf-row--wrap" style="gap:6px;">
+          <span class="lf-badge {% if n.status == 'pending' %}lf-badge--warning{% elif n.status == 'read' %}lf-badge--outline{% elif n.status == 'ignored' %}lf-badge--outline{% else %}lf-badge--info{% endif %}">{{ n.get_status_display }}</span>
+          <span class="lf-text-bold lf-text-sm">{{ n.title }}</span>
+        </div>
+        {% if n.body %}<p class="lf-text-sm lf-text-muted lf-mt-1 lf-mb-0">{{ n.body }}</p>{% endif %}
+        <div class="lf-text-xs lf-text-faint lf-num lf-mt-1">{{ n.created_at|date:'n/j H:i' }}</div>
+      </div>
+      <div class="lf-row lf-row--wrap" style="gap:4px;">
+        {% if n.status != 'read' and n.status != 'ignored' %}
+        <a href="{% url 'notification_mark_read' n.pk %}" class="lf-btn lf-btn--ghost lf-btn--sm">已读</a>
+        {% endif %}
+        {% if n.status != 'ignored' %}
+        <a href="{% url 'notification_ignore' n.pk %}" class="lf-btn lf-btn--ghost lf-btn--sm">忽略</a>
+        {% endif %}
+      </div>
+    </article>
+    {% empty %}
+    <div class="lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <p class="lf-empty__text">暂无通知。提醒到期时会自动出现在这里。</p>
     </div>
-  </div>
-</div>
-{% empty %}<div class="px-3 py-4 text-center text-secondary">暂无通知。</div>{% endfor %}
-</section>
-</main></body></html>
+    {% endfor %}
+  </section>
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

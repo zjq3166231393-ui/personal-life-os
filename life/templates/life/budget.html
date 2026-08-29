@@ -1,44 +1,152 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>预算 - Personal Life OS</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}.progress{height:12px;border-radius:6px}.over-budget .progress-bar{background:#ef4444}</style></head>
-<body><main class="container py-3 py-md-4" style="max-width:780px">
-<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between"><div><h1 class="h5 fw-bold mb-0">{{ month_start|date:'Y年n月' }} 预算</h1></div><a href="{% url 'home' %}" class="text-white text-decoration-none small">← 首页</a></section>
+{% extends "_base.html" %}
+{% block title %}预算 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
 
-<!-- total budget card -->
-<section class="card shadow-sm p-4 mb-3 {% if over_total %}over-budget{% endif %}">
-  <div class="d-flex justify-content-between align-items-start mb-2">
-    <div><span class="text-secondary small">总预算</span><h2 class="h4 fw-bold mb-0">¥{{ total_amount|floatformat:2 }}</h2></div>
-    <div class="text-end"><span class="text-secondary small">已花</span><h3 class="h5 fw-bold mb-0 {% if over_total %}text-danger{% endif %}">¥{{ spent_total|floatformat:2 }}</h3></div>
-    <div class="text-end"><span class="text-secondary small">剩余</span><h3 class="h5 fw-bold mb-0 {% if remaining < 0 %}text-danger{% else %}text-success{% endif %}">¥{{ remaining|floatformat:2 }}</h3></div>
-  </div>
-  <div class="progress"><div class="progress-bar {% if over_total %}bg-danger{% elif pct > 80 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ pct }}%"></div></div>
-  <div class="d-flex justify-content-between mt-1"><small class="text-secondary">{{ pct }}%</small>{% if over_total %}<small class="text-danger">超支 ¥{{ over_amount|floatformat:2 }}</small>{% elif remaining > 0 %}<small class="text-success">剩余 ¥{{ remaining|floatformat:2 }}</small>{% endif %}</div>
-</section>
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{{ month_start|date:"Y年n月" }} 预算</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
 
-<!-- set total budget -->
-<section class="card shadow-sm p-3 mb-3"><form method="post" class="row g-2 align-items-end">{% csrf_token %}
-  <div class="col-8 col-md-4"><label class="form-label small mb-0">设置总预算</label><input type="number" name="total_budget" class="form-control form-control-sm" step="0.01" min="0" value="{{ total_amount }}" placeholder="月度总预算"></div>
-  <div class="col-4 col-md-2"><button type="submit" class="btn btn-sm btn-dark w-100">保存</button></div>
-</form></section>
+  {# ───── Hero：超支时红底，但内部文字强制白色保证对比度 ───── #}
+  <section class="lf-card lf-card--padded lf-mb-4 {% if over_total %}lf-hero--danger{% endif %}" style="{% if not over_total %}background:linear-gradient(135deg,#1e3a8a,#2b56d8 55%,#4b80f0);color:#fff;{% endif %}padding:24px;">
+    <div class="lf-row" style="gap:24px;align-items:center;">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-text-sm" style="{% if not over_total %}opacity:.85;{% else %}color:rgba(255,255,255,.85);{% endif %}">总预算</div>
+        <div class="lf-amount lf-amount--xl lf-num" style="margin-top:4px;color:#fff;">¥{{ total_amount|floatformat:2 }}</div>
+      </div>
+      <div style="text-align:center;">
+        {% with r=64 pct_clamped=pct|default:0 %}
+        <svg width="92" height="92" viewBox="0 0 100 100" aria-label="预算进度">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"
+                  stroke-dasharray="263.89" stroke-dashoffset="{{ pct_clamped }}" transform="rotate(-90 50 50)"
+                  style="transition:stroke-dashoffset 800ms cubic-bezier(0.32,0.72,0.24,1);"/>
+          <text x="50" y="46" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">已用</text>
+          <text x="50" y="62" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">{{ pct }}%</text>
+        </svg>
+        {% endwith %}
+      </div>
+    </div>
+    <div class="lf-row lf-row--between lf-mt-4" style="color:#fff;">
+      <div>
+        <div class="lf-text-xs" style="opacity:.85;">已花</div>
+        <div class="lf-amount lf-num lf-mt-1" style="color:#fff;">¥{{ spent_total|floatformat:2 }}</div>
+      </div>
+      <div class="lf-text-end">
+        <div class="lf-text-xs" style="opacity:.85;">剩余</div>
+        <div class="lf-amount lf-num lf-mt-1" style="color:#fff;">{% if remaining < 0 %}-¥{{ over_amount|floatformat:2 }}{% else %}¥{{ remaining|floatformat:2 }}{% endif %}</div>
+      </div>
+    </div>
+    {% if over_total %}
+    <div class="lf-mt-3">
+      <span class="lf-badge" style="background:rgba(255,255,255,.92);color:var(--danger);">超支 ¥{{ over_amount|floatformat:2 }}</span>
+    </div>
+    {% endif %}
+  </section>
 
-<!-- category budgets -->
-<section class="card shadow-sm p-4 mb-3"><h2 class="h6 fw-bold mb-3">分类预算</h2>
-<form method="post">{% csrf_token %}
-{% for row in cat_rows %}
-<div class="border-bottom py-2">
-  <div class="d-flex justify-content-between align-items-center mb-1">
-    <span>{{ row.obj.icon }} <strong>{{ row.obj.name }}</strong></span>
-    <span class="small">已花 ¥{{ row.spent|floatformat:2 }} /
-      <input type="number" name="cat_{{ row.obj.pk }}" class="form-control form-control-sm d-inline-block" style="width:80px" step="0.01" min="0" value="{{ row.budget }}" placeholder="预算">
-    </span>
-  </div>
-  {% if row.budget > 0 %}
-  <div class="progress"><div class="progress-bar {% if row.over %}bg-danger{% elif row.pct > 80 %}bg-warning{% else %}bg-success{% endif %}" style="width:{{ row.pct }}%"></div></div>
-  <div class="d-flex justify-content-between"><small class="text-secondary">{{ row.pct }}%</small>{% if row.over %}<small class="text-danger">超支 ¥{{ row.over_amount|floatformat:2 }}</small>{% elif row.remaining > 0 %}<small class="text-success">剩余 ¥{{ row.remaining|floatformat:2 }}</small>{% endif %}</div>
+  {# ───── 30 天趋势 sparkline ───── #}
+  {% if trend_30 %}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-row lf-row--between lf-mb-3">
+      <h3 class="lf-section-title lf-mb-0">近 30 天支出趋势</h3>
+      <span class="lf-text-xs lf-text-faint">每日合计</span>
+    </div>
+    <div class="lf-sparkline">
+      {% for d in trend_30 %}
+      {% widthratio d.amount|floatformat:0 200 100 as bar_pct %}
+      <span class="lf-sparkline__bar {% if forloop.counter == 30 %}lf-sparkline__bar--today{% endif %}" style="height:{% if d.amount > 0 %}{{ bar_pct }}{% else %}4{% endif %}%;" title="{{ d.date|date:'m/d' }} ¥{{ d.amount|floatformat:0 }}"></span>
+      {% endfor %}
+    </div>
+    <div class="lf-row lf-row--between lf-mt-2">
+      <span class="lf-text-xs lf-text-faint lf-num">{{ trend_30.0.date|date:"m/d" }}</span>
+      <span class="lf-text-xs lf-text-faint lf-num">今天</span>
+    </div>
+  </section>
   {% endif %}
-</div>
-{% endfor %}
-<div class="mt-3"><button type="submit" class="btn btn-sm btn-dark">保存分类预算</button></div>
-</form></section>
-{% include 'life/_bottom_nav.html' %}</main></body></html>
+
+  {# ───── 节省建议 ───── #}
+  {% if savings_tip %}
+  <section class="lf-card lf-card--tight lf-mb-4 lf-row" style="gap:12px;align-items:flex-start;padding:16px;">
+    {% if savings_tip.tone == 'success' %}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success);flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>
+    {% elif savings_tip.tone == 'danger' %}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger);flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    {% elif savings_tip.tone == 'warning' %}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning);flex-shrink:0;margin-top:2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    {% else %}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info);flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+    {% endif %}
+    <div style="flex:1;min-width:0;">
+      <div class="lf-text-sm lf-text-bold" style="margin-bottom:4px;">
+        {% if savings_tip.tone == 'success' %}做得好{% elif savings_tip.tone == 'danger' %}注意{% elif savings_tip.tone == 'warning' %}提醒{% else %}提示{% endif %}
+      </div>
+      <div class="lf-text-sm" style="line-height:1.6;">{{ savings_tip.text }}</div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ───── 设置总预算 ───── #}
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">设置总预算</h3>
+    <form method="post">{% csrf_token %}
+      <div class="lf-row" style="gap:8px;">
+        <div style="flex:1;">
+          <input type="number" name="total_budget" class="lf-input lf-num" step="0.01" min="0" value="{{ total_amount }}" placeholder="月度总预算">
+        </div>
+        <button type="submit" class="lf-btn lf-btn--primary">保存</button>
+      </div>
+    </form>
+  </section>
+
+  {# ───── 分类预算（Top 3 + 全部） ───── #}
+  {% if top_spending_cats %}
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title">本月支出 Top 3</h3>
+    {% for row in top_spending_cats %}
+    <div class="lf-row" style="padding:10px 0;border-bottom:1px solid var(--border-soft);{% if forloop.last %}border-bottom:0;{% endif %}">
+      <span class="lf-badge {% if forloop.counter == 1 %}lf-badge--danger{% elif forloop.counter == 2 %}lf-badge--warning{% else %}lf-badge--outline{% endif %}" style="min-width:28px;justify-content:center;">{{ forloop.counter }}</span>
+      <span style="flex:1;">{{ row.obj.icon }} {{ row.obj.name }}</span>
+      <span class="lf-amount lf-num">¥{{ row.spent|floatformat:0 }}</span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="lf-card">
+    <h3 class="lf-section-title">分类预算</h3>
+    <form method="post">{% csrf_token %}
+      {% for row in cat_rows %}
+      <div class="lf-list-item" style="display:block;padding:14px 0;">
+        <div class="lf-row lf-row--between">
+          <span class="lf-text-1 lf-text-bold">{{ row.obj.icon }} {{ row.obj.name }}</span>
+          <div class="lf-row lf-text-xs lf-text-muted" style="gap:6px;">
+            <span class="lf-num">已花 ¥{{ row.spent|floatformat:0 }}</span>
+            <span>/</span>
+            <input type="number" name="cat_{{ row.obj.pk }}" class="lf-input lf-num" style="width:90px;height:32px;padding:0 8px;" step="0.01" min="0" value="{{ row.budget }}" placeholder="0">
+          </div>
+        </div>
+        {% if row.budget > 0 %}
+        <div class="lf-progress lf-mt-2 {% if row.over %}lf-progress--danger{% elif row.pct > 80 %}lf-progress--warning{% else %}lf-progress--success{% endif %}" style="height:6px;">
+          <div class="lf-progress__bar" style="width:{% if row.pct > 100 %}100{% else %}{{ row.pct }}{% endif %}%;"></div>
+        </div>
+        <div class="lf-row lf-row--between lf-mt-1">
+          <span class="lf-text-xs lf-text-faint lf-num">{{ row.pct }}%</span>
+          {% if row.over %}<span class="lf-text-xs lf-text-danger lf-num">超支 ¥{{ row.over_amount|floatformat:0 }}</span>
+          {% elif row.remaining > 0 %}<span class="lf-text-xs lf-text-success lf-num">剩余 ¥{{ row.remaining|floatformat:0 }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="lf-btn lf-btn--primary lf-mt-3">保存分类预算</button>
+    </form>
+  </section>
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

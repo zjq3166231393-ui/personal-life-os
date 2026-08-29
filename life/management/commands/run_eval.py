@@ -62,7 +62,6 @@ class Command(BaseCommand):
             else:
                 failed += 1
 
-        total = passed + failed + skipped
         rate = passed / (passed + failed) * 100 if (passed + failed) > 0 else 0
         self.stdout.write(f"\n{'='*50}")
         self.stdout.write(f"Results: {passed}/{passed+failed} passed ({rate:.1f}%), {skipped} skipped")

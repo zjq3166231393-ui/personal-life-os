@@ -1,7 +1,9 @@
 """PWA views: manifest.json, service worker, offline page, icon."""
+import struct
+import zlib
+
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.cache import cache_page
-import struct, zlib
 
 
 @cache_page(3600)
@@ -10,16 +12,19 @@ def manifest(request):
         "name": "Personal Life OS",
         "short_name": "Life OS",
         "description": "个人生活管理系统",
+        "dir": "ltr",
+        "lang": "zh-CN",
         "start_url": "/",
+        "scope": "/",
         "display": "standalone",
         "background_color": "#f5f7fb",
         "theme_color": "#2563eb",
         "orientation": "portrait-primary",
+        "categories": ["productivity", "lifestyle", "finance"],
         "icons": [
-            {"src": "/pwa-icon/192/", "sizes": "192x192", "type": "image/png"},
-            {"src": "/pwa-icon/512/", "sizes": "512x512", "type": "image/png"},
+            {"src": "/pwa-icon/192/", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/pwa-icon/512/", "sizes": "512x512", "type": "image/png", "purpose": "any"},
         ],
-        "lang": "zh-CN",
     }
     return JsonResponse(data)
 
@@ -27,22 +32,22 @@ def manifest(request):
 def pwa_icon(request, size):
     """Generate a simple blue-square PNG icon at the given size."""
     s = int(size)
-    # Minimal PNG: blue square with white "L" letter area
+    # Minimal PNG: blue square with white center circle
     def make_png(w, h, r, g, b):
         raw = b''
         for y in range(h):
             raw += b'\x00'  # filter none
             for x in range(w):
-                # Center circle in lighter blue
-                cx, cy = w//2, h//2
-                dist = ((x-cx)**2 + (y-cy)**2)**0.5
-                if dist < w*0.35:
+                cx, cy = w // 2, h // 2
+                dist = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                if dist < w * 0.35:
                     raw += bytes([255, 255, 255, 255])
                 else:
                     raw += bytes([r, g, b, 255])
         return raw
 
     raw_data = make_png(s, s, 37, 99, 235)
+
     def chunk(ctype, data):
         c = ctype + data
         return struct.pack('>I', len(data)) + c + struct.pack('>I', zlib.crc32(c) & 0xffffffff)
@@ -57,56 +62,79 @@ def pwa_icon(request, size):
 @cache_page(86400)
 def service_worker(request):
     sw = """
-const CACHE = 'lifeos-v1';
-const URLS = [
-  '/',
+const CACHE = 'lifeos-v3';
+const RUNTIME = 'lifeos-runtime-v3';
+const APP_SHELL = [
   '/static/offline.html',
-  'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
-  'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap',
+  '/manifest.json',
+  '/pwa-icon/192/',
+  '/pwa-icon/512/',
+  '/static/css/lifeos.css?v=4',
+  '/static/js/i18n.js?v=2'
 ];
+// Never cache auth / API / user-data pages (privacy + always-fresh HTML).
+const NO_CACHE = ['/api/', '/accounts/', '/expenses/', '/tasks/',
+                  '/notes/', '/reminders/', '/budget/', '/dashboard/',
+                  '/common/', '/recurring/', '/installments/', '/categories/',
+                  '/review/', '/admin/', '/export/', '/profile/'];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)));
-  self.skipWaiting();
+self.addEventListener('install', function(e) {
+  e.waitUntil(
+    caches.open(CACHE).then(function(c) { return c.addAll(APP_SHELL).catch(function(){}); })
+      .then(function() { return self.skipWaiting(); })
+  );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));
-  self.clients.claim();
+self.addEventListener('activate', function(e) {
+  e.waitUntil(
+    caches.keys().then(function(keys) {
+      return Promise.all(keys.filter(function(k) { return k !== CACHE && k !== RUNTIME; })
+        .map(function(k) { return caches.delete(k); }));
+    }).then(function() { return self.clients.claim(); })
+  );
 });
 
-self.addEventListener('push', e => {
-  const data = e.data ? e.data.json() : {};
-  const title = data.title || 'Personal Life OS';
-  const opts = { body: data.body || '', icon: '/pwa-icon/192/', badge: '/pwa-icon/192/' };
+function shouldCache(path) { return !NO_CACHE.some(function(p) { return path.indexOf(p) >= 0; }); }
+
+self.addEventListener('fetch', function(e) {
+  var url = new URL(e.request.url);
+  if (e.request.method !== 'GET') return;
+  if (url.origin !== self.location.origin) return; // only handle same-origin
+
+  // Navigations: NETWORK-FIRST, never cached (user-data pages stay private & fresh).
+  // Offline -> show the offline page instead of a stale cached HTML.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(function() { return caches.match('/static/offline.html'); })
+    );
+    return;
+  }
+
+  // Static assets: CACHE-FIRST, then network, then cache.
+  e.respondWith(
+    caches.match(e.request).then(function(cached) {
+      if (cached) return cached;
+      return fetch(e.request).then(function(res) {
+        if (res.ok && shouldCache(url.pathname)) {
+          var copy = res.clone();
+          caches.open(RUNTIME).then(function(c) { return c.put(e.request, copy); });
+        }
+        return res;
+      }).catch(function() { return cached; });
+    })
+  );
+});
+
+self.addEventListener('push', function(e) {
+  var data = e.data ? e.data.json() : {};
+  var title = data.title || 'Personal Life OS';
+  var opts = { body: data.body || '', icon: '/pwa-icon/192/', badge: '/pwa-icon/192/' };
   e.waitUntil(self.registration.showNotification(title, opts));
 });
 
-self.addEventListener('notificationclick', e => {
+self.addEventListener('notificationclick', function(e) {
   e.notification.close();
   e.waitUntil(clients.openWindow('/'));
-});
-
-self.addEventListener('fetch', e => {
-  // Never cache API calls or dynamic data
-  if (e.request.url.includes('/api/') || e.request.url.includes('/accounts/')) {
-    return;
-  }
-  e.respondWith(
-    caches.match(e.request).then(cached =>
-      cached || fetch(e.request).then(resp => {
-        if (resp.ok && e.request.method === 'GET') {
-          const clone = resp.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return resp;
-      }).catch(() => {
-        if (e.request.mode === 'navigate') {
-          return caches.match('/static/offline.html');
-        }
-      })
-    )
-  );
 });
 """
     return HttpResponse(sw, content_type="application/javascript")

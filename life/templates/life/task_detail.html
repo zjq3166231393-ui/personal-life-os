@@ -1,17 +1,82 @@
-<!doctype html><html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ task.title }}</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap" rel="stylesheet">
-<style>body{background:#f5f7fb;font-family:'Noto Sans SC',system-ui,sans-serif}.card{border:0;border-radius:18px}.hero{background:linear-gradient(135deg,#183b77,#2563eb);color:#fff;border-radius:22px}</style></head>
-<body><main class="container py-3 py-md-4" style="max-width:540px">
-<section class="hero p-3 p-md-4 shadow-sm mb-3 d-flex justify-content-between"><div><h1 class="h5 fw-bold mb-0">{{ task.title }}</h1><span class="badge {% if task.status == 'completed' %}text-bg-success{% elif task.status == 'cancelled' %}text-bg-secondary{% else %}text-bg-primary{% endif %}">{{ task.get_status_display }}</span></div><a href="{% url 'task_list' %}" class="text-white text-decoration-none small">← 返回</a></section>
-<section class="card shadow-sm p-4">
-  <p><strong>优先级：</strong>{% if task.priority == 1 %}🔴 高{% elif task.priority == 2 %}🟡 中{% else %}🟢 低{% endif %}</p>
-  {% if task.due_at %}<p><strong>截止：</strong>{{ task.due_at|date:'Y-m-d H:i' }}</p>{% endif %}
-  {% if task.completed_at %}<p><strong>完成于：</strong>{{ task.completed_at|date:'Y-m-d H:i' }}</p>{% endif %}
-  <p><strong>描述：</strong>{{ task.description|default:'无'|linebreaksbr }}</p>
-  <p><strong>来源：</strong>{{ task.get_source_display }}</p>
-  {% if task.parent_task %}<p><strong>父任务：</strong>{{ task.parent_task.title }}</p>{% endif %}
-  <p class="text-secondary small">创建于 {{ task.created_at|date:'Y-m-d H:i' }}</p>
-  <div class="mt-3"><a href="{% url 'task_edit' task.pk %}" class="btn btn-primary btn-sm">编辑</a><a href="{% url 'task_delete' task.pk %}" class="btn btn-outline-danger btn-sm ms-2">删除</a></div>
-</section>
-</main></body></html>
+{% extends "_base.html" %}
+{% block title %}{{ task.title }} · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <a href="{% url 'task_list' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      任务
+    </a>
+    <div class="lf-row" style="gap:8px;">
+      <a href="{% url 'task_edit' task.pk %}" class="lf-btn lf-btn--primary lf-btn--sm">编辑</a>
+      <form method="post" action="{% url 'task_delete' task.pk %}" style="display:inline;">{% csrf_token %}<button type="submit" class="lf-btn lf-btn--danger lf-btn--sm">删除</button></form>
+    </div>
+  </header>
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <div class="lf-row lf-row--between" style="gap:12px;">
+      <h1 class="lf-page-header__title" style="font-size:22px;">{{ task.title }}</h1>
+      <span class="lf-badge {% if task.status == 'completed' %}lf-badge--success{% elif task.status == 'cancelled' %}lf-badge--outline{% else %}lf-badge--brand{% endif %}">{{ task.get_status_display }}</span>
+    </div>
+  </section>
+
+  <section class="lf-card lf-card--flush">
+    <div class="lf-list">
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">优先级</span>
+        <span class="lf-badge {% if task.priority == 1 %}lf-badge--danger{% elif task.priority == 2 %}lf-badge--warning{% else %}lf-badge--outline{% endif %}">{% if task.priority == 1 %}高{% elif task.priority == 2 %}中{% else %}低{% endif %}</span>
+      </div>
+      {% if task.due_at %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">截止时间</span>
+        <span class="lf-num lf-text-sm">{{ task.due_at|date:'Y-m-d H:i' }}</span>
+      </div>
+      {% endif %}
+      {% if task.completed_at %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">完成于</span>
+        <span class="lf-num lf-text-sm lf-text-success">{{ task.completed_at|date:'Y-m-d H:i' }}</span>
+      </div>
+      {% endif %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">来源</span>
+        <span class="lf-text-sm lf-row" style="gap:6px;">
+          {% if task.source == 'voice' %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info);"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          {% elif task.source == 'text' %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          {% elif task.source == 'ai' %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--brand);"><path d="M12 2a4 4 0 0 0-4 4v2a4 4 0 0 0-4 4v0a4 4 0 0 0 4 4v2a4 4 0 0 0 4 4 4 4 0 0 0 4-4v-2a4 4 0 0 0 4-4v0a4 4 0 0 0-4-4V6a4 4 0 0 0-4-4z"/><circle cx="12" cy="12" r="2"/></svg>
+          {% elif task.source == 'rule' %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success);"><polyline points="20 6 9 17 4 12"/></svg>
+          {% else %}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-3);"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          {% endif %}
+          <span>{{ task.get_source_display }}</span>
+        </span>
+      </div>
+      {% if task.parent_task %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">父任务</span>
+        <a href="{% url 'task_detail' task.parent_task.pk %}" class="lf-text-sm lf-text-brand">{{ task.parent_task.title }}</a>
+      </div>
+      {% endif %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">创建于</span>
+        <span class="lf-num lf-text-faint lf-text-xs">{{ task.created_at|date:'Y-m-d H:i' }}</span>
+      </div>
+    </div>
+  </section>
+
+  {% if task.description %}
+  <section class="lf-card lf-card--padded lf-mt-3">
+    <div class="lf-section-title">描述</div>
+    <p class="lf-text-sm lf-mb-0" style="white-space:pre-wrap;">{{ task.description|linebreaksbr }}</p>
+  </section>
+  {% endif %}
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

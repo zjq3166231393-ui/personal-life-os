@@ -1,11 +1,14 @@
 from django.urls import path
+
 from . import views, views_crud, views_pwa
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("appearance/", views.appearance, name="appearance"),
     path("api/parse/", views.parse_entry, name="parse_entry"),
-    path("api/save/", views.save_entry, name="save_entry"),
+    path("api/parse-status/<str:job_uuid>/", views.parse_status, name="parse_status"),
     path("api/confirm-actions/", views.confirm_actions, name="confirm_actions"),
+    path("api/lunar/", views.lunar_api, name="lunar_api"),
     path("expenses/", views_crud.expense_list, name="expense_list"),
     path("expenses/<int:pk>/", views_crud.expense_detail, name="expense_detail"),
     path("expenses/<int:pk>/edit/", views_crud.expense_edit, name="expense_edit"),
@@ -20,13 +23,27 @@ urlpatterns = [
     path("tasks/<int:pk>/archive/", views_crud.task_archive, name="task_archive"),
     path("tasks/<int:pk>/renew/", views_crud.task_renew, name="task_renew"),
     path("notes/", views_crud.note_list, name="note_list"),
+    path("notes/create/", views_crud.note_create, name="note_create"),
     path("notes/<int:pk>/", views_crud.note_detail, name="note_detail"),
     path("notes/<int:pk>/edit/", views_crud.note_edit, name="note_edit"),
     path("notes/<int:pk>/delete/", views_crud.note_delete, name="note_delete"),
+    path("daily/", views_crud.daily_list, name="daily_list"),
+    path("daily/create/", views_crud.daily_create, name="daily_create"),
+    path("daily/<int:pk>/edit/", views_crud.daily_edit, name="daily_edit"),
+    path("daily/<int:pk>/delete/", views_crud.daily_delete, name="daily_delete"),
+    path("daily/<int:pk>/toggle/", views_crud.daily_toggle, name="daily_toggle"),
     path("categories/", views_crud.category_list, name="category_list"),
     path("categories/create/", views_crud.category_create, name="category_create"),
     path("categories/<int:pk>/edit/", views_crud.category_edit, name="category_edit"),
     path("categories/<int:pk>/deactivate/", views_crud.category_deactivate, name="category_deactivate"),
+
+    # 倒计时 / 纪念日
+    path("countdowns/", views_crud.countdown_list, name="countdown_list"),
+    path("countdowns/create/", views_crud.countdown_create, name="countdown_create"),
+    path("countdowns/<int:pk>/edit/", views_crud.countdown_edit, name="countdown_edit"),
+    path("countdowns/<int:pk>/delete/", views_crud.countdown_delete, name="countdown_delete"),
+    path("countdowns/<int:pk>/pin/", views_crud.countdown_pin, name="countdown_pin"),
+    path("countdowns/<int:pk>/toggle-home/", views_crud.countdown_toggle_home, name="countdown_toggle_home"),
     path("budget/", views_crud.budget, name="budget"),
     path("recurring/", views_crud.recurring_list, name="recurring_list"),
     path("recurring/create/", views_crud.recurring_create, name="recurring_create"),

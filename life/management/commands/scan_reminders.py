@@ -7,7 +7,7 @@ Usage:
 
 Covers: Reminder, Task (due today), RecurringExpense (due this month).
 """
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
@@ -15,6 +15,7 @@ from django.utils import timezone
 from common.email_util import send_notification_email
 from common.models import NotificationLog
 from life.models import RecurringExpense, Reminder, Task
+from life.services import aware_day_start
 
 
 class Command(BaseCommand):
@@ -49,7 +50,9 @@ class Command(BaseCommand):
 
     def _scan_reminders(self, today, tomorrow, now, dry_run):
         created = 0
-        for r in Reminder.objects.filter(is_enabled=True, remind_at__gte=today, remind_at__lt=tomorrow).select_related("user"):
+        # remind_at 是 DateTimeField：today/tomorrow 是 date，须显式转感知时区的当日 00:00
+        for r in Reminder.objects.filter(is_enabled=True, remind_at__gte=aware_day_start(today),
+                                         remind_at__lt=aware_day_start(tomorrow)).select_related("user"):
             key = f"reminder-{r.pk}-{today.isoformat()}"
             if NotificationLog.objects.filter(idempotency_key=key).exists():
                 continue
