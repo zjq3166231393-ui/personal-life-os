@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.conf import settings
 from django.db import models
 
@@ -26,7 +28,9 @@ class UserProfile(models.Model):
     # 语音/AI 解析时若没识别到具体时刻，就用这个时间作为 due_at/event_at。
     # 默认 10:00（上午 10 点），比旧版 12:00 早，因为很多任务更适合上午完成。
     default_reminder_time = models.TimeField(
-        default="10:00", help_text="语音解析任务/提醒未指定时刻时的默认时间（默认 10:00）"
+        # 必须是 time 对象而非字符串 "10:00"：字符串默认值不会被 Django 转换，
+        # 内存中新建的实例该字段就是 str，任何 .strftime() 都会抛 AttributeError。
+        default=time(10, 0), help_text="语音解析任务/提醒未指定时刻时的默认时间（默认 10:00）"
     )
     # ── 头像（2026-08-24）─
     avatar = models.ImageField(

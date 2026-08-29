@@ -1127,8 +1127,9 @@ def dashboard(request):
         .values("category").annotate(s=Sum("amount"))
     }
     for c in categories:
-        this_m = float(this_m_by_cat.get(c.id, Decimal(0)) or 0)
-        last_m = float(last_m_by_cat.get(c.id, Decimal(0)) or 0)
+        # 同样统一走 Decimal 域，避免与 constants.py 的金额类常量混算
+        this_m = this_m_by_cat.get(c.id) or Decimal(0)
+        last_m = last_m_by_cat.get(c.id) or Decimal(0)
         if last_m > 0 and this_m > last_m * CATEGORY_GROWTH_FACTOR:
             anomalies.append({"type": "分类增长", "detail": f"{c.name}: 本月 ¥{this_m:.0f} vs 上月 ¥{last_m:.0f}", "date": today})
 
@@ -1224,14 +1225,14 @@ def dashboard(request):
         if budget_amount > 0 and total_expense > budget_amount * BUDGET_WARN_RATIO:
             Suggestion.objects.create(user=request.user, title="预算即将超支", evidence=f"本月已花 ¥{total_expense:.0f}，预算 ¥{budget_amount}，执行率 {budget_pct}%", category="budget")
         # Category spike vs 3-month average
+        # 全段统一走 Decimal 域：与 constants.py 中的金额类常量（CATEGORY_SPIKE_RATIO 等）
+        # 保持一致。此前此处用 float，float * Decimal 会抛 TypeError 导致看板 500。
         for c in categories:
-            cat_month = float(month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or 0)
+            cat_month = month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or Decimal(0)
             if cat_month > 0:
                 three_mo = base.filter(type="expense", category=c, occurred_at__gte=aware_day_start(today - timedelta(days=90))).aggregate(s=Sum("amount"))["s"] or Decimal(0)
-                three_avg = float(three_mo) / 3
-                # three_avg/cat_month 为 float（用于比值与百分比展示），而 CATEGORY_SPIKE_RATIO
-                # 是 Decimal 金额类常量，float * Decimal 会抛 TypeError，故显式转 float。
-                if three_avg > 0 and cat_month > three_avg * float(CATEGORY_SPIKE_RATIO):
+                three_avg = three_mo / 3
+                if three_avg > 0 and cat_month > three_avg * CATEGORY_SPIKE_RATIO:
                     pct = round((cat_month - three_avg) / three_avg * 100)
                     Suggestion.objects.create(user=request.user, title=f"{c.name}支出偏高", evidence=f"本月 ¥{cat_month:.0f}，比近3月月均 ¥{three_avg:.0f} 高 {pct}%", category="spending")
         # Overdue tasks

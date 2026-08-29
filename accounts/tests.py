@@ -179,6 +179,19 @@ class UserProfileTests(TestCase):
         with self.assertRaises(Exception):
             UserProfile.objects.create(user=user)
 
+    def test_default_reminder_time_is_time_object(self):
+        """TC-PROF-001 根因回归：字段默认值必须是 time 对象，不能是字符串。
+
+        曾写成 default="10:00"：Django 只在从数据库读取时才把 TimeField 转成 time，
+        而 post_save 信号里「内存中新建」的实例该字段仍是 str，
+        任何 .strftime() 调用都会抛 AttributeError。
+        """
+        from datetime import time
+        user = User.objects.create_user("testuser", password="CorrectPass123!")
+        # 刻意不 refresh_from_db：要验证的正是「内存中刚创建的实例」
+        self.assertIsInstance(user.profile.default_reminder_time, time)
+        self.assertEqual(user.profile.default_reminder_time.strftime("%H:%M"), "10:00")
+
 
 class DataIsolationTests(TestCase):
     @classmethod

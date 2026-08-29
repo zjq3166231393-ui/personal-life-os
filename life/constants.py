@@ -6,6 +6,15 @@
 
 比值类常量（BUDGET_WARN_RATIO 等）直接定义为 Decimal，与视图里的金额运算保持一致，
 替换时无需再包一层 Decimal(str(...))。
+
+类型约定（务必遵守，否则会踩坑）：
+    所有比值 / 金额类常量统一为 Decimal，视图里的金额运算也统一走 Decimal 域。
+    Python 不允许 float 与 Decimal 直接做算术运算（* / + 等会抛 TypeError），
+    一旦某处先把金额转成 float 再乘这些常量就会崩溃。
+    历史教训：dashboard 曾因 float * CATEGORY_SPIKE_RATIO 抛 TypeError，
+    而该分支仅在「每 3 天生成建议」时执行，导致看板每月约 10 天返回 500，
+    平时跑测试还测不出来（取决于运行日期）。
+    需要百分比 / 图表数值时，请在最后一步再转 float，不要提前转。
 """
 
 from decimal import Decimal

@@ -29,6 +29,11 @@ jobs:
           ruff check .
       - name: Django system check
         run: python manage.py check
+      - name: Check for missing migrations
+        # 模型改了却没生成迁移时，makemigrations --check 会非 0 退出。
+        # 曾因 ParseJob.uuid 的默认值被写成「立即求值」，导致模型与迁移长期漂移无人发现，
+        # 每次 makemigrations 还会冒出一条含随机默认值的多余迁移。
+        run: python manage.py makemigrations --check --dry-run
       - name: Run tests
         # CI 运行在 UTC 容器上，正好覆盖 Asia/Shanghai 的时区回归
         # （date.today() 在 UTC 下会与本地日期错位，已统一改用 timezone.localdate()）
