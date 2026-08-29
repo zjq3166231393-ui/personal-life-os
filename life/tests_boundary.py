@@ -23,7 +23,7 @@ from django.db.models import Sum
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import Category, Expense
+from .models import Category, Expense, RecurringExpense
 from .services import aware_day_end, aware_day_start, home_data
 from .views_crud import _budget_last_month_total
 
@@ -169,6 +169,25 @@ class DashboardBoundaryTests(TestCase):
                 with patch("django.utils.timezone.localdate", return_value=date(2026, 8, day)):
                     r = self.client.get("/dashboard/")
                 self.assertEqual(r.status_code, 200)
+
+    def test_tc_dash_006_recurring_amount_zero_no_crash(self):
+        """TC-DASH-006 回归：固定账单金额为 0 时看板不得 500（ZeroDivisionError）。
+
+        异常检测会对每条 RecurringExpense 取最近一笔同名支出，并做
+        abs(recent.amount - r.amount) / r.amount 的环比判断。若某条固定账
+        单金额为 0（免费订阅 / 手动填 0 / 历史脏数据），旧代码会除零拖垮
+        整个看板。修复后在 r.amount == 0 时直接跳过该条。
+        """
+        # 一笔金额为 0 的固定账单，且名称能命中现有支出（recent 不为 None）
+        RecurringExpense.objects.create(
+            user=self.user, name="免费会员", amount=Decimal("0"),
+            frequency="monthly", due_day=1, start_date=date(2026, 8, 1), is_active=True,
+        )
+        Expense.objects.create(user=self.user, category=self.cat, type="expense", status="confirmed",
+                               amount=Decimal("300"), note="免费会员 自动续期", occurred_at=aware(2026, 8, 12, 12, 0, 0))
+        with patch("django.utils.timezone.localdate", return_value=date(2026, 8, 15)):
+            r = self.client.get("/dashboard/")
+        self.assertEqual(r.status_code, 200)
 
 
 class ReviewBoundaryTests(TestCase):

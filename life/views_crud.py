@@ -1136,7 +1136,7 @@ def dashboard(request):
     # 4. Recurring bill amount change > 20%
     for r in RecurringExpense.objects.filter(user=request.user, is_active=True):
         recent = Expense.objects.filter(user=request.user, note__icontains=r.name, type="expense", status="confirmed").order_by("-occurred_at").first()
-        if recent and recent.amount > 0 and abs(recent.amount - r.amount) / r.amount > BILL_CHANGE_ALERT_RATIO:
+        if recent and recent.amount > 0 and r.amount > 0 and abs(recent.amount - r.amount) / r.amount > BILL_CHANGE_ALERT_RATIO:
             anomalies.append({"type": "账单异常", "detail": f"{r.name}: 实际 ¥{recent.amount} vs 预期 ¥{r.amount}", "date": recent.occurred_at.date()})
 
     anomalies.sort(key=lambda x: x["date"], reverse=True)
