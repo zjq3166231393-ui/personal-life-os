@@ -1,6 +1,14 @@
 from django.urls import path
 
-from . import views, views_crud, views_export, views_pwa, views_search
+from . import (
+    views,
+    views_calendar,
+    views_crud,
+    views_export,
+    views_import,
+    views_pwa,
+    views_search,
+)
 
 urlpatterns = [
     path("", views.home, name="home"),
@@ -9,6 +17,12 @@ urlpatterns = [
     path("search/", views_search.search, name="search"),
     path("export/", views_export.export_index, name="export_index"),
     path("export/<str:kind>/", views_export.export_csv, name="export_csv"),
+    # 数据导入（P1：与导出成对，两阶段确认）
+    path("import/", views_import.import_index, name="import_index"),
+    path("import/expense/", views_import.import_expense, name="import_expense"),
+    path("import/expense/confirm/", views_import.import_expense_confirm, name="import_expense_confirm"),
+    # 日历视图（P1：对标滴答清单日历）
+    path("calendar/", views_calendar.calendar_view, name="calendar"),
     # 快速记账接口（悬浮按钮）
     path("api/quick-expense/", views.quick_add_expense, name="quick_add_expense"),
     path("api/quick-categories/", views.quick_categories, name="quick_categories"),

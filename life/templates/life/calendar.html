@@ -1,0 +1,156 @@
+{% extends "_base.html" %}
+{% load life_extras %}
+{% block title %}{{ year }}年{{ month }}月 · 日历 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">日历</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  {# ───── 月份导航 ───── #}
+  <div class="lf-cal-nav">
+    <a href="?year={{ prev_year }}&month={{ prev_month }}" class="lf-btn lf-btn--ghost lf-btn--sm" aria-label="上一月">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </a>
+    <div style="text-align:center;">
+      <div class="lf-cal-nav__title lf-num">{{ year }}年{{ month }}月</div>
+      <div class="lf-text-xs lf-text-faint lf-num lf-mt-1">
+        支出 ¥{{ month_expense|floatformat:0 }}
+        {% if month_income %}· 收入 ¥{{ month_income|floatformat:0 }}{% endif %}
+      </div>
+    </div>
+    <a href="?year={{ next_year }}&month={{ next_month }}" class="lf-btn lf-btn--ghost lf-btn--sm" aria-label="下一月">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </a>
+  </div>
+  <div class="lf-text-end lf-mb-2">
+    <a href="?year={{ today.year }}&month={{ today.month }}&day={{ today.day }}" class="lf-btn lf-btn--ghost lf-btn--sm">回到今天</a>
+  </div>
+
+  {# ───── 月历网格 ───── #}
+  <section class="lf-card lf-card--padded">
+    <div class="lf-cal-grid lf-mb-1">
+      {% for w in weekdays %}<div class="lf-cal-dow">{{ w }}</div>{% endfor %}
+    </div>
+    {% for week in weeks %}
+      <div class="lf-cal-grid">
+        {% for c in week %}
+          <a href="?year={{ year }}&month={{ month }}&day={{ c.day }}"
+             class="lf-cal-cell {% if c.outside %}is-outside{% endif %} {% if c.is_today %}is-today{% endif %} {% if c.selected %}is-selected{% endif %}">
+            <div class="lf-cal-cell__day">{{ c.day }}</div>
+            {% if c.expense %}
+              <div class="lf-cal-cell__amount" style="color:var(--text-1);">-{{ c.expense|floatformat:0 }}</div>
+            {% endif %}
+            {% if c.income %}
+              <div class="lf-cal-cell__amount" style="color:var(--success);">+{{ c.income|floatformat:0 }}</div>
+            {% endif %}
+            <div class="lf-cal-cell__dots">
+              {% if c.has_task %}<span class="lf-cal-dot lf-cal-dot--task" title="有任务"></span>{% endif %}
+              {% if c.has_reminder %}<span class="lf-cal-dot lf-cal-dot--reminder" title="有提醒"></span>{% endif %}
+              {% if c.has_countdown %}<span class="lf-cal-dot lf-cal-dot--countdown" title="有倒计时"></span>{% endif %}
+              {% if c.has_checkin %}<span class="lf-cal-dot lf-cal-dot--checkin" title="已打卡"></span>{% endif %}
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </section>
+
+  <div class="lf-row lf-row--wrap lf-mt-2 lf-mb-3" style="gap:12px;">
+    <span class="lf-text-xs lf-text-faint"><span class="lf-cal-dot lf-cal-dot--task" style="display:inline-block;"></span> 任务</span>
+    <span class="lf-text-xs lf-text-faint"><span class="lf-cal-dot lf-cal-dot--reminder" style="display:inline-block;"></span> 提醒</span>
+    <span class="lf-text-xs lf-text-faint"><span class="lf-cal-dot lf-cal-dot--countdown" style="display:inline-block;"></span> 倒计时</span>
+    <span class="lf-text-xs lf-text-faint"><span class="lf-cal-dot lf-cal-dot--checkin" style="display:inline-block;"></span> 打卡</span>
+  </div>
+
+  {# ───── 选中日明细 ───── #}
+  {% if detail %}
+    <div class="lf-note-group-header">
+      <span>{{ detail.date|date:"n月j日" }} · {{ detail.date|lunar_date }}</span>
+      <span>
+        {% if detail.total_expense %}支出 ¥{{ detail.total_expense|floatformat:0 }}{% endif %}
+        {% if detail.total_income %}· 收入 ¥{{ detail.total_income|floatformat:0 }}{% endif %}
+      </span>
+    </div>
+
+    {% if detail.expenses %}
+      {% for e in detail.expenses %}
+        <a href="{% url 'expense_detail' e.pk %}" class="lf-result-row">
+          <div class="lf-result-row__main">
+            <div class="lf-result-row__title">{{ e|expense_title }}</div>
+            <div class="lf-result-row__meta">
+              <span>{{ e.occurred_at|date:"H:i" }}</span>
+              {% if e.category %}<span>{{ e.category.name }}</span>{% endif %}
+              <span>{{ e.get_type_display }}</span>
+            </div>
+          </div>
+          <div class="lf-result-row__amount lf-num {% if e.type == 'income' %}is-income{% else %}is-expense{% endif %}">
+            {% if e.type == 'income' %}+{% else %}-{% endif %}{{ e.amount }}
+          </div>
+        </a>
+      {% endfor %}
+    {% endif %}
+
+    {% for t in detail.tasks %}
+      <a href="{% url 'task_detail' t.pk %}" class="lf-result-row">
+        <div class="lf-result-row__main">
+          <div class="lf-result-row__title">✅ {{ t.title }}</div>
+          <div class="lf-result-row__meta">
+            <span class="lf-badge lf-badge--{{ t.status }}">{{ t.get_status_display }}</span>
+            {% if t.due_at %}<span>{{ t.due_at|date:"H:i" }}</span>{% endif %}
+          </div>
+        </div>
+      </a>
+    {% endfor %}
+
+    {% for r in detail.reminders %}
+      <a href="{% url 'reminder_edit' r.pk %}" class="lf-result-row">
+        <div class="lf-result-row__main">
+          <div class="lf-result-row__title">🔔 {{ r.title }}</div>
+          <div class="lf-result-row__meta">
+            <span>{{ r.get_reminder_type_display }}</span>
+            <span>{{ r.event_at|date:"H:i" }}</span>
+          </div>
+        </div>
+      </a>
+    {% endfor %}
+
+    {% for cd in detail.countdowns %}
+      <a href="{% url 'countdown_edit' cd.pk %}" class="lf-result-row">
+        <div class="lf-result-row__main">
+          <div class="lf-result-row__title">🎯 {{ cd.title }}</div>
+          <div class="lf-result-row__meta"><span>{{ cd.get_kind_display|default:"纪念日" }}</span></div>
+        </div>
+      </a>
+    {% endfor %}
+
+    {% for c in detail.checkins %}
+      <div class="lf-result-row" style="cursor:default;">
+        <div class="lf-result-row__main">
+          <div class="lf-result-row__title">{{ c.icon }} {{ c.title }}</div>
+          <div class="lf-result-row__meta"><span>已打卡</span></div>
+        </div>
+      </div>
+    {% endfor %}
+
+    {% if not detail.expenses and not detail.tasks and not detail.reminders and not detail.countdowns and not detail.checkins %}
+      <div class="lf-card lf-empty" style="padding:20px;">
+        <p class="lf-empty__text" style="font-size:13px;">这一天没有记录</p>
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="lf-card lf-empty" style="padding:20px;">
+      <p class="lf-empty__text" style="font-size:13px;">点击日历上的任意一天，查看当天明细</p>
+    </div>
+  {% endif %}
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "_base.html" %}
+{% block title %}确认导入 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:860px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">确认导入</h1>
+    <a href="{% url 'import_index' %}" class="lf-page-header__back">重新选择文件</a>
+  </header>
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <div class="lf-row lf-row--wrap" style="gap:16px;">
+      <div>
+        <div class="lf-text-xs lf-text-faint">可导入</div>
+        <div class="lf-text-lg" style="font-weight:700;color:var(--success);">{{ ok_count }} 条</div>
+      </div>
+      {% if err_count %}
+        <div>
+          <div class="lf-text-xs lf-text-faint">无法解析</div>
+          <div class="lf-text-lg" style="font-weight:700;color:var(--danger);">{{ err_count }} 条</div>
+        </div>
+      {% endif %}
+    </div>
+    <p class="lf-text-xs lf-text-faint lf-mt-2" style="line-height:1.6;">
+      下面是要写入的数据预览。确认无误后点「确认导入」，重复记录会自动跳过。
+    </p>
+  </section>
+
+  {% if errors %}
+    <section class="lf-card lf-card--padded lf-mb-3" style="border-color:var(--danger);">
+      <h2 class="lf-text-sm" style="font-weight:600;color:var(--danger);margin-bottom:8px;">以下行无法解析，将被跳过</h2>
+      <div style="max-height:220px;overflow-y:auto;">
+        {% for e in errors %}
+          <div class="lf-text-xs" style="padding:6px 0;border-bottom:1px solid var(--border-soft);">
+            <span class="lf-num" style="color:var(--text-3);">第 {{ e.line }} 行</span>
+            <span style="color:var(--danger);">{{ e.reason }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if items %}
+    <div class="lf-card" style="padding:0;overflow:hidden;">
+      <div style="max-height:420px;overflow-y:auto;">
+        <table class="lf-table">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>类型</th>
+              <th>分类</th>
+              <th class="lf-text-end">金额</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+              <tr>
+                <td class="lf-num lf-text-xs">{{ it.occurred_at }}</td>
+                <td><span class="lf-badge lf-badge--outline">{{ it.type_display }}</span></td>
+                <td class="lf-text-xs">{{ it.category_name|default:"—" }}</td>
+                <td class="lf-text-end lf-num">{{ it.amount }}</td>
+                <td class="lf-text-xs">{{ it.note|default:it.merchant|default:"—" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+  <form method="post" action="{% url 'import_expense_confirm' %}" class="lf-mt-4">
+    {% csrf_token %}
+    <div class="lf-modal__foot">
+      {% if ok_count %}
+        <button type="submit" class="lf-btn lf-btn--primary">确认导入 {{ ok_count }} 条</button>
+      {% else %}
+        <button type="button" class="lf-btn lf-btn--primary" disabled>没有可导入的数据</button>
+      {% endif %}
+      <a href="{% url 'import_index' %}" class="lf-btn lf-btn--ghost">取消</a>
+    </div>
+  </form>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

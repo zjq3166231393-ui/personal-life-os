@@ -1,0 +1,57 @@
+{% extends "_base.html" %}
+{% block title %}数据导入 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">数据导入</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <p class="lf-text-sm lf-text-faint lf-mb-4" style="margin-top:-8px;">
+    把其他记账软件的数据导进来。<strong>先上传预览，确认无误后才写入</strong>，不会一上来就改你的数据。
+  </p>
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <h2 class="lf-text-sm" style="font-weight:600;margin-bottom:8px;">① 准备 CSV 文件</h2>
+    <p class="lf-text-xs lf-text-faint" style="line-height:1.7;margin-bottom:10px;">
+      表头必须是下面这 8 列，顺序一致（导出功能产出的文件就是标准格式，可以先用它导出一份当模板）：
+    </p>
+    <div class="lf-code-block">{{ expected_header|join:"、" }}</div>
+    <p class="lf-text-xs lf-text-faint lf-mt-2" style="line-height:1.7;">
+      · <strong>日期</strong>：2026-08-29 或 2026-08-29 14:30 都支持<br>
+      · <strong>类型</strong>：支出 / 收入 / 转账<br>
+      · <strong>金额</strong>：纯数字，如 35.50<br>
+      · <strong>分类</strong>：找不到会自动为你新建<br>
+      · 状态与来源两列可留空，导入后统一记为「已确认 / 手动」
+    </p>
+    <div class="lf-mt-3">
+      <a href="{% url 'export_csv' 'expense' %}" class="lf-btn lf-btn--ghost lf-btn--sm">先导出一份当作模板</a>
+    </div>
+  </section>
+
+  <section class="lf-card lf-card--padded">
+    <h2 class="lf-text-sm" style="font-weight:600;margin-bottom:10px;">② 上传并预览</h2>
+    <form method="post" action="{% url 'import_expense' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="lf-field">
+        <input type="file" name="file" id="csvFile" accept=".csv,text/csv" required class="lf-input">
+      </div>
+      <div class="lf-modal__foot" style="margin-top:16px;">
+        <button type="submit" class="lf-btn lf-btn--primary">上传并预览</button>
+        <a href="{% url 'home' %}" class="lf-btn lf-btn--ghost">取消</a>
+      </div>
+    </form>
+    <p class="lf-quick-hint" style="margin-top:14px;">
+      单次最多 {{ max_rows }} 行、5MB。重复记录（同日期 + 同金额 + 同备注）会自动跳过。
+    </p>
+  </section>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
