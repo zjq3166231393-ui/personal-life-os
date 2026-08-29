@@ -3,6 +3,7 @@ PyMySQL>=1.1
 python-dotenv>=1.0
 cryptography>=42.0
 openai>=1.0
+Pillow>=10.0
 zhdate>=0.1
 redis>=5.0
 # 生产 WSGI 服务器（Docker / PaaS 启动依赖，缺失会导致容器起不来）
