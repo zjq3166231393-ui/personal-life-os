@@ -8,6 +8,7 @@ from . import (
     views_import,
     views_pwa,
     views_search,
+    views_tag,
 )
 
 urlpatterns = [
@@ -23,6 +24,11 @@ urlpatterns = [
     path("import/expense/confirm/", views_import.import_expense_confirm, name="import_expense_confirm"),
     # 日历视图（P1：对标滴答清单日历）
     path("calendar/", views_calendar.calendar_view, name="calendar"),
+    # 标签管理（P1：对标 MoneyWiz / 滴答清单 / flomo 的标签）
+    path("tags/", views_tag.tag_list, name="tag_list"),
+    path("tags/create/", views_tag.tag_create, name="tag_create"),
+    path("tags/<int:pk>/rename/", views_tag.tag_rename, name="tag_rename"),
+    path("tags/<int:pk>/delete/", views_tag.tag_delete, name="tag_delete"),
     # 快速记账接口（悬浮按钮）
     path("api/quick-expense/", views.quick_add_expense, name="quick_add_expense"),
     path("api/quick-categories/", views.quick_categories, name="quick_categories"),

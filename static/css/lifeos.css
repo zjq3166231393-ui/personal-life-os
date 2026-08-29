@@ -1632,3 +1632,28 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   .lf-cal-cell{min-height:52px;padding:4px 2px 16px}
   .lf-cal-cell__amount{font-size:9.5px}
 }
+
+
+/* ===== Tags (2026-08-29) ===== */
+.lf-tag-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-bottom:1px solid var(--border-soft);
+}
+.lf-tag-row:last-child{border-bottom:none}
+.lf-tag-picker{display:flex;flex-wrap:wrap;gap:6px}
+.lf-tag-picker__opt{
+  padding:5px 11px;border-radius:var(--r-pill);border:1px solid var(--border);
+  background:var(--surface);font-size:12.5px;color:var(--text-2);cursor:pointer;
+  transition:all .15s var(--ease);user-select:none;
+}
+.lf-tag-picker__opt:hover{border-color:var(--border-strong)}
+.lf-tag-picker__opt.is-active{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.lf-tag-inline{display:inline-flex;flex-wrap:wrap;gap:4px}
+.lf-tag-mini{
+  font-size:10.5px;padding:1px 7px;border-radius:var(--r-pill);
+  background:var(--surface-3);color:var(--text-2);white-space:nowrap;
+}
+/* 选中态：用 :has() 免去额外的 JS（现代浏览器均支持） */
+.lf-tag-picker__opt:has(input:checked){
+  background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;
+}

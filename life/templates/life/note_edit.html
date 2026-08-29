@@ -30,6 +30,8 @@
     <div class="lf-text-xs lf-text-faint lf-mb-3">
       ✏️ 提示：在首页输入框也可以直接说「我现在有个新的想法」「记录一下…」，AI 会自动解析到这里的笔记。
     </div>
+    {% include "life/_tag_picker.html" %}
+
     <div class="lf-row lf-mt-2" style="gap:8px;">
       <button type="submit" class="lf-btn lf-btn--primary">保存</button>
       <a href="{% url 'note_list' %}" class="lf-btn lf-btn--ghost">取消</a>

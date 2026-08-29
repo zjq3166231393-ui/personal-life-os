@@ -56,6 +56,7 @@ class Expense(models.Model):
     source = models.CharField(max_length=20, choices=Source.choices, default="manual")
     status = models.CharField(max_length=20, choices=Status.choices, default="confirmed")
     raw_text = models.TextField(blank=True)
+    tags = models.ManyToManyField("Tag", blank=True, related_name="expenses")
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -110,6 +111,7 @@ class Task(models.Model):
     recurrence_day = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Day of month (1-31) for monthly/yearly")
     recurrence_days_before = models.PositiveSmallIntegerField(default=0, help_text="Remind N days before due date")
     raw_text = models.TextField(blank=True)
+    tags = models.ManyToManyField("Tag", blank=True, related_name="tasks")
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -156,11 +158,41 @@ class Task(models.Model):
         return None
 
 
+class Tag(models.Model):
+    """用户自定义标签，可挂到 Expense / Task / Note 上。
+
+    与 Category 的本质区别（这也是为什么要两套机制）：
+    - **Category 是单选树形分类**：一笔支出只能属于一个分类，用于统计口径
+    - **Tag 是多维多值标签**：一笔支出可同时有「#旅行 #待报销 #和家人」，
+      用于横向检索，不参与金额统计，避免重复计算
+
+    因此看板/预算等金额聚合**只看分类不看标签**，防止同一笔钱被算两遍。
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tags")
+    name = models.CharField(max_length=30)
+    color = models.CharField(max_length=20, blank=True, default="", help_text="展示色（如 #f97316）；留空则跟随主题色")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "name"], name="unique_tag_per_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "name"]),
+        ]
+
+    def __str__(self):
+        return f"#{self.name}"
+
+
 class Note(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notes")
     title = models.CharField(max_length=200)
     raw_text = models.TextField(blank=True)
     occurred_on = models.DateField(null=True, blank=True)
+    tags = models.ManyToManyField("Tag", blank=True, related_name="notes")
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -81,9 +81,10 @@ def search(request):
             qs = Expense.objects.filter(
                 user=user, is_deleted=False
             ).filter(
-                _build_cond(q, ["note", "merchant", "raw_text", "category__name"])
+                _build_cond(q, ["note", "merchant", "raw_text", "category__name", "tags__name"])
             )
-        qs = qs.select_related("category")[:SEARCH_LIMIT_PER_TYPE + 1]
+        # tags__name 会 join 中间表，一条记录命中多个标签时会产生重复行，故 distinct
+        qs = qs.select_related("category").prefetch_related("tags").distinct()[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("expense", "账目", "expense_list", qs))
 
     if not only or only == "task":
@@ -93,9 +94,9 @@ def search(request):
             qs = Task.objects.filter(
                 user=user, is_deleted=False
             ).filter(
-                _build_cond(q, ["title", "description", "raw_text"])
+                _build_cond(q, ["title", "description", "raw_text", "tags__name"])
             )
-        qs = qs[:SEARCH_LIMIT_PER_TYPE + 1]
+        qs = qs.prefetch_related("tags").distinct()[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("task", "任务", "task_list", qs))
 
     if not only or only == "note":
@@ -105,9 +106,9 @@ def search(request):
             qs = Note.objects.filter(
                 user=user, is_deleted=False
             ).filter(
-                _build_cond(q, ["title", "raw_text"])
+                _build_cond(q, ["title", "raw_text", "tags__name"])
             )
-        qs = qs[:SEARCH_LIMIT_PER_TYPE + 1]
+        qs = qs.prefetch_related("tags").distinct()[:SEARCH_LIMIT_PER_TYPE + 1]
         groups.append(_group("note", "随心记", "note_list", qs))
 
     if not only or only == "reminder":

@@ -67,6 +67,8 @@
         </div>
       </div>
 
+      {% include "life/_tag_picker.html" %}
+
       <div class="lf-row lf-mt-6" style="gap:8px;">
         <button type="submit" class="lf-btn lf-btn--primary">保存</button>
         <a href="{% url 'expense_list' %}" class="lf-btn lf-btn--ghost">取消</a>

@@ -1,0 +1,69 @@
+{% extends "_base.html" %}
+{% block title %}标签 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">标签</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <p class="lf-text-sm lf-text-faint lf-mb-4" style="margin-top:-8px;">
+    标签用于<strong>横向检索</strong>，一笔记录可以有多个标签（如「旅行 · 待报销 · 和家人」）。
+    与分类不同，标签<strong>不参与金额统计</strong>，避免同一笔钱被重复计算。
+  </p>
+
+  {# ───── 新建标签 ───── #}
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <form method="post" action="{% url 'tag_create' %}" class="lf-row" style="gap:8px;align-items:flex-end;">
+      {% csrf_token %}
+      <div class="lf-field" style="flex:1;min-width:0;">
+        <label for="tagName" class="lf-label">新建标签</label>
+        <input type="text" name="name" id="tagName" class="lf-input" placeholder="如：待报销" maxlength="30" required>
+      </div>
+      <button type="submit" class="lf-btn lf-btn--primary">+ 创建</button>
+    </form>
+    <p class="lf-quick-hint">当前 {{ total }} / {{ limit }} 个。建议保持少量、稳定、可复用。</p>
+  </section>
+
+  {# ───── 标签列表 ───── #}
+  {% if tags %}
+    <section class="lf-card" style="padding:0;overflow:hidden;">
+      {% for t in tags %}
+        <div class="lf-tag-row">
+          <div style="flex:1;min-width:0;">
+            <span class="lf-chip" style="font-weight:600;">#{{ t.name }}</span>
+            <div class="lf-text-xs lf-text-faint lf-mt-1">
+              账目 {{ t.expense_count }} · 任务 {{ t.task_count }} · 随心记 {{ t.note_count }}
+            </div>
+          </div>
+          <div class="lf-row" style="gap:6px;flex-shrink:0;">
+            <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm"
+                    onclick="var n=prompt('重命名为：','{{ t.name|escapejs }}'); if(n&&n.trim()){ this.disabled=true; var f=document.createElement('form'); f.method='post'; f.action='{% url "tag_rename" t.pk %}'; var c=document.createElement('input'); c.type='hidden'; c.name='csrfmiddlewaretoken'; c.value='{{ csrf_token }}'; var i=document.createElement('input'); i.type='hidden'; i.name='name'; i.value=n.trim(); f.appendChild(c); f.appendChild(i); document.body.appendChild(f); f.submit(); }">
+              重命名
+            </button>
+            <form method="post" action="{% url 'tag_delete' t.pk %}" style="display:inline;"
+                  onsubmit="return confirm('删除标签「{{ t.name|escapejs }}」？\n相关记录不会被删除，只会解除标签关联。');">
+              {% csrf_token %}
+              <button type="submit" class="lf-btn lf-btn--ghost lf-btn--sm" style="color:var(--danger);">删除</button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </section>
+  {% else %}
+    <div class="lf-card lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      <p class="lf-empty__text">还没有标签</p>
+      <p class="lf-text-xs lf-text-faint">创建几个常用标签，之后记账时就能快速打标。</p>
+    </div>
+  {% endif %}
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

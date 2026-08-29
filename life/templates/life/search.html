@@ -72,6 +72,7 @@
                   <span>{{ item.occurred_at|date:"n月j日 H:i" }}</span>
                   {% if item.category %}<span>{{ item.category.name }}</span>{% endif %}
                   <span>{{ item.get_type_display }}</span>
+                  {% for t in item.tags.all %}<span class="lf-tag-mini">#{{ t.name }}</span>{% endfor %}
                 </div>
               </div>
               <div class="lf-result-row__amount lf-num {% if item.type == 'income' %}is-income{% else %}is-expense{% endif %}">
@@ -87,6 +88,7 @@
                 <div class="lf-result-row__meta">
                   <span class="lf-badge lf-badge--{{ item.status }}">{{ item.get_status_display }}</span>
                   {% if item.due_at %}<span>截止 {{ item.due_at|date:"n月j日" }}</span>{% endif %}
+                  {% for t in item.tags.all %}<span class="lf-tag-mini">#{{ t.name }}</span>{% endfor %}
                 </div>
               </div>
             </a>
@@ -98,6 +100,7 @@
                 {% if item.raw_text %}<div class="lf-result-row__desc">{{ item.raw_text|truncatechars:100|highlight:q }}</div>{% endif %}
                 <div class="lf-result-row__meta">
                   <span>{{ item.created_at|date:"n月j日 H:i" }}</span>
+                  {% for t in item.tags.all %}<span class="lf-tag-mini">#{{ t.name }}</span>{% endfor %}
                 </div>
               </div>
             </a>

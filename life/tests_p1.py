@@ -17,7 +17,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
-from .models import Category, Countdown, Expense, Reminder, Task
+from .models import Category, Countdown, Expense, Reminder, Tag, Task
 from .models_daily import DailyCheckin
 
 HEADER = ["日期", "类型", "金额", "分类", "商家", "备注", "状态", "来源"]
@@ -210,4 +210,122 @@ class CalendarTests(TestCase):
     def test_tc_c008_requires_login(self):
         self.client.logout()
         r = self.client.get("/calendar/")
+        self.assertEqual(r.status_code, 302)
+
+
+class TagTests(TestCase):
+    def setUp(self):
+        self.u = _mkuser("kate")
+        self.other = _mkuser("leo")
+        self.client.login(username="kate", password="TestPass123!")
+
+    def test_tc_t001_create_tag_via_page(self):
+        r = self.client.post("/tags/create/", {"name": "待报销"})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(Tag.objects.filter(user=self.u, name="待报销").exists())
+
+    def test_tc_t002_duplicate_name_rejected(self):
+        Tag.objects.create(user=self.u, name="旅行")
+        self.client.post("/tags/create/", {"name": "旅行"})
+        self.assertEqual(Tag.objects.filter(user=self.u, name="旅行").count(), 1)
+
+    def test_tc_t003_same_name_allowed_across_users(self):
+        """唯一约束是「每用户」，不同用户可有同名标签。"""
+        Tag.objects.create(user=self.u, name="旅行")
+        Tag.objects.create(user=self.other, name="旅行")
+        self.assertEqual(Tag.objects.filter(name="旅行").count(), 2)
+
+    def test_tc_t004_rename_tag(self):
+        t = Tag.objects.create(user=self.u, name="旧名")
+        self.client.post(f"/tags/{t.pk}/rename/", {"name": "新名"})
+        t.refresh_from_db()
+        self.assertEqual(t.name, "新名")
+
+    def test_tc_t005_delete_tag_keeps_records(self):
+        """删标签只解除关联，不能删掉业务记录。"""
+        t = Tag.objects.create(user=self.u, name="临时")
+        e = Expense.objects.create(user=self.u, amount=Decimal("10.00"), note="有标签的账",
+                                   occurred_at=timezone.now())
+        e.tags.add(t)
+        self.client.post(f"/tags/{t.pk}/delete/")
+        self.assertFalse(Tag.objects.filter(pk=t.pk).exists())
+        self.assertTrue(Expense.objects.filter(pk=e.pk, is_deleted=False).exists())
+
+    def test_tc_t006_cannot_touch_other_users_tag(self):
+        """关键安全用例：别人的标签改不了也删不掉。"""
+        t = Tag.objects.create(user=self.other, name="别人的标签")
+        self.client.post(f"/tags/{t.pk}/rename/", {"name": "被改了"})
+        t.refresh_from_db()
+        self.assertEqual(t.name, "别人的标签")
+        self.client.post(f"/tags/{t.pk}/delete/")
+        self.assertTrue(Tag.objects.filter(pk=t.pk).exists())
+
+    def test_tc_t007_apply_tags_to_expense(self):
+        t1 = Tag.objects.create(user=self.u, name="旅行")
+        t2 = Tag.objects.create(user=self.u, name="待报销")
+        e = Expense.objects.create(user=self.u, amount=Decimal("20.00"), note="打车",
+                                   occurred_at=timezone.now())
+        r = self.client.post(f"/expenses/{e.pk}/edit/", {
+            "note": "打车", "amount": "20.00", "type": "expense",
+            "occurred_at": e.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+            "tags": [str(t1.id), str(t2.id)],
+        })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(set(e.tags.values_list("id", flat=True)), {t1.id, t2.id})
+
+    def test_tc_t008_foreign_tag_id_is_ignored(self):
+        """关键安全用例：提交他人的标签 id 应被忽略，不能挂上。"""
+        mine = Tag.objects.create(user=self.u, name="我的标签")
+        theirs = Tag.objects.create(user=self.other, name="别人的标签")
+        e = Expense.objects.create(user=self.u, amount=Decimal("20.00"), note="打车",
+                                   occurred_at=timezone.now())
+        self.client.post(f"/expenses/{e.pk}/edit/", {
+            "note": "打车", "amount": "20.00", "type": "expense",
+            "occurred_at": e.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+            "tags": [str(mine.id), str(theirs.id)],
+        })
+        self.assertEqual(set(e.tags.values_list("id", flat=True)), {mine.id})
+
+    def test_tc_t009_search_matches_tag_name(self):
+        t = Tag.objects.create(user=self.u, name="待报销")
+        e = Expense.objects.create(user=self.u, amount=Decimal("88.00"), note="客户吃饭",
+                                   occurred_at=timezone.now())
+        e.tags.add(t)
+        # 关键词只出现在标签名里，备注里没有
+        r = self.client.get("/search/?q=待报销")
+        self.assertContains(r, "客户吃饭")
+
+    def test_tc_t010_search_by_tag_excludes_other_users(self):
+        """关键安全用例：搜标签也不能搜到别人打了同名标签的记录。"""
+        Tag.objects.create(user=self.u, name=" shared标签名 ")
+        mine = Tag.objects.create(user=self.u, name="共享名")
+        theirs = Tag.objects.create(user=self.other, name="共享名")
+        e_mine = Expense.objects.create(user=self.u, amount=Decimal("11.00"), note="我的记录",
+                                        occurred_at=timezone.now())
+        e_mine.tags.add(mine)
+        e_theirs = Expense.objects.create(user=self.other, amount=Decimal("22.00"), note="别人的记录",
+                                          occurred_at=timezone.now())
+        e_theirs.tags.add(theirs)
+
+        r = self.client.get("/search/?q=共享名")
+        self.assertContains(r, "我的记录")
+        self.assertNotContains(r, "别人的记录")
+
+    def test_tc_t011_tag_list_shows_usage_counts(self):
+        t = Tag.objects.create(user=self.u, name="统计用")
+        e = Expense.objects.create(user=self.u, amount=Decimal("5.00"), note="a",
+                                   occurred_at=timezone.now())
+        e.tags.add(t)
+        r = self.client.get("/tags/")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "统计用")
+        self.assertContains(r, "账目 1")
+
+    def test_tc_t012_empty_name_rejected(self):
+        self.client.post("/tags/create/", {"name": "   "})
+        self.assertEqual(Tag.objects.filter(user=self.u).count(), 0)
+
+    def test_tc_t013_requires_login(self):
+        self.client.logout()
+        r = self.client.get("/tags/")
         self.assertEqual(r.status_code, 302)

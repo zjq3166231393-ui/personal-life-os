@@ -115,6 +115,10 @@ bottom nav is shown there instead.
     <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
     <span>数据导出</span>
   </a>
+  <a href="{% url 'tag_list' %}" class="lf-sidebar__item {% if url_name == 'tag_list' or url_name == 'tag_create' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+    <span>标签</span>
+  </a>
   <a href="{% url 'import_index' %}" class="lf-sidebar__item {% if url_name == 'import_index' or url_name == 'import_expense' or url_name == 'import_expense_confirm' %}is-active{% endif %}">
     <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
     <span>数据导入</span>

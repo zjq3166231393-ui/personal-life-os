@@ -1,0 +1,28 @@
+{% comment %}
+标签选择器 —— 在 expense_edit / task_edit / note_edit 中复用。
+
+需要 context：all_tags（当前用户全部标签）、cur_tag_ids（已选标签 id 集合）。
+选中态用 CSS `:has(input:checked)` 实现，无需 JS。
+{% endcomment %}
+{% if all_tags %}
+  <div class="lf-field">
+    <label class="lf-label">标签
+      <span class="lf-text-faint" style="font-weight:400;">（可多选，不影响金额统计）</span>
+    </label>
+    <div class="lf-tag-picker">
+      {% for t in all_tags %}
+        <label class="lf-tag-picker__opt">
+          <input type="checkbox" name="tags" value="{{ t.id }}"
+                 {% if t.id in cur_tag_ids %}checked{% endif %}
+                 style="display:none;">
+          #{{ t.name }}
+        </label>
+      {% endfor %}
+    </div>
+    <p class="lf-quick-hint">
+      没有想要的标签？先保存，再去
+      <a href="{% url 'tag_list' %}" class="lf-link" target="_blank">标签管理</a>
+      新建。
+    </p>
+  </div>
+{% endif %}

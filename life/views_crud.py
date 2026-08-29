@@ -1,5 +1,5 @@
 from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -58,10 +58,27 @@ from .models import (
 )
 from .models_daily import DailyCheckin
 from .services import aware_day_end, aware_day_start
+from .views_tag import apply_tags, parse_tag_ids, user_tags
 
 
 def _user_queryset(model, request):
     return model.objects.filter(user=request.user, is_deleted=False)
+
+
+def _parse_aware_dt(raw, fallback):
+    """把表单（datetime-local）提交的字符串解析为感知时区的 datetime。
+
+    直接把字符串赋给 DateTimeField 会让 Django 收到 naive datetime 而告警，
+    在 UTC 部署时还会被按服务器时区解释而错位——与已修复的时区 bug 属同类问题。
+    """
+    if not raw:
+        return fallback
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return timezone.make_aware(datetime.strptime(raw.strip(), fmt))
+        except ValueError:
+            continue
+    return fallback
 
 
 # ── Expense CRUD ────────────────────────────────────────────────────
@@ -213,16 +230,22 @@ def expense_edit(request, pk):
         expense.note = request.POST.get("note", expense.note)[:500]
         expense.amount = request.POST.get("amount", expense.amount)
         expense.type = request.POST.get("type", expense.type)
-        expense.occurred_at = request.POST.get("occurred_at", expense.occurred_at)
+        expense.occurred_at = _parse_aware_dt(request.POST.get("occurred_at"), expense.occurred_at)
         expense.merchant = request.POST.get("merchant", expense.merchant)[:200]
         expense.source = request.POST.get("source", expense.source)
         cat_id = request.POST.get("category")
         if cat_id:
             expense.category_id = int(cat_id)
         expense.save()
-        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.note or expense.merchant}")
+        apply_tags(expense, request.user, parse_tag_ids(request.POST))
+        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.display_title}")
         return redirect("expense_list")
-    return render(request, "life/expense_edit.html", {"expense": expense, "categories": categories})
+    return render(request, "life/expense_edit.html", {
+        "expense": expense,
+        "categories": categories,
+        "all_tags": user_tags(request.user),
+        "cur_tag_ids": {t.id for t in expense.tags.all()},
+    })
 
 @login_required
 @require_POST
@@ -427,7 +450,7 @@ def task_edit(request, pk):
         task.title = request.POST.get("title", task.title)[:200]
         task.description = request.POST.get("description", "")[:5000]
         task.priority = int(request.POST.get("priority", task.priority))
-        task.due_at = request.POST.get("due_at") or None
+        task.due_at = _parse_aware_dt(request.POST.get("due_at"), None)
         task.source = request.POST.get("source", task.source)
         task.recurrence_rule = request.POST.get("recurrence_rule", task.recurrence_rule)
         task.recurrence_day = int(request.POST.get("recurrence_day") or 0) or None
@@ -439,12 +462,17 @@ def task_edit(request, pk):
             task.completed_at = None
         task.status = new_status
         task.save()
+        apply_tags(task, request.user, parse_tag_ids(request.POST))
         if new_status == "completed":
             record(request.user, "task.complete", task.pk, f"完成任务: {task.title}")
         else:
             record(request.user, "task.update", task.pk, f"修改任务: {task.title}")
         return redirect("task_list")
-    return render(request, "life/task_edit.html", {"task": task})
+    return render(request, "life/task_edit.html", {
+        "task": task,
+        "all_tags": user_tags(request.user),
+        "cur_tag_ids": {t.id for t in task.tags.all()},
+    })
 
 @login_required
 @require_POST
@@ -537,10 +565,15 @@ def note_edit(request, pk):
         note.raw_text = request.POST.get("raw_text", note.raw_text) or ""
         note.occurred_on = request.POST.get("occurred_on") or None
         note.save()
+        apply_tags(note, request.user, parse_tag_ids(request.POST))
         record(request.user, "note.update", note.pk, f"修改随心记: {note.title}")
         messages.success(request, "已保存")
         return redirect("note_list")
-    return render(request, "life/note_edit.html", {"note": note})
+    return render(request, "life/note_edit.html", {
+        "note": note,
+        "all_tags": user_tags(request.user),
+        "cur_tag_ids": {t.id for t in note.tags.all()},
+    })
 
 @login_required
 @require_POST
