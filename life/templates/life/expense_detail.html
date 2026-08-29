@@ -1,4 +1,5 @@
 {% extends "_base.html" %}
+{% load life_extras %}
 {% block title %}账目详情 · Personal Life OS{% endblock %}
 {% block body_class %}lf-has-bottom-nav{% endblock %}
 {% block body %}
@@ -35,6 +36,21 @@
       <div class="lf-list-item lf-row lf-row--between">
         <span class="lf-text-muted lf-text-sm">分类</span>
         <span class="lf-text-sm">{{ expense.category.icon }} {{ expense.category.name }}</span>
+      </div>
+      {% endif %}
+      {% if expense.type == 'transfer' %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">转出账户</span>
+        <span class="lf-text-sm">{% if expense.account %}{{ expense.account.display_icon }} {{ expense.account.name }}{% else %}未指定{% endif %}</span>
+      </div>
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">转入账户</span>
+        <span class="lf-text-sm">{% if expense.transfer_to_account %}{{ expense.transfer_to_account.display_icon }} {{ expense.transfer_to_account.name }}{% else %}未指定{% endif %}</span>
+      </div>
+      {% elif expense.account %}
+      <div class="lf-list-item lf-row lf-row--between">
+        <span class="lf-text-muted lf-text-sm">账户</span>
+        <span class="lf-text-sm">{{ expense.account.display_icon }} {{ expense.account.name }}</span>
       </div>
       {% endif %}
       {% if expense.merchant %}

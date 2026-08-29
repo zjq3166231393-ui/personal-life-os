@@ -17,7 +17,7 @@
       <div class="lf-row" style="gap:12px;">
         <div class="lf-field" style="flex:1;margin-bottom:16px;">
           <label class="lf-label">类型</label>
-          <select name="type" class="lf-select">
+          <select name="type" class="lf-select" onchange="var tf=document.getElementById('transferField');if(tf)tf.style.display=this.value==='transfer'?'block':'none';">
             <option value="expense" {% if expense.type == 'expense' %}selected{% endif %}>支出</option>
             <option value="income" {% if expense.type == 'income' %}selected{% endif %}>收入</option>
             <option value="transfer" {% if expense.type == 'transfer' %}selected{% endif %}>转账</option>
@@ -53,6 +53,24 @@
             </select>
             <a href="{% url 'category_create' %}?type=expense&next={% url 'expense_edit' expense.pk %}" class="lf-action-pill lf-action-pill--ghost" title="新增自定义分类" style="flex:none;">+</a>
           </div>
+        </div>
+      </div>
+
+      <div class="lf-field">
+        <label class="lf-label">账户</label>
+        <select name="account" class="lf-select">
+          <option value="">未指定</option>
+          {% for a in accounts %}<option value="{{ a.pk }}" {% if a.pk == expense.account_id %}selected{% endif %}>{{ a.display_icon }} {{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div id="transferField" style="display:{% if expense.type == 'transfer' %}block{% else %}none{% endif %};">
+        <div class="lf-field">
+          <label class="lf-label">转入账户（仅转账）</label>
+          <select name="transfer_to_account" class="lf-select">
+            <option value="">未指定</option>
+            {% for a in accounts %}<option value="{{ a.pk }}" {% if a.pk == expense.transfer_to_account_id %}selected{% endif %}>{{ a.display_icon }} {{ a.name }}</option>{% endfor %}
+          </select>
         </div>
       </div>
 

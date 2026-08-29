@@ -121,6 +121,14 @@
       <input type="text" id="quickNote" class="lf-input" placeholder="备注（可选）" autocomplete="off" maxlength="100">
     </div>
 
+    <div style="margin-top:10px;">
+      <label class="lf-label" for="quickAccount">账户（可选）</label>
+      <select id="quickAccount" class="lf-select">
+        <option value="">未指定</option>
+        {% for a in active_accounts %}<option value="{{ a.pk }}">{{ a.display_icon }} {{ a.name }}</option>{% endfor %}
+      </select>
+    </div>
+
     <div class="lf-quick-err" id="quickErr"></div>
     <p class="lf-quick-hint">只填金额即可保存，分类与备注都可以留空。按 Esc 关闭。</p>
 
@@ -217,6 +225,7 @@ if ('serviceWorker' in navigator) {
 
   var amountEl = document.getElementById('quickAmount');
   var noteEl = document.getElementById('quickNote');
+  var accountEl = document.getElementById('quickAccount');
   var catsEl = document.getElementById('quickCats');
   var errEl = document.getElementById('quickErr');
   var saveBtn = document.getElementById('quickSave');
@@ -253,6 +262,7 @@ if ('serviceWorker' in navigator) {
     modal.setAttribute('aria-hidden', 'true');
     if(amountEl) amountEl.value = '';
     if(noteEl) noteEl.value = '';
+    if(accountEl) accountEl.value = '';
     currentCatId = null;
     showErr('');
   }
@@ -336,6 +346,7 @@ if ('serviceWorker' in navigator) {
         amount: raw,
         type: currentType,
         category_id: currentCatId,
+        account_id: accountEl ? (accountEl.value || null) : null,
         note: noteEl ? noteEl.value.trim() : ''
       })
     })

@@ -45,6 +45,7 @@ from .constants import (
     WEEK_TREND_DAYS,
 )
 from .models import (
+    Account,
     Budget,
     Category,
     Expense,
@@ -226,6 +227,13 @@ def expense_edit(request, pk):
     from django.db.models import Q
     expense = get_object_or_404(Expense, pk=pk, user=request.user, is_deleted=False)
     categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    # 账户选择器：启用中的账户；若本笔已关联一个已停用的账户，也一并纳入，避免编辑时丢关联
+    accounts = Account.objects.filter(user=request.user, is_deleted=False, is_active=True)
+    if expense.account_id and not accounts.filter(pk=expense.account_id).exists():
+        accounts = Account.objects.filter(
+            Q(user=request.user, is_deleted=False, is_active=True) | Q(pk=expense.account_id)
+        )
+    accounts = accounts.order_by("type", "name")
     if request.method == "POST":
         expense.note = request.POST.get("note", expense.note)[:500]
         expense.amount = request.POST.get("amount", expense.amount)
@@ -236,6 +244,19 @@ def expense_edit(request, pk):
         cat_id = request.POST.get("category")
         if cat_id:
             expense.category_id = int(cat_id)
+        # 账户：只能选自己的、且启用中的；空值或越权的 account_id 置空（不报错，避免阻断编辑）
+        acc_id = request.POST.get("account")
+        expense.account = Account.objects.filter(
+            pk=acc_id, user=request.user, is_deleted=False, is_active=True
+        ).first() if acc_id else None
+        # 只有转账才有「转入账户」；非转账必须清空，避免脏数据拖累余额推算
+        if expense.type == "transfer":
+            tacc_id = request.POST.get("transfer_to_account")
+            expense.transfer_to_account = Account.objects.filter(
+                pk=tacc_id, user=request.user, is_deleted=False, is_active=True
+            ).first() if tacc_id else None
+        else:
+            expense.transfer_to_account = None
         expense.save()
         apply_tags(expense, request.user, parse_tag_ids(request.POST))
         record(request.user, "expense.update", expense.pk, f"修改支出: {expense.display_title}")
@@ -243,6 +264,7 @@ def expense_edit(request, pk):
     return render(request, "life/expense_edit.html", {
         "expense": expense,
         "categories": categories,
+        "accounts": accounts,
         "all_tags": user_tags(request.user),
         "cur_tag_ids": {t.id for t in expense.tags.all()},
     })

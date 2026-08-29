@@ -329,7 +329,7 @@ def quick_add_expense(request):
     """
     from django.db.models import Q
 
-    from .models import Category
+    from .models import Account, Category
 
     try:
         payload = json.loads(request.body)
@@ -361,11 +361,20 @@ def quick_add_expense(request):
             pk=cat_id, type=type_, is_active=True,
         ).first()
 
+    # 账户同理：只能选自己的、且启用中的账户，越权/失效的 account_id 直接忽略（不报错，避免阻断记账）
+    account = None
+    acc_id = payload.get("account_id")
+    if acc_id:
+        account = Account.objects.filter(
+            pk=acc_id, user=request.user, is_deleted=False, is_active=True
+        ).first()
+
     expense = Expense.objects.create(
         user=request.user,
         type=type_,
         amount=amount,
         category=category,
+        account=account,
         note=note,
         occurred_at=timezone.now(),
         status="confirmed",
@@ -381,6 +390,7 @@ def quick_add_expense(request):
         "type_display": expense.get_type_display(),
         "note": expense.note,
         "category": expense.category.name if expense.category else "",
+        "account": expense.account.name if expense.account else "",
         "occurred_at": expense.occurred_at.strftime("%Y-%m-%d %H:%M"),
     })
 
