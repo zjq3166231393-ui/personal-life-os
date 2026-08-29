@@ -3,14 +3,15 @@
 | 项目 | 内容 |
 |---|---|
 | 被测系统 | personal-life-os（Django 5.2.17 / Python 3.13） |
-| 版本/分支 | `release-v0.9.0` @ `e68f0db` |
+| 版本/分支 | `release-v0.9.0` @ `8d635d0`（已含根因修复） |
 | 测试日期 | 2026-08-29 |
 | 测试类型 | 功能测试 + 回归测试 + 边界测试 + 静态审查 |
 | 测试方法 | 边界值分析、等价类划分、负向测试、一致性测试、配置（时区）测试、全月日历扫描 |
 | 执行环境 | Windows 11 / SQLite（测试库）/ `TIME_ZONE=Asia/Shanghai` + `USE_TZ=True` |
-| 用例总数 | 26（新增 26，全部自动化） |
-| 执行结果 | 26 Pass / 0 Fail（缺陷修复后） |
-| 全量回归 | 305 项全过（严格模式 `-W error::RuntimeWarning`，naive datetime 告警 0） |
+| 用例总数 | 27（新增 27，全部自动化） |
+| 执行结果 | 27 Pass / 0 Fail |
+| 全量回归 | 306 项全过（严格模式 `-W error::RuntimeWarning`，naive datetime 告警 0） |
+| 缺陷状态 | 4 项全部修复，且根因已根治（非仅规避） |
 
 ---
 
@@ -88,10 +89,10 @@
 
 | 缺陷编号 | 严重级 | 模块 | 现象 | 根因 | 影响面 | 状态 |
 |---|---|---|---|---|---|---|
-| BUG-01 | **P1 高** | 财务看板 `dashboard` | 页面 500 | `three_avg`（float）× `CATEGORY_SPIKE_RATIO`（Decimal）抛 `TypeError` | 建议仅在 `day % 3 == 0` 生成 → **每月约 10 天**，任何有支出数据的用户打开看板即 500（实测 31 天中 10 天失败） | ✅ 已修 |
+| BUG-01 | **P1 高** | 财务看板 `dashboard` | 页面 500 | `three_avg`（float）× `CATEGORY_SPIKE_RATIO`（Decimal）抛 `TypeError` | 建议仅在 `day % 3 == 0` 生成 → **每月约 10 天**，任何有支出数据的用户打开看板即 500（实测 31 天中 10 天失败） | ✅ 已修 · **根因根治**：该分支统一回 Decimal 域 |
 | BUG-02 | P2 中 | 模型 `ParseJob.uuid` | 第二条记录 `IntegrityError` | `default=uuid.uuid4().hex` 在类定义时**立即求值**，默认值固化为常量，与 `unique=True` 冲突 | 任何不显式传 uuid 的创建路径第 2 条即失败；同时每次 `makemigrations` 都产生多余迁移（持续迁移漂移） | ✅ 已修 |
-| BUG-03 | P3 低 | 服务 `home_data` | `AttributeError: 'str' object has no attribute 'strftime'` | `TimeField(default="10:00")` 是字符串默认值，Django 仅在从 DB 读取时转成 `time`；内存新建实例仍是 `str` | 仅影响「创建用户后对同一内存实例调用 `home_data()`」的场景（测试、脚本、未来欢迎页）。注册走 redirect 属新请求，生产当前不受影响 | ✅ 已修 |
-| BUG-04 | P2 中 | 工程规范 | `makemigrations --check` 失败 | 模型与迁移不同步（BUG-02 的连带结果） | CI 若加迁移检查会失败；易被误生成含随机默认值的迁移 | ✅ 已修（补 `0028`） |
+| BUG-03 | P3 低 | 服务 `home_data` | `AttributeError: 'str' object has no attribute 'strftime'` | `TimeField(default="10:00")` 是字符串默认值，Django 仅在从 DB 读取时转成 `time`；内存新建实例仍是 `str` | 仅影响「创建用户后对同一内存实例调用 `home_data()`」的场景（测试、脚本、未来欢迎页）。注册走 redirect 属新请求，生产当前不受影响 | ✅ 已修 · **根因根治**：模型默认值改 `time(10, 0)` + 迁移 `0008` |
+| BUG-04 | P2 中 | 工程规范 | `makemigrations --check` 失败 | 模型与迁移不同步（BUG-02 的连带结果） | CI 若加迁移检查会失败；易被误生成含随机默认值的迁移 | ✅ 已修 · 补 `0028`，且**已加 CI 检查防复发** |
 
 ### 缺陷发现过程说明
 
@@ -105,26 +106,28 @@
 
 | 项 | 处理 |
 |---|---|
-| BUG-01 | `cat_month > three_avg * float(CATEGORY_SPIKE_RATIO)`；并全仓扫描其余 `float` 用法，确认仅此一处混算（其余均为「Decimal 运算后再转 float」） |
+| BUG-01 | 建议块与异常检测块的两处 float 分支**统一回 Decimal 域**，与 `constants.py`「金额运算统一 Decimal」约定一致；全仓扫描确认已无「float × 常量」的混算点 |
 | BUG-02 | 新增模块级 `_default_parse_job_uuid()` 可调用工厂作为 default；生成迁移 `life/migrations/0028_alter_parsejob_uuid.py` |
-| BUG-03 | 改为同时兼容 `time`（`strftime`）与 `str`（截断为 `HH:MM`） |
-| 迁移同步 | `makemigrations --check` 现为 `No changes detected` |
+| BUG-03 | **根因**：模型默认值 `default="10:00"` → `default=time(10, 0)`，补迁移 `accounts/migrations/0008`；调用侧仍兼容 `str` 作为兜底 |
+| BUG-04 | 补迁移后 `makemigrations --check` 为 `No changes detected`；并**在 CI 新增该检查步骤**防复发 |
+| 同类写法清零 | 全仓扫描：模型 `default=` 无「立即求值」（`list`/`dict` 均为可调用对象）、无可变默认值（`[]`/`{}`）；其余 `.strftime()` 调用点均为 datetime 对象 |
 
 ### 回归验证
 
 | 项目 | 结果 |
 |---|---|
-| 专项用例 | 26 / 26 通过 |
-| 全量测试（严格模式） | **305 / 305 通过**，`-W error::RuntimeWarning` 下无任何 naive datetime 告警 |
+| 专项用例 | 27 / 27 通过 |
+| 全量测试（严格模式） | **306 / 306 通过**，`-W error::RuntimeWarning` 下无任何 naive datetime 告警 |
 | `ruff check life/ accounts/ common/` | All checks passed |
 | `manage.py check` | 0 issues |
+| `makemigrations --check` | No changes detected |
 
 ---
 
 ## 5. 结论与建议
 
-1. **结论**：专项测试的 26 条用例全部通过，期间发现并修复 4 项缺陷（1 项 P1、2 项 P2、1 项 P3）。日期边界域的修复经边界值/等价类验证有效，未发现新的漏计问题。
-2. **建议一（高）**：CI 增加 `makemigrations --check --dry-run` 步骤。本次 BUG-04 若非专项测试触发，会一直潜伏到上线。
+1. **结论**：27 条用例全部通过，期间发现 4 项缺陷（1 项 P1、2 项 P2、1 项 P3），**全部修复且根因已根治**（非仅规避）。日期边界域的修复经边界值/等价类验证有效，未发现新的漏计问题。
+2. **已完成（原建议一）**：CI 已增加 `makemigrations --check --dry-run` 步骤，模型与迁移漂移会直接让检查变红。
 3. **建议二（中）**：对「按日期/周期触发」的逻辑统一补**日历扫描**用例（如 TC-DASH-005 模式），避免缺陷随日期漂移而漏网。
-4. **建议三（中）**：`constants.py` 中比率常量混用 `Decimal` 与 `int`（如 `CATEGORY_SPIKE_RATIO` 为 Decimal、`CATEGORY_GROWTH_FACTOR` 为 int）。建议统一为 `float`（用于比值比较）或统一 `Decimal`（用于金额运算），从类型层面消除 BUG-01 这类混算隐患。
-5. **遗留**：BUG-03 的根因（`TimeField` 使用字符串默认值）本次以保证健壮性的方式规避，未改动模型默认值（避免额外迁移）。如需根治，可将默认值改为 `datetime.time(10, 0)` 并生成迁移。
+4. **已完成（原建议三，方案调整为「保持 Decimal」）**：`constants.py` 已补充类型约定说明与历史教训。最终选择**保留 Decimal 域**并把两处 float 分支统一回来，而非把常量改成 float——后者会破坏其余 10 余处 Decimal 金额运算。
+5. **无遗留项**：BUG-03 根因已根治（模型默认值改为 `time(10, 0)` + 迁移 `0008`），调用侧的 `str` 兼容仅作为兜底保留。
