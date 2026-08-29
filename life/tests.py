@@ -481,6 +481,26 @@ class BudgetTests(TestCase):
         # Only confirmed 200 counted, not pending 300
         self.assertContains(r, "200.00")
 
+    def test_spent_includes_last_day_of_month(self):
+        """回归：月末当天（非午夜）的支出必须计入本月总额。
+
+        历史 bug：用 date 过滤 occurred_at（DateTimeField）时，__lte=月末 会被 Django
+        补成当天 00:00，导致当月最后一天的记录被整日排除，预算/统计/复盘全部少算一天。
+        """
+        from calendar import monthrange
+        from datetime import datetime
+
+        from django.utils import timezone
+        today = timezone.localdate()
+        _, last_day = monthrange(today.year, today.month)
+        # 当月最后一天 15:30 —— 旧逻辑下会被 __lte=月末(00:00) 排除
+        last_day_afternoon = timezone.make_aware(datetime(today.year, today.month, last_day, 15, 30))
+        Expense.objects.create(user=self.user, category=self.cat, type="expense", status="confirmed",
+                               amount=Decimal("777"), occurred_at=last_day_afternoon)
+        self.client.login(username="test", password="pass")
+        r = self.client.get("/budget/")
+        self.assertEqual(r.context["spent_total"], Decimal("777"))
+
     def test_overspent_detection(self):
         Budget.objects.create(user=self.user, month=self.month, amount=Decimal("100"))
         Expense.objects.create(user=self.user, type="expense", status="confirmed",

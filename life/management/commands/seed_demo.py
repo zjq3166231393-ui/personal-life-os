@@ -25,6 +25,7 @@ from life.models import (
     Review,
     Task,
 )
+from life.services import aware_day_start
 
 DEMO_USERNAME = "demo"
 DEMO_PASSWORD = "demo123456"
@@ -86,7 +87,7 @@ class Command(BaseCommand):
 
         # Income
         Expense.objects.create(user=user, type="income", amount=Decimal(8000),
-                               occurred_at=days[0] if days else today, note="工资",
+                               occurred_at=aware_day_start(days[0] if days else today), note="工资",
                                source="manual", status="confirmed")
 
         # ── Budget ──────────────────────────────────────────────

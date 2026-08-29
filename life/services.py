@@ -6,7 +6,7 @@ view modules so the logic lives in one place and the view files stay focused on
 request handling.
 """
 from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Q, Sum
@@ -30,6 +30,25 @@ from .models_daily import DailyCheckin, daily_progress_for
 TITLE_PLACEHOLDERS = frozenset({
     "任务", "提醒", "待办", "事件", "事项", "备忘", "记录", "东西", "内容", "文本",
 })
+
+
+def aware_day_start(d):
+    """date → 当天 00:00 的感知时区 datetime（供 DateTimeField 过滤/赋值）。
+
+    用 date 直接过滤 DateTimeField 时，Django 会隐式补成当天 00:00 的 naive 值并抛
+    RuntimeWarning，且在 UTC 部署环境下该值会被按默认时区解释。过滤 DateTimeField
+    必须显式转成感知时区值。
+    """
+    return timezone.make_aware(datetime.combine(d, time.min))
+
+
+def aware_day_end(d):
+    """date → 当天 23:59:59.999999 的感知时区 datetime（闭区间右端）。
+
+    用于 __lte 上界：直接传 date 会被补成 00:00，导致「当月/当周最后一天」的记录
+    被整日排除（预算、月度统计、复盘都会少算一天）。
+    """
+    return timezone.make_aware(datetime.combine(d, time.max))
 
 
 def resolve_category(user, name):
@@ -183,8 +202,10 @@ def home_data(user):
     bills = bills[:5]
 
     # ── budget summary ──────────────────────────────────────────
+    # occurred_at 是 DateTimeField：边界必须感知时区且取到当日末尾，否则当月最后一天被漏计
     spent = Expense.objects.filter(user=user, type="expense", status="confirmed", is_deleted=False,
-                                   occurred_at__gte=month_start, occurred_at__lte=month_end).aggregate(s=Sum("amount"))["s"] or Decimal(0)
+                                   occurred_at__gte=aware_day_start(month_start),
+                                   occurred_at__lte=aware_day_end(month_end)).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     budget = Budget.objects.filter(user=user, category__isnull=True, month=month_start).first()
     budget_amount = budget.amount if budget else Decimal(0)
     budget_pct = min(int(spent / budget_amount * 100) if budget_amount > 0 else 0, 100)

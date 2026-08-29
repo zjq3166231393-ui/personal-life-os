@@ -57,6 +57,7 @@ from .models import (
     Task,
 )
 from .models_daily import DailyCheckin
+from .services import aware_day_end, aware_day_start
 
 
 def _user_queryset(model, request):
@@ -170,7 +171,8 @@ def expense_list(request):
         last_period_end = period_start
         last_total = Expense.objects.filter(
             user=request.user, type="expense", status="confirmed", is_deleted=False,
-            occurred_at__gte=last_period_start, occurred_at__lt=last_period_end,
+            occurred_at__gte=aware_day_start(last_period_start),
+            occurred_at__lt=aware_day_start(last_period_end),
         ).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     else:
         last_total = Decimal(0)
@@ -652,7 +654,7 @@ def budget(request):
     # ── totals ─────────────────────────────────────────────────────
     spent_total = Expense.objects.filter(
         user=request.user, type="expense", status="confirmed", is_deleted=False,
-        occurred_at__gte=month_start, occurred_at__lte=month_end,
+        occurred_at__gte=aware_day_start(month_start), occurred_at__lte=aware_day_end(month_end),
     ).aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
     budget_total = Budget.objects.filter(
@@ -676,7 +678,7 @@ def budget(request):
         row["category"]: row["s"]
         for row in Expense.objects.filter(
             user=request.user, type="expense", status="confirmed", is_deleted=False,
-            occurred_at__gte=month_start, occurred_at__lte=month_end,
+            occurred_at__gte=aware_day_start(month_start), occurred_at__lte=aware_day_end(month_end),
         ).values("category").annotate(s=Sum("amount"))
     }
 
@@ -947,7 +949,8 @@ def dashboard(request):
 
     # ── monthly totals ─────────────────────────────────────────────
     base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
-    month_qs = base.filter(occurred_at__gte=month_start, occurred_at__lte=month_end)
+    month_qs = base.filter(occurred_at__gte=aware_day_start(month_start),
+                           occurred_at__lte=aware_day_end(month_end))
 
     total_expense = month_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
     total_income = month_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
@@ -961,7 +964,9 @@ def dashboard(request):
         last_month_start = date(sel_year, sel_month - 1, 1)
         _, last_ld = monthrange(last_month_start.year, last_month_start.month)
         last_month_end = date(last_month_start.year, last_month_start.month, last_ld)
-    last_month_total = base.filter(type="expense", occurred_at__gte=last_month_start, occurred_at__lte=last_month_end).aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    last_month_total = base.filter(type="expense",
+                                   occurred_at__gte=aware_day_start(last_month_start),
+                                   occurred_at__lte=aware_day_end(last_month_end)).aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
     # ── category breakdown ─────────────────────────────────────────
     cat_spent = defaultdict(Decimal)
@@ -974,7 +979,9 @@ def dashboard(request):
     # ── daily trend（N+1 → 单次按日聚合）──────────────────────────────
     daily_agg = {
         row["occurred_at__date"]: row["s"]
-        for row in base.filter(type="expense", occurred_at__gte=month_start, occurred_at__lte=month_end)
+        for row in base.filter(type="expense",
+                               occurred_at__gte=aware_day_start(month_start),
+                               occurred_at__lte=aware_day_end(month_end))
         .values("occurred_at__date").annotate(s=Sum("amount"))
     }
     daily = []
@@ -1015,7 +1022,8 @@ def dashboard(request):
 
     def _sum_by_month(typ):
         out = {}
-        for row in base.filter(type=typ, occurred_at__gte=span_start, occurred_at__lte=span_end) \
+        for row in base.filter(type=typ, occurred_at__gte=aware_day_start(span_start),
+                               occurred_at__lte=aware_day_end(span_end)) \
                 .values("occurred_at__year", "occurred_at__month").annotate(s=Sum("amount")):
             out[(row["occurred_at__year"], row["occurred_at__month"])] = row["s"] or Decimal(0)
         return out
@@ -1097,7 +1105,7 @@ def dashboard(request):
                     })
 
     # 2. 当日暴增：今天 > 3x 30 日均（保留原逻辑，已是单次聚合）
-    daily_30 = base.filter(type="expense", occurred_at__gte=today - timedelta(days=DAY_TREND_DAYS)).aggregate(s=Sum("amount"))["s"] or Decimal(0)
+    daily_30 = base.filter(type="expense", occurred_at__gte=aware_day_start(today - timedelta(days=DAY_TREND_DAYS))).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     avg_30 = daily_30 / 30 if daily_30 > 0 else Decimal(0)
     today_spent = base.filter(type="expense", occurred_at__date=today).aggregate(s=Sum("amount"))["s"] or Decimal(0)
     if avg_30 > 0 and today_spent > avg_30 * ANOMALY_SPIKE_FACTOR:
@@ -1113,7 +1121,9 @@ def dashboard(request):
     }
     last_m_by_cat = {
         row["category"]: row["s"]
-        for row in base.filter(type="expense", occurred_at__gte=last_month_start, occurred_at__lte=last_month_end)
+        for row in base.filter(type="expense",
+                               occurred_at__gte=aware_day_start(last_month_start),
+                               occurred_at__lte=aware_day_end(last_month_end))
         .values("category").annotate(s=Sum("amount"))
     }
     for c in categories:
@@ -1217,7 +1227,7 @@ def dashboard(request):
         for c in categories:
             cat_month = float(month_qs.filter(type="expense", category=c).aggregate(s=Sum("amount"))["s"] or 0)
             if cat_month > 0:
-                three_mo = base.filter(type="expense", category=c, occurred_at__gte=today - timedelta(days=90)).aggregate(s=Sum("amount"))["s"] or Decimal(0)
+                three_mo = base.filter(type="expense", category=c, occurred_at__gte=aware_day_start(today - timedelta(days=90))).aggregate(s=Sum("amount"))["s"] or Decimal(0)
                 three_avg = float(three_mo) / 3
                 if three_avg > 0 and cat_month > three_avg * CATEGORY_SPIKE_RATIO:
                     pct = round((cat_month - three_avg) / three_avg * 100)
@@ -1359,7 +1369,7 @@ def review(request):
 
     # Generate draft
     base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
-    period_qs = base.filter(occurred_at__gte=start, occurred_at__lte=end)
+    period_qs = base.filter(occurred_at__gte=aware_day_start(start), occurred_at__lte=aware_day_end(end))
     total_exp = period_qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
     total_inc = period_qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
 
