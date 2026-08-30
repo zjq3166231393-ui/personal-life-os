@@ -1,0 +1,56 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}{% if g %}编辑目标{% else %}新建储蓄目标{% endif %} · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{% if g %}编辑目标{% else %}新建储蓄目标{% endif %}</h1>
+    <a href="{% url 'savings_goals' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      返回
+    </a>
+  </header>
+
+  <section class="lf-card lf-card--padded">
+    <form method="post">{% csrf_token %}
+      <div class="lf-field">
+        <label class="lf-label">目标名称</label>
+        <input type="text" name="name" class="lf-input" maxlength="80" value="{{ g.name|default:'' }}" placeholder="例如：旅行基金 / 新手机 / 应急金" required>
+      </div>
+
+      <div class="lf-row lf-mt-3" style="gap:12px;">
+        <div style="flex:1;">
+          <label class="lf-label">目标金额（¥）</label>
+          <input type="number" name="target_amount" class="lf-input lf-num" step="0.01" min="0" value="{{ g.target_amount|default:'' }}" placeholder="0.00" required>
+        </div>
+        <div style="flex:1;">
+          <label class="lf-label">已攒金额（¥）</label>
+          <input type="number" name="current_amount" class="lf-input lf-num" step="0.01" min="0" value="{{ g.current_amount|default:0 }}" placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="lf-row lf-mt-3" style="gap:12px;">
+        <div style="flex:1;">
+          <label class="lf-label">图标（emoji）</label>
+          <input type="text" name="icon" class="lf-input" maxlength="8" value="{{ g.icon|default:'🎯' }}" placeholder="🎯">
+        </div>
+        <div style="flex:1;">
+          <label class="lf-label">截止日期（可选）</label>
+          <input type="date" name="deadline" class="lf-input" value="{{ g.deadline|date:'Y-m-d'|default:'' }}">
+        </div>
+      </div>
+
+      <div class="lf-field lf-mt-3">
+        <label class="lf-label">备注（可选）</label>
+        <textarea name="note" class="lf-input" rows="3" maxlength="500" placeholder="写上为什么想攒这笔钱，更有动力～">{{ g.note|default:'' }}</textarea>
+      </div>
+
+      <button type="submit" class="lf-btn lf-btn--primary lf-mt-4" style="width:100%;">{% if g %}保存修改{% else %}创建目标{% endif %}</button>
+    </form>
+  </section>
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

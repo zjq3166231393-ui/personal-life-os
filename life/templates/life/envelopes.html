@@ -1,0 +1,98 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}信封预算 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{{ month_start|date:"Y年n月" }} 信封预算</h1>
+    <a href="{% url 'budget' %}" class="lf-text-xs lf-text-faint">总预算 →</a>
+  </header>
+
+  {# ───── 总体进度 Hero ───── #}
+  <section class="lf-card lf-card--padded lf-hero-anim lf-hero--brand lf-mb-4">
+    <div class="lf-row" style="gap:24px;align-items:center;">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-text-sm" style="opacity:.85;">信封已用</div>
+        <div class="lf-amount lf-amount--xl lf-num" style="margin-top:4px;color:#fff;">¥{{ spent_total|floatformat:2 }}</div>
+        <div class="lf-text-xs" style="opacity:.85;margin-top:4px;">已分配 ¥{{ alloc_total|floatformat:2 }}{% if unallocated > 0 %} · 未分配 ¥{{ unallocated|floatformat:2 }}{% endif %} · 本月已过 {{ month_elapsed_pct }}%（剩 {{ days_left }} 天）</div>
+      </div>
+      <div style="text-align:center;">
+        <svg width="92" height="92" viewBox="0 0 100 100" aria-label="信封总进度">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"
+                  stroke-dasharray="263.89" stroke-dashoffset="{{ overall_pct }}" transform="rotate(-90 50 50)"
+                  style="transition:stroke-dashoffset 800ms cubic-bezier(0.32,0.72,0.24,1);"/>
+          <text x="50" y="46" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">已用</text>
+          <text x="50" y="62" text-anchor="middle" fill="#fff" font-size="18" font-weight="700">{{ overall_pct }}%</text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  {% if env_rows %}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8"/><rect x="2" y="4" width="20" height="8" rx="2"/><path d="M22 7l-10 5L2 7"/></svg></span>
+      <h3 class="lf-section-title lf-mb-0">本月信封</h3>
+    </div>
+    <form method="post">{% csrf_token %}
+      {% for row in env_rows %}
+      <div class="lf-list-item" style="display:block;padding:14px 0;border-bottom:1px solid var(--border-soft);{% if forloop.last %}border-bottom:0;{% endif %}">
+        <div class="lf-row lf-row--between">
+          <span class="lf-text-1 lf-text-bold">{{ row.obj.icon }} {{ row.obj.name }}</span>
+          <div class="lf-row lf-text-xs lf-text-muted" style="gap:6px;">
+            <span class="lf-num">已用 ¥{{ row.spent|floatformat:0 }}</span>
+            <span>/</span>
+            <input type="number" name="env_{{ row.obj.pk }}" class="lf-input lf-num" style="width:90px;height:32px;padding:0 8px;" step="0.01" min="0" value="{{ row.budget }}" placeholder="0">
+          </div>
+        </div>
+        <div class="lf-progress lf-mt-2 {% if row.over %}lf-progress--danger{% elif row.pct > 80 %}lf-progress--warning{% else %}lf-progress--success{% endif %}" style="height:6px;">
+          <div class="lf-progress__bar" style="width:{% if row.pct > 100 %}100{% else %}{{ row.pct }}{% endif %}%;"></div>
+        </div>
+        <div class="lf-row lf-row--between lf-mt-1">
+          <span class="lf-text-xs lf-text-faint lf-num">{{ row.pct }}%</span>
+          {% if row.over %}<span class="lf-text-xs lf-text-danger lf-num">超支 ¥{{ row.over_amount|floatformat:0 }}</span>
+          {% elif row.remaining > 0 %}<span class="lf-text-xs lf-text-success lf-num">剩 ¥{{ row.remaining|floatformat:0 }}</span>
+          {% endif %}
+        </div>
+        {% if row.pace %}
+        <div class="lf-text-xs lf-mt-1 lf-num {% if row.pace == 'fast' %}lf-text-danger{% elif row.pace == 'slow' %}lf-text-success{% else %}lf-text-faint{% endif %}">
+          {% if row.pace == "fast" %}⚠️ 花销偏快{% elif row.pace == "slow" %}🐢 花销偏慢{% else %}节奏正常{% endif %}
+          · 日均 ¥{{ row.daily_avg|floatformat:0 }}
+          {% if row.projected_over > 0 %}· 月末预计超支 ¥{{ row.projected_over|floatformat:0 }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <button type="submit" class="lf-btn lf-btn--primary lf-mt-3">保存信封</button>
+    </form>
+  </section>
+  {% else %}
+  <section class="lf-card lf-card--padded lf-mb-4 lf-text-center">
+    <div style="display:flex;justify-content:center;margin-bottom:12px;"><span class="lf-icon-tile" style="width:48px;height:48px;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;"><path d="M22 12v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8"/><rect x="2" y="4" width="20" height="8" rx="2"/><path d="M22 7l-10 5L2 7"/></svg></span></div>
+    <h3 class="lf-section-title lf-mb-1">还没有信封</h3>
+    <p class="lf-text-soft">在下方选择一个分类并设置本月额度，就生成了一个「信封」。钱花进对应分类时，信封余额会自动减少。</p>
+  </section>
+  {% endif %}
+
+  {% if available %}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+      <h3 class="lf-section-title lf-mb-0">添加信封</h3>
+    </div>
+    <form method="post" class="lf-row" style="gap:8px;">{% csrf_token %}
+      <select name="new_cat" class="lf-select" style="flex:1;">
+        {% for c in available %}<option value="{{ c.pk }}">{{ c.icon }} {{ c.name }}</option>{% endfor %}
+      </select>
+      <input type="number" name="new_amount" class="lf-input lf-num" style="width:110px;" step="0.01" min="0" placeholder="金额">
+      <button type="submit" class="lf-btn lf-btn--primary">添加</button>
+    </form>
+  </section>
+  {% endif %}
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

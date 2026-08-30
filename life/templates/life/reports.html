@@ -1,0 +1,258 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}报表 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block body %}
+<main class="lf-container lf-reports">
+
+  <header class="lf-page-header">
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+    <h1 class="lf-page-header__title">报表</h1>
+    <span class="lf-page-header__hint">{{ period_label }}</span>
+    <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm lf-print-btn" onclick="window.print()">🖨️ 导出 PDF</button>
+  </header>
+
+  {# ───── 时间预设 / 自定义区间 ───── #}
+  <section class="lf-card lf-mb-3">
+    <div class="lf-seg lf-mb-3" id="presetSeg">
+      <a class="lf-seg__btn {% if preset == 'month' %}is-active{% endif %}" href="?preset=month">本月</a>
+      <a class="lf-seg__btn {% if preset == 'last_month' %}is-active{% endif %}" href="?preset=last_month">上月</a>
+      <a class="lf-seg__btn {% if preset == 'year' %}is-active{% endif %}" href="?preset=year">今年</a>
+      <a class="lf-seg__btn {% if preset == 'last_year' %}is-active{% endif %}" href="?preset=last_year">去年</a>
+      <a class="lf-seg__btn {% if preset == 'all' %}is-active{% endif %}" href="?preset=all">全部</a>
+    </div>
+    <form method="get" class="lf-row lf-row--wrap" style="gap:10px;align-items:flex-end;">
+      <input type="hidden" name="preset" value="custom">
+      <div class="lf-field" style="min-width:140px;">
+        <label for="rStart" class="lf-label">开始日期</label>
+        <input type="date" name="start" id="rStart" class="lf-input lf-num" value="{{ period_start|date:'Y-m-d' }}">
+      </div>
+      <div class="lf-field" style="min-width:140px;">
+        <label for="rEnd" class="lf-label">结束日期</label>
+        <input type="date" name="end" id="rEnd" class="lf-input lf-num" value="{{ period_end|date:'Y-m-d' }}">
+      </div>
+      <button type="submit" class="lf-btn lf-btn--primary">查看区间</button>
+    </form>
+  </section>
+
+  <script type="application/json" id="chart-data">{{ chart_data|safe }}</script>
+
+  {# ───── 顶部 3 KPI 卡片 ───── #}
+  <section class="lf-row lf-mb-4" style="gap:12px;">
+    <div class="lf-card lf-card--tight" style="flex:1;text-align:center;padding:16px 12px;">
+      <div class="lf-text-xs lf-text-faint">支出</div>
+      <div class="lf-amount lf-amount--lg lf-num lf-text-danger lf-mt-2">¥{{ total_expense|floatformat:0 }}</div>
+    </div>
+    <div class="lf-card lf-card--tight" style="flex:1;text-align:center;padding:16px 12px;">
+      <div class="lf-text-xs lf-text-faint">收入</div>
+      <div class="lf-amount lf-amount--lg lf-num lf-text-success lf-mt-2">¥{{ total_income|floatformat:0 }}</div>
+    </div>
+    <div class="lf-card lf-card--tight" style="flex:1;text-align:center;padding:16px 12px;">
+      <div class="lf-text-xs lf-text-faint">结余</div>
+      <div class="lf-amount lf-amount--lg lf-num {% if balance >= 0 %}lf-text-success{% else %}lf-text-danger{% endif %} lf-mt-2">¥{{ balance|floatformat:0 }}</div>
+      {% if savings_rate is not None %}<div class="lf-text-xs lf-text-faint lf-mt-1">结余率 {{ savings_rate }}%</div>{% endif %}
+    </div>
+  </section>
+
+  {# ───── 环比 / 同比 ───── #}
+  {% if not is_all %}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0z"/><path d="M19 7l-3 6a3 3 0 0 0 6 0z"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">对比</h3></div>
+    </div>
+    <div class="lf-reports-compare">
+      {# 环比 #}
+      <div class="lf-reports-compare__col">
+        <div class="lf-text-xs lf-text-faint lf-mb-2">环比（上一周期）</div>
+        <div class="lf-compare-row">
+          <span class="lf-compare-row__label">支出</span>
+          {% if delta_expense_mom == None %}<span class="lf-compare-row__val">—</span>
+          {% else %}
+            <span class="lf-compare-row__val {% if delta_expense_mom > 0 %}lf-text-danger{% elif delta_expense_mom < 0 %}lf-text-success{% else %}lf-text-faint{% endif %}">
+              {% if delta_expense_mom > 0 %}▲ {% elif delta_expense_mom < 0 %}▼ {% endif %}{{ delta_expense_mom|floatformat:1 }}%
+            </span>
+          {% endif %}
+          <span class="lf-compare-row__ref lf-num">上期 ¥{{ prev_expense|floatformat:0 }}</span>
+        </div>
+        <div class="lf-compare-row">
+          <span class="lf-compare-row__label">收入</span>
+          {% if delta_income_mom == None %}<span class="lf-compare-row__val">—</span>
+          {% else %}
+            <span class="lf-compare-row__val {% if delta_income_mom > 0 %}lf-text-success{% elif delta_income_mom < 0 %}lf-text-danger{% else %}lf-text-faint{% endif %}">
+              {% if delta_income_mom > 0 %}▲ {% elif delta_income_mom < 0 %}▼ {% endif %}{{ delta_income_mom|floatformat:1 }}%
+            </span>
+          {% endif %}
+          <span class="lf-compare-row__ref lf-num">上期 ¥{{ prev_income|floatformat:0 }}</span>
+        </div>
+        <div class="lf-compare-row">
+          <span class="lf-compare-row__label">结余</span>
+          {% if delta_balance_mom == None %}<span class="lf-compare-row__val">—</span>
+          {% else %}
+            <span class="lf-compare-row__val {% if delta_balance_mom > 0 %}lf-text-success{% elif delta_balance_mom < 0 %}lf-text-danger{% else %}lf-text-faint{% endif %}">
+              {% if delta_balance_mom > 0 %}▲ {% elif delta_balance_mom < 0 %}▼ {% endif %}{{ delta_balance_mom|floatformat:1 }}%
+            </span>
+          {% endif %}
+          <span class="lf-compare-row__ref lf-num">上期 ¥{{ prev_balance|floatformat:0 }}</span>
+        </div>
+      </div>
+      {# 同比 #}
+      <div class="lf-reports-compare__col">
+        <div class="lf-text-xs lf-text-faint lf-mb-2">同比（去年同期）</div>
+        <div class="lf-compare-row">
+          <span class="lf-compare-row__label">支出</span>
+          {% if delta_expense_yoy == None %}<span class="lf-compare-row__val">—</span>
+          {% else %}
+            <span class="lf-compare-row__val {% if delta_expense_yoy > 0 %}lf-text-danger{% elif delta_expense_yoy < 0 %}lf-text-success{% else %}lf-text-faint{% endif %}">
+              {% if delta_expense_yoy > 0 %}▲ {% elif delta_expense_yoy < 0 %}▼ {% endif %}{{ delta_expense_yoy|floatformat:1 }}%
+            </span>
+          {% endif %}
+          <span class="lf-compare-row__ref lf-num">去年 ¥{{ yoy_expense|floatformat:0 }}</span>
+        </div>
+        <div class="lf-compare-row">
+          <span class="lf-compare-row__label">收入</span>
+          {% if delta_income_yoy == None %}<span class="lf-compare-row__val">—</span>
+          {% else %}
+            <span class="lf-compare-row__val {% if delta_income_yoy > 0 %}lf-text-success{% elif delta_income_yoy < 0 %}lf-text-danger{% else %}lf-text-faint{% endif %}">
+              {% if delta_income_yoy > 0 %}▲ {% elif delta_income_yoy < 0 %}▼ {% endif %}{{ delta_income_yoy|floatformat:1 }}%
+            </span>
+          {% endif %}
+          <span class="lf-compare-row__ref lf-num">去年 ¥{{ yoy_income|floatformat:0 }}</span>
+        </div>
+        <div class="lf-compare-row">
+          <span class="lf-compare-row__label">结余</span>
+          {% if delta_balance_yoy == None %}<span class="lf-compare-row__val">—</span>
+          {% else %}
+            <span class="lf-compare-row__val {% if delta_balance_yoy > 0 %}lf-text-success{% elif delta_balance_yoy < 0 %}lf-text-danger{% else %}lf-text-faint{% endif %}">
+              {% if delta_balance_yoy > 0 %}▲ {% elif delta_balance_yoy < 0 %}▼ {% endif %}{{ delta_balance_yoy|floatformat:1 }}%
+            </span>
+          {% endif %}
+          <span class="lf-compare-row__ref lf-num">去年 ¥{{ yoy_balance|floatformat:0 }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ───── 分类构成：支出 ───── #}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">支出构成</h3></div>
+      <span class="lf-section-head__action lf-text-xs lf-text-faint lf-num">合计 ¥{{ expense_cat_total|floatformat:0 }}</span>
+    </div>
+    {% if expense_cats %}
+    <ul class="lf-cat-list">
+      {% for c in expense_cats %}
+      <li class="lf-cat-row">
+        <span class="lf-cat-row__icon">{{ c.icon }}</span>
+        <span class="lf-cat-row__name">{{ c.name }}</span>
+        <span class="lf-cat-row__bar"><span class="lf-cat-row__bar-fill" style="width:{{ c.pct }}%;background:{{ c.color }};"></span></span>
+        <span class="lf-cat-row__pct lf-text-xs lf-text-faint lf-num">{{ c.pct }}%</span>
+        <span class="lf-cat-row__amt lf-num">¥{{ c.amount|floatformat:0 }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="lf-text-faint">本期没有支出记录。</p>
+    {% endif %}
+  </section>
+
+  {# ───── 分类构成：收入 ───── #}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">收入构成</h3></div>
+      <span class="lf-section-head__action lf-text-xs lf-text-faint lf-num">合计 ¥{{ income_cat_total|floatformat:0 }}</span>
+    </div>
+    {% if income_cats %}
+    <ul class="lf-cat-list">
+      {% for c in income_cats %}
+      <li class="lf-cat-row">
+        <span class="lf-cat-row__icon">{{ c.icon }}</span>
+        <span class="lf-cat-row__name">{{ c.name }}</span>
+        <span class="lf-cat-row__bar"><span class="lf-cat-row__bar-fill" style="width:{{ c.pct }}%;background:{{ c.color }};"></span></span>
+        <span class="lf-cat-row__pct lf-text-xs lf-text-faint lf-num">{{ c.pct }}%</span>
+        <span class="lf-cat-row__amt lf-num">¥{{ c.amount|floatformat:0 }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="lf-text-faint">本期没有收入记录。</p>
+    {% endif %}
+  </section>
+
+  {# ───── 每日趋势 ───── #}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">每日收支趋势</h3></div>
+    </div>
+    <div class="lf-chart-wrap">
+      <canvas id="dailyCanvas"></canvas>
+    </div>
+  </section>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+
+{% block scripts %}
+<style>
+.lf-reports .lf-page-header { position: relative; }
+.lf-print-btn { margin-left: auto; }
+.lf-reports-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.lf-reports-compare__col { min-width: 0; }
+.lf-compare-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--border-soft); }
+.lf-compare-row:last-child { border-bottom: 0; }
+.lf-compare-row__label { font-size: 13px; color: var(--text-2); }
+.lf-compare-row__val { font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.lf-compare-row__ref { font-size: 12px; color: var(--text-3); }
+
+.lf-cat-list { list-style: none; margin: 0; padding: 0; }
+.lf-cat-row { display: grid; grid-template-columns: 28px 1fr 90px 42px 84px; align-items: center; gap: 10px; padding: 8px 0; }
+.lf-cat-row__icon { font-size: 18px; }
+.lf-cat-row__name { font-size: 14px; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-cat-row__bar { height: 8px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
+.lf-cat-row__bar-fill { display: block; height: 100%; border-radius: 999px; }
+.lf-cat-row__pct { text-align: right; }
+.lf-cat-row__amt { text-align: right; font-weight: 600; color: var(--text-1); }
+.lf-chart-wrap { position: relative; height: 280px; }
+
+/* 打印 / 导出 PDF（2026-08-30 增强） */
+@media print {
+  .lf-sidebar, .lf-bottom-nav, .lf-fab, .lf-print-btn, .lf-seg, form { display: none !important; }
+  body { background: #fff; }
+  .lf-container { max-width: 100%; padding: 0; }
+  .lf-card { box-shadow: none; border: 1px solid #e5e7eb; break-inside: avoid; }
+  .lf-chart-wrap { height: 240px; }
+  .lf-page-header__back { display: none !important; }
+}
+</style>
+<script>
+(function(){
+  var el = document.getElementById('chart-data');
+  if(!el) return;
+  var D = JSON.parse(el.textContent);
+  var font = { family: 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif', size: 12 };
+  var canvas = document.getElementById('dailyCanvas');
+  if(canvas && D.dailyLabels && D.dailyLabels.length){
+    new Chart(canvas, {
+      type: 'bar',
+      data: { labels: D.dailyLabels, datasets: [{ label: '收支', data: D.dailyAmounts, backgroundColor: 'rgba(43,86,216,.85)', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
+        plugins: { legend: { display: false } },
+        scales: { x: { grid: { display: false }, ticks: { font: font, maxRotation: 0, autoSkip: true } }, y: { grid: { color: '#eef2f7' }, ticks: { font: font } } } }
+    });
+  }
+})();
+</script>
+{% endblock %}

@@ -49,6 +49,7 @@ TEMPLATES = [{
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
         "life.context_processors.accounts",
+        "life.context_processors.undo_state",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"

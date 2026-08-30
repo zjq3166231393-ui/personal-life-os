@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -22,11 +22,44 @@ ACCOUNT_LIMIT_PER_USER = 50
 
 @login_required
 def account_list(request):
-    accounts = Account.objects.filter(user=request.user, is_deleted=False)
+    accounts = list(Account.objects.filter(user=request.user, is_deleted=False))
+    ids = [a.id for a in accounts]
+    zero = Decimal("0")
+    # ── 余额批量聚合：替代 Account.balance 每账户 4 次查询的 N+1 ──
+    # 旧实现遍历每个账户调用 account.balance（income/expense/转出/转入 4 次聚合），
+    # K 个账户 = 4K 次查询；改为 2 次 GROUP BY 一次算完所有账户余额。
+    out_rows = (
+        Expense.objects.filter(
+            user=request.user, is_deleted=False, status="confirmed", account_id__in=ids,
+        )
+        .values("account_id")
+        .annotate(
+            income=Sum("amount", filter=Q(type="income")),
+            expense=Sum("amount", filter=Q(type="expense")),
+            out_xfer=Sum("amount", filter=Q(type="transfer")),
+        )
+    )
+    out_map = {r["account_id"]: r for r in out_rows}
+    in_rows = (
+        Expense.objects.filter(
+            user=request.user, is_deleted=False, status="confirmed", transfer_to_account_id__in=ids,
+        )
+        .values("transfer_to_account_id")
+        .annotate(in_xfer=Sum("amount", filter=Q(type="transfer")))
+    )
+    in_map = {r["transfer_to_account_id"]: (r["in_xfer"] or zero) for r in in_rows}
+
     rows = []
     total = Decimal("0")
     for a in accounts:
-        bal = a.balance
+        o = out_map.get(a.id, {})
+        bal = (
+            a.initial_balance
+            + (o.get("income") or zero)
+            - (o.get("expense") or zero)
+            - (o.get("out_xfer") or zero)
+            + in_map.get(a.id, zero)
+        )
         rows.append({"obj": a, "balance": bal})
         total += bal
     return render(request, "life/account_list.html", {
@@ -34,7 +67,7 @@ def account_list(request):
         "total": total,
         "types": Account.Type.choices,
         "limit": ACCOUNT_LIMIT_PER_USER,
-        "count": accounts.count(),
+        "count": len(accounts),
     })
 
 

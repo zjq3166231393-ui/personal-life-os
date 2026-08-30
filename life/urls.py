@@ -3,16 +3,20 @@ from django.urls import path
 from . import (
     views,
     views_account,
+    views_attachment,
     views_batch,
+    views_category_rules,
     views_calendar,
     views_crud,
     views_export,
+    views_forecast,
     views_gamification,
     views_import,
     views_ocr,
     views_pwa,
     views_search,
     views_tag,
+    views_trash,
 )
 
 urlpatterns = [
@@ -42,8 +46,15 @@ urlpatterns = [
     # 快速记账接口（悬浮按钮）
     path("api/quick-expense/", views.quick_add_expense, name="quick_add_expense"),
     path("api/quick-categories/", views.quick_categories, name="quick_categories"),
+    path("api/suggest-category/", views_category_rules.suggest_category, name="suggest_category"),
+    path("category-rules/", views_category_rules.category_rule_list, name="category_rule_list"),
+    path("category-rules/create/", views_category_rules.category_rule_create, name="category_rule_create"),
+    path("category-rules/<int:pk>/edit/", views_category_rules.category_rule_edit, name="category_rule_edit"),
+    path("category-rules/<int:pk>/delete/", views_category_rules.category_rule_delete, name="category_rule_delete"),
+
     path("api/parse/", views.parse_entry, name="parse_entry"),
     path("api/parse-status/<str:job_uuid>/", views.parse_status, name="parse_status"),
+    path("api/voice-expense/", views.voice_expense, name="voice_expense"),
     path("api/confirm-actions/", views.confirm_actions, name="confirm_actions"),
     path("api/lunar/", views.lunar_api, name="lunar_api"),
     path("expenses/", views_crud.expense_list, name="expense_list"),
@@ -85,6 +96,15 @@ urlpatterns = [
     path("countdowns/<int:pk>/pin/", views_crud.countdown_pin, name="countdown_pin"),
     path("countdowns/<int:pk>/toggle-home/", views_crud.countdown_toggle_home, name="countdown_toggle_home"),
     path("budget/", views_crud.budget, name="budget"),
+    # 储蓄目标 / 信封预算（对标 MoneyWiz / 随手记的存钱罐 + 信封预算法）
+    path("savings/", views_crud.savings_goals, name="savings_goals"),
+    path("savings/create/", views_crud.savings_goal_create, name="savings_goal_create"),
+    path("savings/<int:pk>/edit/", views_crud.savings_goal_edit, name="savings_goal_edit"),
+    path("savings/<int:pk>/delete/", views_crud.savings_goal_delete, name="savings_goal_delete"),
+    path("savings/<int:pk>/adjust/", views_crud.savings_goal_adjust, name="savings_goal_adjust"),
+    path("envelopes/", views_crud.envelopes, name="envelopes"),
+    # 净值趋势图（账户余额按日快照 → 净值/资产曲线，纯后端分析）
+    path("net-worth/", views_crud.net_worth, name="net_worth"),
     path("recurring/", views_crud.recurring_list, name="recurring_list"),
     path("recurring/create/", views_crud.recurring_create, name="recurring_create"),
     path("recurring/<int:pk>/edit/", views_crud.recurring_edit, name="recurring_edit"),
@@ -94,6 +114,8 @@ urlpatterns = [
     path("installments/<int:pk>/edit/", views_crud.installment_edit, name="installment_edit"),
     path("installments/<int:pk>/pay/", views_crud.installment_pay, name="installment_pay"),
     path("dashboard/", views_crud.dashboard, name="dashboard"),
+    path("reports/", views_crud.reports, name="reports"),
+    path("annual/", views_crud.annual_summary, name="annual_summary"),
     # PWA
     path("manifest.json", views_pwa.manifest, name="manifest"),
     path("sw.js", views_pwa.service_worker, name="service_worker"),
@@ -109,4 +131,22 @@ urlpatterns = [
     # 图片识别记账（P2：OCR 小票 → 确认记账）
     path("ocr/", views_ocr.ocr_upload, name="ocr_upload"),
     path("ocr/save/", views_ocr.ocr_save, name="ocr_save"),
+    # 现金流预测（洞察增强：基于余额 + 固定支出推算未来余额）
+    path("forecast/", views_forecast.forecast, name="cashflow_forecast"),
+
+    # ── 凭证附件（P0-3）────────────────────────────────────────────
+    path("expenses/<int:pk>/attachments/", views_attachment.attachment_upload,
+         name="attachment_upload"),
+    path("attachments/<int:pk>/", views_attachment.attachment_serve, name="attachment_serve"),
+    path("attachments/<int:pk>/download/", views_attachment.attachment_download,
+         name="attachment_download"),
+    path("attachments/<int:pk>/delete/", views_attachment.attachment_delete,
+         name="attachment_delete"),
+
+    # ── 回收站 / 撤销（P0-4） ────────────────────────────────────────
+    path("trash/", views_trash.trash_list, name="trash"),
+    path("trash/undo/", views_trash.undo_delete, name="trash_undo"),
+    path("trash/empty/", views_trash.trash_empty, name="trash_empty"),
+    path("trash/<str:kind>/<int:pk>/restore/", views_trash.trash_restore, name="trash_restore"),
+    path("trash/<str:kind>/<int:pk>/purge/", views_trash.trash_purge, name="trash_purge"),
 ]

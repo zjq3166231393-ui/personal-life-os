@@ -215,6 +215,10 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   background: linear-gradient(135deg, #b91c1c 0%, #dc2626 55%, #ef4444 100%);
   box-shadow: 0 24px 56px -16px rgba(220,38,38,.35), inset 0 1px 0 rgba(255,255,255,.15);
 }
+.lf-hero--brand {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2b56d8 55%, #4b80f0 100%);
+  color: #fff;
+}
 .lf-hero__progress {
   height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; margin-top: 18px; overflow: hidden;
 }
@@ -309,6 +313,56 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 
+/* Switch（每日记账提醒开关，2026-08-30 增强） */
+.lf-switch { position: relative; display: inline-flex; flex: 0 0 auto; cursor: pointer; }
+.lf-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.lf-switch__track {
+  width: 46px; height: 26px; border-radius: 999px; background: var(--surface-3);
+  border: 1px solid var(--border-strong); transition: background var(--t-base) var(--ease);
+  display: inline-flex; align-items: center; padding: 0 3px;
+}
+.lf-switch__thumb {
+  width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(15,23,42,.25); transition: transform var(--t-base) var(--ease);
+}
+.lf-switch input:checked + .lf-switch__track { background: var(--brand); border-color: var(--brand); }
+.lf-switch input:checked + .lf-switch__track .lf-switch__thumb { transform: translateX(20px); }
+.lf-switch input:focus-visible + .lf-switch__track { box-shadow: 0 0 0 3px var(--brand-soft); }
+
+/* ── iOS 风格开关行（countdown_edit / recurring_edit 共用）──
+   此前 .lf-ios-row / .lf-ios-toggle 只有模板在用、CSS 从未定义，开关退化为裸 checkbox。
+   视觉状态用 :has() 直接跟随 input，不依赖 JS 同步 is-on 类（避免点击 input 时失同步）。 */
+.lf-ios-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.lf-ios-row:last-of-type { border-bottom: none; }
+.lf-ios-row__label { font-size: 14px; color: var(--text-1); }
+.lf-ios-toggle {
+  position: relative; display: inline-flex; flex: 0 0 auto;
+  width: 46px; height: 26px; border-radius: 999px; cursor: pointer;
+  background: var(--surface-3); border: 1px solid var(--border-strong);
+  transition: background var(--t-base) var(--ease), border-color var(--t-base) var(--ease);
+}
+.lf-ios-toggle > input[type="checkbox"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer;
+}
+.lf-ios-toggle::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .25);
+  transition: transform var(--t-base) var(--ease);
+}
+.lf-ios-toggle:has(input:checked),
+.lf-ios-toggle.is-on { background: var(--brand); border-color: var(--brand); }
+.lf-ios-toggle:has(input:checked)::after,
+.lf-ios-toggle.is-on::after { transform: translateX(20px); }
+.lf-ios-toggle:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--brand-soft); }
+@media (prefers-reduced-motion: reduce) {
+  .lf-ios-toggle, .lf-ios-toggle::after { transition: none; }
+}
+
 /* Badge / pill */
 .lf-badge {
   display: inline-flex; align-items: center; gap: 4px;
@@ -353,6 +407,14 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-list-item:last-child { border-bottom: 0; }
 .lf-list-item--hover:hover { background: var(--surface-2); }
 
+/* BEM 变体（账户构成 / 储蓄 / 信封列表复用） */
+.lf-list__item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--border-soft); }
+.lf-list__item:last-child { border-bottom: 0; }
+.lf-list__icon { width: 34px; height: 34px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 17px; background: var(--surface-3); border-radius: 10px; }
+.lf-list__body { flex: 1; min-width: 0; }
+.lf-list__title { font-size: 14.5px; font-weight: 600; color: var(--text-1); }
+.lf-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; display: inline-block; }
+
 /* Bottom nav dead block removed (2026-08-25): the real .lf-bottom-nav
    definition lives further down (~line 678) and the old .lf-nav-item class
    was never referenced by any template. Keep this area clean. */
@@ -377,6 +439,12 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-alert--success { background: var(--success-soft); border-color: rgba(5,150,105,.2); color: var(--success); }
 .lf-alert--warning { background: var(--warning-soft); border-color: rgba(217,119,6,.2); color: var(--warning); }
 .lf-alert--danger { background: var(--danger-soft); border-color: rgba(220,38,38,.2); color: var(--danger); }
+
+/* 每日记账提醒 nudge（2026-08-30 增强） */
+.lf-nudge--remind { background: linear-gradient(135deg, var(--brand-soft), var(--surface-2)); border: 1px solid rgba(43,86,216,.18); }
+.lf-nudge__icon { font-size: 26px; line-height: 1; flex: 0 0 auto; }
+.lf-nudge__title { font-weight: 700; font-size: 15px; color: var(--text-1); }
+.lf-row--center { align-items: center; }
 
 /* Divider */
 .lf-divider { height: 1px; background: var(--border-soft); border: 0; margin: 16px 0; }
@@ -1187,6 +1255,34 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
    快捷宫格（首页）
    ============================================================ */
 .lf-quick-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* ─── Home command center (redesign: ①A grid + ⑤B unified icons + ③A tiles) ─── */
+@media (min-width: 1024px) {
+  .lf-container--home { max-width: 1040px; }
+  .lf-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .lf-home > .lf-hero.lf-home__hero { grid-column: 1 / -1; margin-bottom: 0; }
+  .lf-home__main { min-width: 0; }
+  .lf-home__side { position: sticky; top: 24px; min-width: 0; }
+}
+@media (min-width: 1280px) {
+  .lf-container--home { max-width: 1140px; }
+}
+.lf-icon-tile {
+  width: 38px; height: 38px; flex: 0 0 auto;
+  border-radius: var(--r-md);
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: flex; align-items: center; justify-content: center;
+}
+.lf-icon-tile svg { width: 20px; height: 20px; display: block; }
+.lf-section-head { display: flex; align-items: center; gap: 12px; }
+.lf-section-head__main { flex: 1; min-width: 0; }
+.lf-section-head__action { flex: 0 0 auto; }
 .lf-quick-tile {
   position: relative; display: flex; align-items: center; gap: 12px;
   padding: 16px; background: var(--surface); border: 1px solid var(--border);
@@ -1735,3 +1831,131 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 /* ── 图片识别记账（P2）：识别原文折叠区 ── */
 .lf-ocr-raw{background:var(--surface-3);border:1px solid var(--border-soft);border-radius:var(--r-md);padding:12px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto;margin:0;}
 .lf-badge-tile__progress-bar{height:100%;border-radius:999px;background:var(--brand);transition:width .6s ease}
+
+/* ── 现金流预测（洞察增强）：首页卡片 + 详情页 ── */
+.lf-cf-icon{font-size:22px;line-height:1;}
+.lf-cf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+.lf-cf-num{font-size:17px;font-weight:800;color:var(--text-1);margin-top:2px;}
+
+/* ── 语音记账（增强）：麦克风按钮 + 录音态 ── */
+.lf-quick-voice__row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.lf-mic{width:46px;height:46px;border-radius:50%;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--brand);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;transition:transform .15s ease,box-shadow .15s ease;}
+.lf-mic:hover{transform:scale(1.05);}
+.lf-mic.is-recording{background:var(--brand);color:#fff;animation:lf-pulse 1.4s infinite;}
+@keyframes lf-pulse{0%{box-shadow:0 0 0 0 rgba(43,86,216,.45)}70%{box-shadow:0 0 0 12px rgba(43,86,216,0)}100%{box-shadow:0 0 0 0 rgba(43,86,216,0)}}
+.lf-cf-num--danger{color:var(--danger,#dc2626);}
+.lf-cf-chart-wrap{position:relative;height:260px;}
+
+/* ── 全局快捷键帮助弹窗 ── */
+.lf-kbd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.lf-kbd-list li{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-2);}
+.lf-kbd{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 8px;background:var(--surface-2,#f2f4f8);border:1px solid rgba(127,127,127,.28);border-bottom-width:2px;border-radius:7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:700;color:var(--text-1);}
+/* ── 页面 Hero 入场微动效（储蓄 / 信封 / 净值三页共用，视觉统一） ── */
+@keyframes lf-fade-up { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+.lf-hero-anim { animation: lf-fade-up .5s cubic-bezier(.32,.72,.24,1) both; }
+@media (prefers-reduced-motion: reduce) { .lf-hero-anim { animation: none; } }
+
+/* ── 删除后「撤销」条（P0-4 回收站 / 撤销） ── */
+/* 贴在页面内容顶部、容器宽度内对齐；不自动消失，直到用户操作或离开页面。 */
+.lf-undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 28px);
+  max-width: 720px;
+  margin: 12px auto 0;
+  padding: 10px 12px;
+  background: var(--surface-2, #f2f4f8);
+  border: 1px solid var(--border, rgba(127,127,127,.24));
+  border-radius: var(--r-md, 12px);
+}
+.lf-undo-bar__main { flex: 1; min-width: 0; }
+.lf-undo-bar__main > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .lf-undo-bar { flex-wrap: wrap; }
+  .lf-undo-bar__main { flex: 1 1 60%; }
+}
+
+/* ── 凭证附件（P0-3）──────────────────────────────────────────── */
+.lf-attach-grid {
+  display: grid; gap: 12px; margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+.lf-attach {
+  margin: 0; border: 1px solid var(--border); border-radius: var(--r-md);
+  overflow: hidden; background: var(--surface-1);
+}
+.lf-attach__thumb {
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 4 / 3; background: var(--surface-2);
+  border-bottom: 1px solid var(--border-soft); color: var(--text-3);
+  overflow: hidden;
+}
+.lf-attach__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lf-attach__thumb svg { width: 28px; height: 28px; }
+.lf-attach__meta {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding: 7px 9px 0; font-size: 11px; color: var(--text-2);
+}
+.lf-attach__actions {
+  display: flex; gap: 6px; padding: 6px 9px 9px;
+}
+.lf-attach__actions .lf-btn { padding: 3px 8px; font-size: 11px; }
+.lf-attach-form { display: flex; gap: 8px; align-items: center; }
+.lf-attach-form .lf-input { flex: 1; min-width: 0; font-size: 12px; }
+@media (max-width: 600px) {
+  .lf-attach-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .lf-attach-form { flex-wrap: wrap; }
+  .lf-attach-form .lf-input { flex: 1 1 100%; }
+}
+
+/* ── 年度账单（P1-7）──────────────────────────────────────────── */
+.lf-insight {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.lf-bar-list { display: flex; flex-direction: column; gap: 12px; }
+.lf-bar-row { display: flex; flex-direction: column; gap: 5px; }
+.lf-bar-track {
+  height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--surface-2);
+}
+.lf-bar-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand) 0%, var(--brand-strong) 100%);
+  transition: width 420ms var(--ease);
+}
+.lf-py-3 { padding: 16px 0; }
+.lf-text-center { text-align: center; }
+.lf-input--ghost {
+  background: transparent; border-color: var(--border);
+}
+.lf-input--ghost:focus { border-color: var(--brand); }
+
+/* ── 移动端滑动手势（P1-6）：左滑揭示「编辑/删除」操作 ── */
+.lf-swipe { position: relative; overflow: hidden; }
+.lf-swipe__content {
+  position: relative; z-index: 2;
+  transition: transform .22s ease;
+  touch-action: pan-y;
+}
+.lf-swipe__actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; z-index: 1;
+}
+.lf-swipe__action {
+  width: 76px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; color: #fff; text-decoration: none;
+  font-size: 12px; line-height: 1;
+}
+.lf-swipe__action svg { width: 18px; height: 18px; }
+.lf-swipe__action--edit { background: var(--brand); }
+.lf-swipe__action--delete { background: var(--danger, #ef4444); }
+.lf-swipe.is-open .lf-swipe__content { transform: translateX(-152px); }
+/* 仅在支持精确悬停（桌面）时隐藏滑动操作提示，避免移动端误触 */
+@media (hover: none) {
+  .lf-list-item--hover:hover { background: var(--surface); }
+}

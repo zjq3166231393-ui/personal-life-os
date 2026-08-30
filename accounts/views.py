@@ -256,9 +256,11 @@ class ProfileForm(forms.ModelForm):
         fields = ("display_name", "timezone", "currency", "monthly_budget",
                   "ai_parsing_enabled", "daily_ai_limit",
                   "email_notifications", "email_important_only",
-                  "default_reminder_time")
+                  "default_reminder_time",
+                  "daily_log_reminder_enabled", "daily_log_reminder_time")
         widgets = {
             "default_reminder_time": forms.TimeInput(attrs={"type": "time", "class": "lf-input"}),
+            "daily_log_reminder_time": forms.TimeInput(attrs={"type": "time", "class": "lf-input"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -345,6 +347,42 @@ def change_identity(request):
     return redirect("profile")
 
 
+def _sync_daily_log_reminder(profile):
+    """根据「每日记账提醒」开关维护一条 daily Recurrence 提醒，复用现有提醒引擎。
+
+    - 启用：确保存在一条标题为标记的每日提醒，event_at/remind_at 设为今日提醒时间；
+      已存在则同步时间并重新启用。
+    - 停用：将该标记提醒置为禁用（不删除，保留历史）。
+    真正的每日通知由 scan_reminders 定时扫描产生；首页 nudge 为无需定时的兜底提示。
+    """
+    from datetime import datetime as _dt
+
+    from django.utils import timezone
+
+    from life.models import Reminder
+
+    user = profile.user
+    title = "💰 每日记账提醒"
+    if profile.daily_log_reminder_enabled:
+        today = timezone.localdate()
+        dt = _dt.combine(today, profile.daily_log_reminder_time)
+        event_at = timezone.make_aware(dt)
+        r, created = Reminder.objects.get_or_create(
+            user=user, title=title, recurrence_rule=Reminder.Recurrence.DAILY,
+            defaults={"reminder_type": "custom", "event_at": event_at,
+                      "remind_at": event_at, "is_enabled": True},
+        )
+        if not created:
+            r.event_at = event_at
+            r.remind_at = event_at
+            r.is_enabled = True
+            r.save(update_fields=["event_at", "remind_at", "is_enabled"])
+    else:
+        Reminder.objects.filter(
+            user=user, title=title, recurrence_rule=Reminder.Recurrence.DAILY
+        ).update(is_enabled=False)
+
+
 @login_required
 @guest_blocked
 def profile(request):
@@ -353,6 +391,7 @@ def profile(request):
         form = ProfileForm(request.POST, instance=profile)
         if form.is_valid():
             form.save()
+            _sync_daily_log_reminder(profile)
             return redirect("profile")
     else:
         form = ProfileForm(instance=profile)

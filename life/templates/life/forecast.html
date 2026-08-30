@@ -1,0 +1,153 @@
+{% extends "_base.html" %}
+{% load static %}
+{% load life_extras %}
+{% block title %}现金流预测 · Personal Life OS{% endblock %}
+
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+
+{% block body %}
+<main class="lf-container">
+
+  <div class="lf-row lf-row--between lf-mb-4" style="margin-top:4px;">
+    <h1 class="lf-page-title">💸 现金流预测</h1>
+    <a href="{% url 'home' %}" class="lf-text-xs lf-text-faint">返回首页 →</a>
+  </div>
+
+  {% if not cf.has_accounts and not cf.upcoming %}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-empty">
+      <div class="lf-empty__icon">💸</div>
+      <h3>还没有可预测的数据</h3>
+      <p class="lf-text-soft">在「账户」里记下你的资金池，或在「固定支出」里添加房租、话费等周期账单，就能看到未来 30 天的余额走势。</p>
+      <div class="lf-row" style="gap:8px;justify-content:center;margin-top:8px;">
+        <a href="{% url 'account_list' %}" class="lf-btn lf-btn--primary lf-btn--sm">+ 添加账户</a>
+        <a href="{% url 'recurring_list' %}" class="lf-btn lf-btn--secondary lf-btn--sm">+ 固定支出</a>
+      </div>
+    </div>
+  </section>
+  {% else %}
+
+  {# ── 概览卡 ── #}
+  <section class="lf-card lf-mb-4 lf-cf-hero">
+    <div class="lf-cf-hero__stats">
+      <div class="lf-cf-stat">
+        <div class="lf-text-xs lf-text-faint">当前余额</div>
+        <div class="lf-cf-stat__num">¥{{ cf.start_balance|floatformat:0 }}</div>
+      </div>
+      <div class="lf-cf-stat">
+        <div class="lf-text-xs lf-text-faint">未来 {{ cf.days }} 天预计</div>
+        <div class="lf-cf-stat__num">¥{{ cf.projected_end|floatformat:0 }}</div>
+      </div>
+      <div class="lf-cf-stat">
+        <div class="lf-text-xs lf-text-faint">最低余额</div>
+        <div class="lf-cf-stat__num {% if cf.goes_negative %}lf-cf-stat__num--danger{% endif %}">¥{{ cf.min_balance|floatformat:0 }}</div>
+      </div>
+    </div>
+    {% if cf.goes_negative %}
+      <div class="lf-alert lf-alert--warning lf-mt-3 lf-mb-0">
+        ⚠️ 预计 <strong>{{ cf.min_date|date:"n月j日" }}</strong> 余额将跌破 0，注意提前预留资金。
+      </div>
+    {% endif %}
+  </section>
+
+  {# ── 走势图 ── #}
+  <section class="lf-card lf-mb-4">
+    <h3 class="lf-section-title lf-mb-3">未来 {{ cf.days }} 天余额走势</h3>
+    <div class="lf-cf-chart-wrap">
+      <canvas id="cfChart" aria-label="余额走势图" role="img"></canvas>
+    </div>
+  </section>
+
+  {# ── 即将扣款 ── #}
+  <section class="lf-card">
+    <div class="lf-row lf-row--between lf-mb-3">
+      <h3 class="lf-section-title lf-mb-0">即将扣款</h3>
+      <a href="{% url 'recurring_list' %}" class="lf-text-xs lf-text-faint">管理固定支出 →</a>
+    </div>
+    {% if cf.upcoming %}
+    <ul class="lf-list">
+      {% for b in cf.upcoming %}
+      <li class="lf-list-item">
+        <span class="lf-badge lf-badge--brand">固定</span>
+        <span class="lf-text-1 lf-truncate" style="flex:1;">{{ b.name }}</span>
+        <span class="lf-amount lf-num">¥{{ b.amount }}</span>
+        <span class="lf-text-xs lf-text-faint lf-num">{{ b.date|date:"n/j" }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="lf-text-soft lf-mb-0">未来 {{ cf.days }} 天没有固定扣款。</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+</main>
+
+{{ cf.series|json_script:"cf-series" }}
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.lf-cf-hero__stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.lf-cf-stat{background:var(--surface-2,#f5f7fb);border-radius:var(--r-md);padding:12px;text-align:center;}
+.lf-cf-stat__num{font-size:20px;font-weight:800;margin-top:4px;color:var(--text-1);}
+.lf-cf-stat__num--danger{color:var(--danger,#dc2626);}
+.lf-cf-chart-wrap{position:relative;height:260px;}
+.lf-empty{text-align:center;padding:24px 12px;}
+.lf-empty__icon{font-size:40px;}
+.lf-empty h3{margin:10px 0 6px;}
+</style>
+<script>
+(function(){
+  var el=document.getElementById('cf-series');
+  if(!el) return;
+  var series=JSON.parse(el.textContent);
+  if(!series.length) return;
+  var canvas=document.getElementById('cfChart');
+  if(!canvas || typeof Chart==='undefined') return;
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){ Chart.defaults.animation=false; }
+  var labels=series.map(function(p){return p[0].slice(5);}); // MM-DD
+  var data=series.map(function(p){return p[1];});
+  var font={family:'system-ui, sans-serif', size:11};
+  // 跌破 0 的线段用红色强调
+  var lineColor = data.some(function(v){return v<0;}) ? '#e11d48' : '#2b56d8';
+  new Chart(canvas,{
+    type:'line',
+    data:{
+      labels:labels,
+      datasets:[{
+        label:'预计余额',
+        data:data,
+        borderColor:lineColor,
+        backgroundColor:'rgba(43,86,216,.10)',
+        fill:true,
+        tension:.3,
+        pointRadius:0,
+        pointHoverRadius:4,
+        borderWidth:2,
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:600},
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            title:function(c){return c[0].label;},
+            label:function(c){return '¥'+Number(c.parsed.y).toFixed(0);}
+          }
+        }
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:font,maxRotation:0,autoSkip:true,maxTicksLimit:8}},
+        y:{grid:{color:'#eef2f7'},ticks:{font:font,callback:function(v){return '¥'+v;}}}
+      }
+    }
+  });
+})();
+</script>
+{% endblock %}

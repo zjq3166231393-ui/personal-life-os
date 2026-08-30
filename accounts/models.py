@@ -24,6 +24,15 @@ class UserProfile(models.Model):
     daily_ai_limit = models.PositiveSmallIntegerField(default=100, help_text="单日 AI 调用上限，0=不限制")
     email_notifications = models.BooleanField(default=False, help_text="启用邮件提醒")
     email_important_only = models.BooleanField(default=True, help_text="仅发送重要提醒（优先级=高）")
+    # ── 每日记账提醒（2026-08-30 增强）─
+    # 开启后：首页当天未记账时显示 nudge；并在启用时自动建一条 daily Recurrence
+    # Reminder，复用 scan_reminders 引擎产生站内通知（需定时任务运行扫描）。
+    daily_log_reminder_enabled = models.BooleanField(
+        default=False, help_text="每日记账提醒：当天没记账时首页提示，并生成每日提醒"
+    )
+    daily_log_reminder_time = models.TimeField(
+        default=time(21, 0), help_text="每日记账提醒的提醒时间（默认 21:00）"
+    )
     # ── 默认提醒时间（2026-08-24）─
     # 语音/AI 解析时若没识别到具体时刻，就用这个时间作为 due_at/event_at。
     # 默认 10:00（上午 10 点），比旧版 12:00 早，因为很多任务更适合上午完成。

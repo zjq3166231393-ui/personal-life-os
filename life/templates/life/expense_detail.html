@@ -7,7 +7,7 @@
 
   <header class="lf-page-header">
     <a href="{% url 'expense_list' %}" class="lf-page-header__back" data-back="history">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       账目
     </a>
     <div class="lf-row" style="gap:8px;">
@@ -22,7 +22,8 @@
         <h1 class="lf-page-header__title lf-truncate" style="font-size:20px;">{{ expense|expense_title }}</h1>
         <div class="lf-text-xs lf-text-faint lf-num lf-mt-1">{{ expense.occurred_at|date:'Y-m-d H:i' }}</div>
       </div>
-      <div class="lf-amount lf-amount--lg {% if expense.type == 'income' %}lf-text-success{% else %}lf-text-1{% endif %}">{% if expense.type == 'income' %}+{% else %}-{% endif %}¥{{ expense.amount }}</div>
+      <div class="lf-amount lf-amount--lg {% if expense.type == 'income' %}lf-text-success{% else %}lf-text-1{% endif %}">{% if expense.type == 'income' %}+{% else %}-{% endif %}{{ expense.display_amount }}</div>
+      {% if expense.is_foreign_currency %}<div class="lf-text-xs lf-text-faint lf-num lf-mt-1">折算本位币 ≈ {{ expense.display_base_amount }}（汇率 1 {{ expense.currency }} = {{ expense.rate }} CNY）</div>{% endif %}
     </div>
   </section>
 
@@ -80,6 +81,55 @@
     <p class="lf-text-sm lf-mb-0" style="white-space:pre-wrap;">{{ expense.note }}</p>
   </section>
   {% endif %}
+
+  <section class="lf-card lf-card--padded lf-mt-3">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="11" x2="12" y2="11"/></svg>
+      </span>
+      <div class="lf-section-head__main">
+        <h3 class="lf-section-title lf-mb-0">凭证</h3>
+        <div class="lf-text-xs lf-text-faint">小票、截图、发票 PDF · 单张 5MB 内</div>
+      </div>
+      {% if attachments %}
+        <span class="lf-section-head__action lf-text-xs lf-text-faint lf-num">{{ attachments|length }} 个</span>
+      {% endif %}
+    </div>
+
+    {% if attachments %}
+      <div class="lf-attach-grid">
+        {% for a in attachments %}
+        <figure class="lf-attach">
+          <a href="{% url 'attachment_serve' a.pk %}" target="_blank" rel="noopener" class="lf-attach__thumb">
+            {% if a.is_image %}
+              <img src="{% url 'attachment_serve' a.pk %}" alt="{{ a.name }}" loading="lazy">
+            {% else %}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            {% endif %}
+          </a>
+          <figcaption class="lf-attach__meta">
+            <span class="lf-truncate" title="{{ a.name }}">{{ a.name|default:a.ext|truncatechars:18 }}</span>
+            <span class="lf-text-faint lf-num">{{ a.size_display }}</span>
+          </figcaption>
+          <div class="lf-attach__actions">
+            <a href="{% url 'attachment_download' a.pk %}" class="lf-btn lf-btn--ghost lf-btn--sm" title="下载">下载</a>
+            <form method="post" action="{% url 'attachment_delete' a.pk %}" style="display:inline;">{% csrf_token %}<button type="submit" class="lf-btn lf-btn--ghost lf-btn--sm" style="color:var(--danger);" title="删除">删除</button></form>
+          </div>
+        </figure>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="lf-text-xs lf-text-faint lf-mb-3" style="line-height:1.7;">
+        还没有凭证。报销、退货、账单争议时，有张小票截图会省很多事。
+      </p>
+    {% endif %}
+
+    <form method="post" action="{% url 'attachment_upload' expense.pk %}" enctype="multipart/form-data" class="lf-attach-form">
+      {% csrf_token %}
+      <input type="file" name="file" accept=".jpg,.jpeg,.png,.webp,.gif,.heic,.pdf,image/*,application/pdf" required class="lf-input">
+      <button type="submit" class="lf-btn lf-btn--primary lf-btn--sm">上传凭证</button>
+    </form>
+  </section>
 
 </main>
 {% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

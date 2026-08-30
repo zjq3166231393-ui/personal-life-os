@@ -12,6 +12,7 @@ from common.audit import record
 
 from .ai_router import route_parse_split
 from .models import Expense, Note, ParseJob, RecurringExpense, Reminder, Task
+from .parser import parse_text
 from .services import (
     bump_overdue_due,
     home_data,
@@ -22,7 +23,29 @@ from .services import (
 
 @login_required
 def home(request):
+    _auto_post_recurring(request)
     return render(request, "life/home.html", home_data(request.user))
+
+
+def _auto_post_recurring(request):
+    """首页惰性触发固定支出自动入账（P0-1）。
+
+    没有 cron 的部署环境（Railway / SQLite）靠这里兜底：用户每天开一次首页，
+    到期的房租、话费、订阅就会自动记账。同一天只跑一次（缓存节流），
+    且生成逻辑本身幂等，重复调用不会重复入账。
+    """
+    from django.contrib import messages
+
+    from .recurring import maybe_generate_for_user
+
+    try:
+        stats = maybe_generate_for_user(request.user)
+    except Exception:  # pragma: no cover — 自动记账失败绝不能拖垮首页
+        return
+    if stats and stats.get("created"):
+        names = "、".join(sorted({n for n, _d in stats["dates"]})[:3])
+        more = "等" if len({n for n, _d in stats["dates"]}) > 3 else ""
+        messages.info(request, f"已自动记账 {stats['created']} 笔固定支出：{names}{more}")
 
 
 @login_required
@@ -107,6 +130,93 @@ def parse_status(request, job_uuid):
     if job.status == "error":
         return JsonResponse({"status": "error", "error": job.error or "解析失败。"})
     return JsonResponse({"status": "pending"})
+
+
+@login_required
+@require_POST
+def voice_expense(request):
+    """语音记账：接收语音转写文本，用规则解析器同步提取金额/分类/类型并直接入账。
+
+    相比 /api/parse/ 的 AI 异步轮询，语音记账走同步规则解析（parser.parse_text），
+    识别即记、无需等待，契合「按住说话 → 松手入账」的极速体验（对标随手记/叨叨）。
+    仅处理记账类意图（支出/收入/固定账单）；任务/提醒/笔记等非记账意图返回友好提示，
+    并把识别文本交回前端放入备注，由用户手动处理。
+    """
+    try:
+        payload = json.loads(request.body)
+        text = payload.get("text", "")
+    except (json.JSONDecodeError, AttributeError):
+        return HttpResponseBadRequest("请提供语音转写文本。")
+    if not isinstance(text, str) or not text.strip():
+        return HttpResponseBadRequest("请提供语音转写文本。")
+
+    draft = parse_text(text)
+    kind = draft.get("kind")
+
+    if kind in ("expense", "income", "recurring_expense"):
+        amount = draft.get("amount")
+        if amount in (None, ""):
+            return JsonResponse({
+                "ok": False,
+                "error": "没听清金额，可手动补充或改用快速记账。",
+                "raw_text": text.strip(),
+                "title": draft.get("title", ""),
+            }, status=200)
+        try:
+            amount_d = Decimal(str(amount))
+        except (InvalidOperation, ValueError):
+            return JsonResponse({
+                "ok": False, "error": f"金额无法识别：{amount}",
+                "raw_text": text.strip(), "title": draft.get("title", ""),
+            }, status=200)
+
+        cat = resolve_category(request.user, draft.get("category") or "") if draft.get("category") else None
+        # 名称解析失败时，退回到「商户/标题关键字 → 分类」规则，提升语音自动归类率
+        if cat is None:
+            from .category_rules import match_category
+
+            cat = match_category(
+                request.user, draft.get("title") or text, type_="income" if kind == "income" else "expense"
+            )
+
+        if kind == "recurring_expense":
+            today_loc = timezone.localdate()
+            RecurringExpense.objects.create(
+                user=request.user, name=draft.get("title") or "固定支出",
+                category=cat, amount=amount_d, frequency=draft.get("frequency") or "monthly",
+                due_day=today_loc.day, start_date=today_loc, remind_days_before=3, is_active=True,
+            )
+            return JsonResponse({
+                "ok": True, "kind": "recurring_expense",
+                "amount": str(amount_d), "category": cat.name if cat else "",
+                "title": draft.get("title") or "",
+            })
+
+        Expense.objects.create(
+            user=request.user,
+            type="income" if kind == "income" else "expense",
+            category=cat,
+            amount=amount_d,
+            occurred_at=timezone.now(),
+            note=draft.get("title") or "",
+            raw_text=text.strip(),
+            source="voice",
+        )
+        return JsonResponse({
+            "ok": True, "kind": kind,
+            "type_display": "收入" if kind == "income" else "支出",
+            "amount": str(amount_d),
+            "category": cat.name if cat else "",
+            "note": draft.get("title") or "",
+        })
+
+    # 非记账意图（任务/提醒/笔记等）：语音记账只管钱，给友好提示并交回文本
+    return JsonResponse({
+        "ok": False,
+        "error": "听起来不像一笔账（可能是任务/提醒）。已放到备注，可手动记账。",
+        "raw_text": text.strip(),
+        "title": draft.get("title", ""),
+    }, status=200)
 
 
 def _parse_source(action, default="ai"):
@@ -329,6 +439,7 @@ def quick_add_expense(request):
     """
     from django.db.models import Q
 
+    from .currency import BASE_CURRENCY, CURRENCY_META
     from .models import Account, Category
 
     try:
@@ -339,6 +450,20 @@ def quick_add_expense(request):
     raw_amount = str(payload.get("amount", "")).strip()
     type_ = payload.get("type", "expense")
     note = str(payload.get("note", "")).strip()[:500]
+
+    # 多币种（P1-5）：币种 + 可选汇率
+    currency = str(payload.get("currency", BASE_CURRENCY)).strip().upper()
+    if currency not in CURRENCY_META:
+        currency = BASE_CURRENCY
+    rate = Decimal("1")
+    raw_rate = payload.get("rate")
+    if raw_rate not in (None, "", 0, "0"):
+        try:
+            rate = Decimal(str(raw_rate))
+            if rate <= 0:
+                rate = Decimal("1")
+        except (InvalidOperation, ValueError):
+            rate = Decimal("1")
 
     if type_ not in ("expense", "income"):
         return JsonResponse({"ok": False, "error": "类型只能是支出或收入。"}, status=400)
@@ -354,12 +479,20 @@ def quick_add_expense(request):
 
     # 分类必须属于当前用户或是全局分类，且类型匹配——防止越权引用他人分类
     category = None
+    auto_matched = False
     cat_id = payload.get("category_id")
     if cat_id:
         category = Category.objects.filter(
             Q(user=request.user) | Q(user__isnull=True),
             pk=cat_id, type=type_, is_active=True,
         ).first()
+    # 未显式选分类时，按备注/商户规则自动归类，减少重复手动选择
+    if category is None and note:
+        from .category_rules import match_category
+
+        category = match_category(request.user, note, type_)
+        if category is not None:
+            auto_matched = True
 
     # 账户同理：只能选自己的、且启用中的账户，越权/失效的 account_id 直接忽略（不报错，避免阻断记账）
     account = None
@@ -373,6 +506,8 @@ def quick_add_expense(request):
         user=request.user,
         type=type_,
         amount=amount,
+        currency=currency,
+        rate=rate,
         category=category,
         account=account,
         note=note,
@@ -380,7 +515,7 @@ def quick_add_expense(request):
         status="confirmed",
         source="manual",
     )
-    record(request.user, "expense.create", expense.pk, f"快速记账: {expense.display_title} ¥{amount}")
+    record(request.user, "expense.create", expense.pk, f"快速记账: {expense.display_title} {expense.display_amount}")
 
     return JsonResponse({
         "ok": True,
@@ -391,7 +526,11 @@ def quick_add_expense(request):
         "note": expense.note,
         "category": expense.category.name if expense.category else "",
         "account": expense.account.name if expense.account else "",
+        "currency": expense.currency,
+        "rate": str(expense.rate),
+        "amount_base": str(expense.amount_base) if expense.amount_base is not None else "",
         "occurred_at": expense.occurred_at.strftime("%Y-%m-%d %H:%M"),
+        "auto_matched": auto_matched,
     })
 
 

@@ -7,6 +7,12 @@
   1) POST /import/expense/  上传文件 → 解析 → 预览（结果暂存 session）
   2) POST /import/expense/confirm/  确认后才真正写库
 
+支持三种来源：
+- LifeOS 自家导出的 CSV（8 列标准表头）
+- 支付宝账单（GBK、带前置说明行、交易状态过滤）
+- 微信支付账单（GBK、带前置说明行、金额带 ¥ 前缀）
+第三方账单的解析细节见 life/importers.py。
+
 安全约束：
 - 只导入到 request.user 名下
 - 文件行数与大小有上限，避免超大文件拖垮请求
@@ -25,6 +31,15 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from .importers import (
+    SOURCE_ALIPAY,
+    SOURCE_LIFEOS,
+    SOURCE_WECHAT,
+    SOURCE_LABELS,
+    detect_source,
+    parse_statement,
+    to_naive_str,
+)
 from .models import Category, Expense
 
 # 单次导入上限。个人记账场景下 5000 行已远超实际需求，
@@ -75,9 +90,24 @@ def import_expense(request):
         messages.error(request, "无法读取文件，请确认是 UTF-8 或 GBK 编码的 CSV。")
         return redirect("import_index")
 
+    # 先按自家导出的标准表头解析；不匹配再试支付宝/微信账单
     rows = _parse_rows(text)
+    source = SOURCE_LIFEOS
+    skipped = {}
+
+    if rows is None:
+        src = detect_source(text)
+        if src:
+            stmt_rows, skipped = parse_statement(text, src)
+            rows = [_statement_row(r) for r in stmt_rows]
+            source = src
+
     if rows is None:
         messages.error(request, f"表头不匹配，请确认第一行为：{'、'.join(EXPECTED_HEADER)}")
+        return redirect("import_index")
+
+    if not rows:
+        messages.error(request, "没能从文件里解析出任何可导入的记录，请检查文件是否为支付宝/微信导出的账单。")
         return redirect("import_index")
 
     if len(rows) > IMPORT_MAX_ROWS:
@@ -93,6 +123,10 @@ def import_expense(request):
         "errors": errors,
         "ok_count": len(parsed),
         "err_count": len(errors),
+        "source": source,
+        "source_label": SOURCE_LABELS.get(source, "未知来源"),
+        "skipped": sorted(skipped.items(), key=lambda kv: -kv[1]),
+        "skipped_total": sum(skipped.values()),
     })
 
 
@@ -121,6 +155,8 @@ def import_expense_confirm(request):
             occurred_at=timezone.make_aware(datetime.strptime(item["occurred_at"], "%Y-%m-%d %H:%M")),
             status="confirmed",
             source="manual",
+            # 第三方账单的订单号留在 raw_text：重复导入同一份账单时据此精确去重
+            raw_text=f"订单号 {item['external_id']}" if item.get("external_id") else "",
         )
         created += 1
 
@@ -189,6 +225,18 @@ def _build_preview(user, rows):
         cat_name = row["分类"]
         if cat_name:
             cat_id = _resolve_category(user, cat_name, type_, cat_cache)
+        # 第三方账单常无分类，或分类名在库里找不到：退回到「商户/备注关键字 → 分类」规则
+        if cat_id is None:
+            from .category_rules import build_search_text, match_category
+
+            rule_cat = match_category(
+                user,
+                build_search_text(merchant=row.get("商家", ""), note=row.get("备注", "")),
+                type_,
+            )
+            if rule_cat is not None:
+                cat_id = rule_cat.id
+                cat_name = rule_cat.name
 
         parsed.append({
             "occurred_at": occurred.strftime("%Y-%m-%d %H:%M"),
@@ -199,8 +247,30 @@ def _build_preview(user, rows):
             "category_name": cat_name,
             "merchant": row["商家"],
             "note": row["备注"],
+            # 第三方账单的订单号：写进 raw_text 用于重复导入时精确去重
+            "external_id": row.get("_external_id", ""),
         })
     return parsed, errors
+
+
+def _statement_row(r):
+    """把 life/importers 的统一行结构换成与自家 CSV 相同的 8 列 dict，
+    后续就能完全复用同一套预览 / 写库逻辑。"""
+    note = r["note"]
+    method = r.get("method", "")
+    if method:
+        note = f"{note}（{method}）" if note else method
+    return {
+        "日期": to_naive_str(r["occurred_at"]),
+        "类型": "支出" if r["type"] == "expense" else "收入",
+        "金额": r["amount"],
+        "分类": r["category_name"],
+        "商家": r["merchant"],
+        "备注": note,
+        "状态": "",
+        "来源": "",
+        "_external_id": r.get("order_no", ""),
+    }
 
 
 def _parse_dt(s):
@@ -227,7 +297,12 @@ def _resolve_category(user, name, type_, cache):
 
 
 def _already_exists(user, item):
-    """同日期 + 同金额 + 同备注视为重复，避免重复导入产生脏数据。"""
+    """重复判定：第三方账单优先用订单号（最准），再回落到日期+金额+备注。"""
+    ext = item.get("external_id", "")
+    if ext:
+        # 同一份账单导两次、或分两次导出有重叠区间，都靠订单号拦住
+        if Expense.objects.filter(user=user, is_deleted=False, raw_text=f"订单号 {ext}").exists():
+            return True
     dt = datetime.strptime(item["occurred_at"], "%Y-%m-%d %H:%M")
     return Expense.objects.filter(
         user=user,

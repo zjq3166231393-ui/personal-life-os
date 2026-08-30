@@ -1,0 +1,133 @@
+{% extends "_base.html" %}
+{% load life_extras %}
+{% block title %}{{ year }} 年度账单 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:760px;">
+
+  {# ── Hero：年度账单封面（品牌渐变仅用于此强语境，符合 ②A 锁定） ── #}
+  <section class="lf-hero lf-hero--brand lf-hero-anim" style="margin-bottom:16px;">
+    <div class="lf-row lf-row--between lf-mb-2">
+      <span class="lf-text-xs" style="opacity:.85;">年度账单</span>
+      <form method="get" style="display:inline;">
+        <select name="year" onchange="this.form.submit()" class="lf-num" style="width:auto;padding:2px 8px;font-size:12px;color:inherit;background:rgba(255,255,255,.15);border:1px solid transparent;border-radius:8px;cursor:pointer;">
+          <option value="{{ today_year|add:'-2' }}" {% if year == today_year|add:'-2' %}selected{% endif %}>{{ today_year|add:'-2' }}</option>
+          <option value="{{ today_year|add:'-1' }}" {% if year == today_year|add:'-1' %}selected{% endif %}>{{ today_year|add:'-1' }}</option>
+          <option value="{{ today_year }}" {% if year == today_year %}selected{% endif %}>{{ today_year }}</option>
+        </select>
+      </form>
+    </div>
+    <div class="lf-hero__title lf-num" style="font-size:34px;font-weight:800;">{{ year }} 年</div>
+    <div class="lf-text-sm" style="opacity:.9;margin-top:2px;">这一年你共记下 <strong class="lf-num">{{ txn_count }}</strong> 笔账</div>
+
+    <div class="lf-row lf-row--wrap" style="gap:18px;margin-top:16px;">
+      <div>
+        <div class="lf-text-xs" style="opacity:.8;">全年支出</div>
+        <div class="lf-num" style="font-size:22px;font-weight:700;">¥{{ total_expense|floatformat:0 }}</div>
+        {% if delta_expense_yoy is not None %}<div class="lf-text-xs lf-num" style="opacity:.85;">同比 {% if delta_expense_yoy > 0 %}↑{% else %}↓{% endif %}{{ delta_expense_yoy_abs }}%</div>{% endif %}
+      </div>
+      <div>
+        <div class="lf-text-xs" style="opacity:.8;">全年收入</div>
+        <div class="lf-num" style="font-size:22px;font-weight:700;">¥{{ total_income|floatformat:0 }}</div>
+        {% if delta_income_yoy is not None %}<div class="lf-text-xs lf-num" style="opacity:.85;">同比 {% if delta_income_yoy > 0 %}↑{% else %}↓{% endif %}{{ delta_income_yoy_abs }}%</div>{% endif %}
+      </div>
+      <div>
+        <div class="lf-text-xs" style="opacity:.8;">结余</div>
+        <div class="lf-num" style="font-size:22px;font-weight:700;">¥{{ balance|floatformat:0 }}</div>
+      </div>
+      <div>
+        <div class="lf-text-xs" style="opacity:.8;">储蓄率</div>
+        <div class="lf-num" style="font-size:22px;font-weight:700;">{% if saving_rate is not None %}{{ saving_rate }}%{% else %}—{% endif %}</div>
+      </div>
+    </div>
+  </section>
+
+  {# ── 月度趋势 ── #}
+  <section class="lf-card lf-mb-3">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">月度走势</h3></div>
+      <span class="lf-section-head__action lf-text-xs lf-text-faint">月均支出 ¥{{ avg_monthly_expense|floatformat:0 }}</span>
+    </div>
+    <canvas id="annualChart" height="150" data-labels='{{ chart_labels }}' data-expense='{{ chart_expense }}' data-income='{{ chart_income }}'></canvas>
+  </section>
+
+  {# ── 关键洞察 ── #}
+  <section class="lf-card lf-mb-3">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><circle cx="12" cy="12" r="6"/><path d="M12 12v0"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">这一年</h3></div>
+    </div>
+    <div class="lf-row lf-row--wrap" style="gap:12px;">
+      {% if biggest %}
+      <div class="lf-insight" style="flex:1;min-width:200px;">
+        <div class="lf-text-xs lf-text-faint">最大单笔支出</div>
+        <div class="lf-num" style="font-size:18px;font-weight:700;">¥{{ biggest.amount|floatformat:2 }}</div>
+        <div class="lf-text-xs lf-text-faint lf-mt-1">{{ biggest.icon }} {{ biggest.category }} · {{ biggest.date|date:"Y-m-d" }}</div>
+      </div>
+      {% endif %}
+      <div class="lf-insight" style="flex:1;min-width:200px;">
+        <div class="lf-text-xs lf-text-faint">花得最多的月份</div>
+        <div class="lf-num" style="font-size:18px;font-weight:700;">{{ peak_month.month }} 月</div>
+        <div class="lf-text-xs lf-text-faint lf-mt-1">¥{{ peak_month.amount|floatformat:0 }}</div>
+      </div>
+    </div>
+  </section>
+
+  {# ── 分类排行 ── #}
+  <section class="lf-card lf-mb-3">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">分类排行</h3></div>
+      <span class="lf-section-head__action lf-text-xs lf-text-faint">Top {{ top_categories|length }}</span>
+    </div>
+    {% if top_categories %}
+    <div class="lf-bar-list">
+      {% for c in top_categories %}
+      <div class="lf-bar-row">
+        <div class="lf-row lf-row--between lf-text-sm">
+          <span>{{ c.icon }} {{ c.name }}</span>
+          <span class="lf-num lf-text-faint">¥{{ c.amount|floatformat:0 }} · {{ c.pct }}%</span>
+        </div>
+        <div class="lf-bar-track"><div class="lf-bar-fill" style="width:{{ c.pct }}%;"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="lf-text-sm lf-text-faint">这一年还没有支出记录。</p>
+    {% endif %}
+  </section>
+
+  <div class="lf-text-center lf-py-3">
+    <a href="{% url 'reports' %}?preset=year" class="lf-btn lf-btn--ghost lf-btn--sm">查看完整报表</a>
+  </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  var ctx = document.getElementById('annualChart');
+  if(!ctx || typeof Chart === 'undefined') return;
+  var labels = JSON.parse(ctx.getAttribute('data-labels') || '[]');
+  var expense = JSON.parse(ctx.getAttribute('data-expense') || '[]');
+  var income = JSON.parse(ctx.getAttribute('data-income') || '[]');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: '支出', data: expense, backgroundColor: 'rgba(239,68,68,.75)', borderRadius: 4, maxBarThickness: 18 },
+        { label: '收入', data: income, backgroundColor: 'rgba(34,197,94,.7)', borderRadius: 4, maxBarThickness: 18 }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales: { x: { grid: { display: false } }, y: { ticks: { callback: function(v){ return '¥' + v; } } } }
+    }
+  });
+})();
+</script>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

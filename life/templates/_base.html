@@ -52,7 +52,7 @@
   };
 })();
 </script>
-<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=14">
+<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=17">
 <style>
 /* 密码可见性切换按钮（眼睛图标） */
 .lf-field--pw{position:relative}
@@ -82,6 +82,24 @@
 })();
 </script>
 {% endif %}
+{% if undo_item %}
+{# 删除后的撤销条：URL 带合法 undo token 时由 context processor 注入（P0-4） #}
+<div class="lf-undo-bar" role="status" aria-live="polite">
+  <span class="lf-icon-tile" style="width:34px;height:34px;" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+  </span>
+  <div class="lf-undo-bar__main">
+    <div class="lf-text-sm lf-text-bold">已删除{{ undo_item.kind_label }}「{{ undo_item.title }}」</div>
+    <div class="lf-text-xs lf-text-faint">24 小时内可撤销，也可到回收站恢复</div>
+  </div>
+  <form method="post" action="{% url 'trash_undo' %}" style="margin:0;flex:0 0 auto;">
+    {% csrf_token %}
+    <input type="hidden" name="token" value="{{ undo_item.token }}">
+    <button type="submit" class="lf-btn lf-btn--secondary lf-btn--sm">撤销</button>
+  </form>
+  <a href="{% url 'trash' %}" class="lf-text-xs" style="color:var(--brand);flex:0 0 auto;">回收站</a>
+</div>
+{% endif %}
 {% block body %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
 
@@ -108,9 +126,33 @@
       <button type="button" class="lf-quick-seg__btn" data-qtype="income">收入</button>
     </div>
 
-    <div style="margin-top:12px;">
+    <div class="lf-quick-voice" id="quickVoice" style="margin-top:12px;display:none;">
+      <div class="lf-quick-voice__row">
+        <button type="button" id="quickMic" class="lf-mic" aria-label="语音记账">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg>
+        </button>
+        <span id="quickVoiceStatus" class="lf-text-xs lf-text-faint">点麦克风，说一句「午饭 18 元」</span>
+      </div>
+      <textarea id="quickVoiceText" class="lf-input lf-textarea" rows="2" placeholder="语音转写内容会显示在这里…" readonly></textarea>
+    </div>
+
+    <div class="lf-row" style="gap:8px;margin-top:12px;">
       <input type="text" id="quickAmount" class="lf-quick-amount" inputmode="decimal"
-             placeholder="0.00" autocomplete="off" aria-label="金额">
+             placeholder="0.00" autocomplete="off" aria-label="金额" style="flex:2;">
+      <select id="quickCurrency" class="lf-select" style="flex:1;" aria-label="币种">
+        <option value="CNY">CNY</option>
+        <option value="USD">USD</option>
+        <option value="HKD">HKD</option>
+        <option value="TWD">TWD</option>
+        <option value="JPY">JPY</option>
+        <option value="EUR">EUR</option>
+        <option value="GBP">GBP</option>
+        <option value="KRW">KRW</option>
+        <option value="SGD">SGD</option>
+        <option value="AUD">AUD</option>
+        <option value="THB">THB</option>
+        <option value="MYR">MYR</option>
+      </select>
     </div>
 
     <div class="lf-quick-cats" id="quickCats" style="margin-top:10px;">
@@ -152,7 +194,90 @@
     </div>
   </div>
 </div>
+{% comment %}全局快捷键帮助弹窗：按 ? 打开，列出 N/S//Esc 等快捷键。仅在非输入态触发。{% endcomment %}
+<div id="shortcutHelp" class="lf-modal" aria-hidden="true">
+  <div class="lf-modal__mask" data-shclose></div>
+  <div class="lf-modal__panel" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+    <div class="lf-modal__head">
+      <h3 id="shTitle" class="lf-modal__title">⌨️ 键盘快捷键</h3>
+      <button type="button" class="lf-modal__x" data-shclose aria-label="关闭">×</button>
+    </div>
+    <ul class="lf-kbd-list">
+      <li><span class="lf-kbd">N</span><span>快速记账（打开记账弹窗）</span></li>
+      <li><span class="lf-kbd">S</span><span>前往搜索</span></li>
+      <li><span class="lf-kbd">/</span><span>聚焦 / 打开搜索框</span></li>
+      <li><span class="lf-kbd">?</span><span>显示本帮助</span></li>
+      <li><span class="lf-kbd">Esc</span><span>关闭弹窗</span></li>
+    </ul>
+    <div class="lf-modal__foot">
+      <button type="button" class="lf-btn lf-btn--primary" data-shclose>知道了</button>
+    </div>
+  </div>
+</div>
 {% block scripts %}{% endblock %}
+<script>
+// 移动端滑动手势（P1-6）：列表项左滑揭示「编辑 / 删除」操作。
+// 用 Pointer Events 同时兼容触摸与鼠标拖拽；竖滑照常滚动页面。
+(function () {
+  var OPEN = 152; // 与 CSS 中两个动作宽度（2×76）一致
+  function init() {
+    document.querySelectorAll('[data-swipe]').forEach(function (row) {
+      if (row._swipeBound) return;
+      row._swipeBound = true;
+      var content = row.querySelector('.lf-swipe__content');
+      if (!content) return;
+      var startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horiz = false;
+
+      row.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        startX = e.clientX; startY = e.clientY; dx = 0;
+        dragging = true; decided = false; horiz = false;
+        content.style.transition = 'none';
+      });
+      row.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var mx = e.clientX - startX, my = e.clientY - startY;
+        if (!decided) {
+          if (Math.abs(mx) > 8 || Math.abs(my) > 8) {
+            decided = true;
+            horiz = Math.abs(mx) > Math.abs(my);
+            if (horiz) e.preventDefault();
+          }
+        }
+        if (decided && horiz) {
+          dx = mx;
+          if (dx > 0) dx = dx * 0.3;                       // 右滑回弹
+          if (dx < -OPEN) dx = -OPEN + (dx + OPEN) * 0.3;  // 左滑越界阻尼
+          content.style.transform = 'translateX(' + dx + 'px)';
+        }
+      });
+      function end() {
+        if (!dragging) return;
+        dragging = false;
+        content.style.transition = '';
+        if (decided && horiz && dx < -OPEN / 2) {
+          row.classList.add('is-open');
+          content.style.transform = '';
+        } else {
+          row.classList.remove('is-open');
+          content.style.transform = '';
+        }
+      }
+      row.addEventListener('pointerup', end);
+      row.addEventListener('pointercancel', end);
+      row.addEventListener('click', function (e) {
+        if (!row.classList.contains('is-open')) return;
+        if (e.target.closest('.lf-swipe__action')) return; // 让操作按钮正常触发
+        e.preventDefault();
+        row.classList.remove('is-open');
+        content.style.transform = '';
+      });
+    });
+  }
+  if (document.readyState !== 'loading') init();
+  else document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
 <script src="{% static 'js/i18n.js' %}?v=2" defer></script>
 <script>
 // Smart back: any link with [data-back="history"] uses the browser's history
@@ -233,8 +358,78 @@ if ('serviceWorker' in navigator) {
 
   var currentType = 'expense';
   var currentCatId = null;
+  var userPickedCat = false;  // 用户是否手动点过分类；手动选了就以用户的为准
   var catsLoadedFor = null;   // 缓存：记录已加载过哪个类型的分类
   var submitting = false;
+  var suggestTimer = null;
+
+  // ── 语音记账（Web Speech API，zh-CN）────────────────────────
+  // 浏览器不支持时静默隐藏麦克风入口，不影响手动记账。
+  var voiceWrap = document.getElementById('quickVoice');
+  var micBtn = document.getElementById('quickMic');
+  var voiceStatus = document.getElementById('quickVoiceStatus');
+  var voiceText = document.getElementById('quickVoiceText');
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recog = null, recognizing = false;
+  if(voiceWrap){
+    if(!SR){
+      voiceWrap.style.display = 'none';
+    } else {
+      voiceWrap.style.display = '';
+      recog = new SR();
+      recog.lang = 'zh-CN';
+      recog.interimResults = false;
+      recog.maxAlternatives = 1;
+      recog.onresult = function(e){
+        var transcript = (e.results && e.results[0] && e.results[0][0].transcript || '').trim();
+        if(voiceText) voiceText.value = transcript;
+        if(transcript) submitVoice(transcript);
+      };
+      recog.onerror = function(e){
+        setVoiceStatus('没听清，再试一次或手动记账');
+        stopMic();
+      };
+      recog.onend = function(){ if(recognizing) stopMic(); };
+
+      if(micBtn) micBtn.addEventListener('click', function(){
+        if(recognizing){ stopMic(); return; }
+        try { recog.start(); } catch(e){ return; }
+        recognizing = true;
+        micBtn.classList.add('is-recording');
+        setVoiceStatus('聆听中…说完自动记账');
+      });
+    }
+  }
+  function setVoiceStatus(msg){ if(voiceStatus) voiceStatus.textContent = msg; }
+  function stopMic(){
+    recognizing = false;
+    if(micBtn) micBtn.classList.remove('is-recording');
+    if(recog) { try { recog.stop(); } catch(e){} }
+  }
+  function submitVoice(transcript){
+    setVoiceStatus('识别中…');
+    fetch('/api/voice-expense/', {
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body: JSON.stringify({text: transcript})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      stopMic();
+      if(d && d.ok){
+        toast((d.type_display||'已记录') + ' ¥' + d.amount + (d.category ? ' · ' + d.category : '') + (d.note ? ' · ' + d.note : ''));
+        if(voiceText) voiceText.value = '';
+        setVoiceStatus('点麦克风，说一句「午饭 18 元」');
+        close();
+      } else {
+        // 没识别成账（如无金额/是任务）：把文本放进备注，交回手动记账
+        if(noteEl && d && d.title){ noteEl.value = d.title; }
+        if(amountEl) amountEl.focus();
+        setVoiceStatus((d && d.error) ? d.error : '未识别为账单，已放入备注');
+      }
+    })
+    .catch(function(){ stopMic(); setVoiceStatus('网络异常，请手动记账'); });
+  }
 
   fab.classList.remove('is-hidden');
 
@@ -265,6 +460,10 @@ if ('serviceWorker' in navigator) {
     if(accountEl) accountEl.value = '';
     currentCatId = null;
     showErr('');
+    // 语音 UI 复位（麦克风态/转写文本/状态文案）
+    stopMic();
+    var vt = document.getElementById('quickVoiceText'); if(vt) vt.value = '';
+    var vs = document.getElementById('quickVoiceStatus'); if(vs) vs.textContent = '点麦克风，说一句「午饭 18 元」';
   }
 
   function loadCats(type){
@@ -289,6 +488,7 @@ if ('serviceWorker' in navigator) {
             catsEl.querySelectorAll('.lf-quick-cat').forEach(function(x){ x.classList.remove('is-active'); });
             b.classList.add('is-active');
             currentCatId = c.id;
+            userPickedCat = true;
           });
           catsEl.appendChild(b);
         });
@@ -303,9 +503,31 @@ if ('serviceWorker' in navigator) {
   function setType(t){
     currentType = t;
     currentCatId = null;
+    userPickedCat = false;
     if(typeBtns.forEach) typeBtns.forEach(function(b){ b.classList.toggle('is-active', b.getAttribute('data-qtype') === t); });
     if(catsEl) catsEl.dataset.ready = '0';
     loadCats(t);
+  }
+
+  // 输入备注时实时向规则引擎问「该归哪类」，用户没手动选过才自动预选
+  function onNoteInput(){
+    if(userPickedCat) return;
+    var q = (noteEl && noteEl.value || '').trim();
+    if(suggestTimer) clearTimeout(suggestTimer);
+    suggestTimer = setTimeout(function(){
+      if(!q){ return; }
+      fetch('/api/suggest-category/?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(currentType), {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(!d.ok || !d.category_id) return;
+          var chip = catsEl && catsEl.querySelector('.lf-quick-cat[data-cid="' + d.category_id + '"]');
+          if(!chip) return;
+          catsEl.querySelectorAll('.lf-quick-cat').forEach(function(x){ x.classList.remove('is-active'); });
+          chip.classList.add('is-active');
+          currentCatId = d.category_id;
+        })
+        .catch(function(){});
+    }, 350);
   }
 
   function toast(msg){
@@ -345,6 +567,7 @@ if ('serviceWorker' in navigator) {
       body: JSON.stringify({
         amount: raw,
         type: currentType,
+        currency: (document.getElementById('quickCurrency') || {}).value || 'CNY',
         category_id: currentCatId,
         account_id: accountEl ? (accountEl.value || null) : null,
         note: noteEl ? noteEl.value.trim() : ''
@@ -378,6 +601,7 @@ if ('serviceWorker' in navigator) {
   if(noteEl) noteEl.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){ e.preventDefault(); submit(); }
   });
+  if(noteEl) noteEl.addEventListener('input', onNoteInput);
   var qclosers = modal.querySelectorAll('[data-qclose]');
   if(qclosers.forEach) qclosers.forEach(function(el){ el.addEventListener('click', close); });
   function isTyping(e){
@@ -403,6 +627,9 @@ if ('serviceWorker' in navigator) {
       else { e.preventDefault(); window.location.href = '/search/'; }
     }
   });
+
+  // 暴露给首页 nudge「记一笔」按钮（2026-08-30 增强）
+  window.__openQuickAdd = open;
 })();
 </script>
 <script>
@@ -424,6 +651,50 @@ if ('serviceWorker' in navigator) {
     });
   }
   document.querySelectorAll('.lf-pw-toggle').forEach(bind);
+})();
+</script>
+<script>
+// ── 全局快捷键（S 搜索 / ? 帮助） ──
+// N 与 / 已由快速记账 FAB 模块处理；此处补齐 S 与 ?。
+// 规则：组合键（Ctrl/Meta/Alt）或正在输入框打字时不触发，避免与正常输入冲突。
+(function(){
+  function isTyping(e){
+    var tag = (e.target && e.target.tagName || '').toLowerCase();
+    if(tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!(e.target && e.target.isContentEditable);
+  }
+  function openHelp(){
+    var m = document.getElementById('shortcutHelp');
+    if(!m) return;
+    m.classList.add('is-open'); m.setAttribute('aria-hidden', 'false');
+  }
+  function closeHelp(){
+    var m = document.getElementById('shortcutHelp');
+    if(!m) return;
+    m.classList.remove('is-open'); m.setAttribute('aria-hidden', 'true');
+  }
+  function helpOpen(){
+    var m = document.getElementById('shortcutHelp');
+    return m && m.classList.contains('is-open');
+  }
+  document.addEventListener('keydown', function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(isTyping(e)) return;
+    if(e.key === '?'){ e.preventDefault(); openHelp(); return; }
+    if((e.key === 's' || e.key === 'S') && !helpOpen()){
+      e.preventDefault();
+      var si = document.getElementById('searchInput');
+      if(si){ si.focus(); si.select(); } else { window.location.href = '/search/'; }
+      return;
+    }
+    if(e.key === 'Escape'){ closeHelp(); }
+  });
+  var m = document.getElementById('shortcutHelp');
+  if(m){
+    m.addEventListener('click', function(e){
+      if(e.target && e.target.getAttribute && e.target.getAttribute('data-shclose') !== null) closeHelp();
+    });
+  }
 })();
 </script>
 </body>

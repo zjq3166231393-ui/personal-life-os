@@ -8,13 +8,17 @@ request handling.
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from math import ceil
 
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from .forecast import cashflow_forecast
 from .gamification import home_gamification
 from .lunar import format_lunar, lunar_year_gz
 from .models import (
+    Account,
+    BalanceSnapshot,
     Budget,
     Category,
     Countdown,
@@ -22,6 +26,7 @@ from .models import (
     InstallmentPlan,
     RecurringExpense,
     Reminder,
+    SavingsGoal,
     Task,
 )
 from .models_daily import DailyCheckin, daily_progress_for
@@ -50,6 +55,156 @@ def aware_day_end(d):
     被整日排除（预算、月度统计、复盘都会少算一天）。
     """
     return timezone.make_aware(datetime.combine(d, time.max))
+
+
+def account_balance_as_of(account, day):
+    """计算账户在 day 当天结束时的余额（按日快照 / 历史净值用）。
+
+    逻辑与 Account.balance 完全一致，只是把「全部流水」换成「occurred_at <= day 结束」，
+    从而能得到历史任意一天的余额。净流入 = 初始 + 收入 - 支出 - 转出 + 转入。
+    """
+    from django.db.models import Sum
+
+    zero = Decimal("0")
+    end = timezone.make_aware(datetime.combine(day, time.max))
+    base = account.initial_balance or zero
+
+    def _sum(qs, **kw):
+        return qs.filter(is_deleted=False, status="confirmed", occurred_at__lte=end, **kw).aggregate(s=Sum("amount"))["s"] or zero
+
+    income = _sum(account.transactions, type="income")
+    expense = _sum(account.transactions, type="expense")
+    out_transfer = _sum(account.transactions, type="transfer")
+    in_transfer = _sum(account.incoming_transfers, type="transfer")
+    return base + income - expense - out_transfer + in_transfer
+
+
+def daily_balance_series(account, start, end):
+    """返回账户在 [start, end] 区间逐日余额 list[(date, Decimal)]。
+
+    高效做法：一次性预载该账户全部已确认流水，按发生日聚合当日净变动，
+    再按日做累积求和得到每日余额。复杂度 O(流水数 + 天数)，远优于对每一天
+    各跑 4 次聚合查询（snapshot_balances 回填命令与净值趋势图都依赖它）。
+
+    净变动规则与 Account.balance 完全一致：收入 +、支出 −、转出 −、转入 +。
+    """
+    zero = Decimal("0")
+    base = account.initial_balance or zero
+    daily = {}
+
+    def add(d, delta):
+        daily[d] = daily.get(d, zero) + delta
+
+    for t in account.transactions.filter(is_deleted=False, status="confirmed"):
+        d = t.occurred_at.date()
+        if t.type == "income":
+            add(d, t.amount)
+        elif t.type == "expense":
+            add(d, -t.amount)
+        elif t.type == "transfer":
+            add(d, -t.amount)
+    for t in account.incoming_transfers.filter(is_deleted=False, status="confirmed"):
+        if t.type == "transfer":
+            add(t.occurred_at.date(), t.amount)
+
+    sorted_dates = sorted(daily.keys())
+    series = []
+    cum = zero
+    idx = 0
+    cur = start
+    step = timedelta(days=1)
+    while cur <= end:
+        while idx < len(sorted_dates) and sorted_dates[idx] <= cur:
+            cum += daily[sorted_dates[idx]]
+            idx += 1
+        series.append((cur, base + cum))
+        cur += step
+    return series
+
+
+def _ensure_today_snapshots(user, today):
+    """懒确保：为用户所有活跃账户补齐「今天」的余额快照。
+
+    这样净值趋势图在用户尚未运行 snapshot_balances 回填命令时也能立即出图
+    （至少有一条今日曲线）。已存在的日期会被 unique 约束忽略。
+    """
+    accounts = Account.objects.filter(user=user, is_deleted=False, is_active=True)
+    existing = set(
+        BalanceSnapshot.objects.filter(user=user, date=today).values_list("account_id", flat=True)
+    )
+    to_create = []
+    for a in accounts:
+        if a.id in existing:
+            continue
+        to_create.append(BalanceSnapshot(user=user, account=a, date=today, balance=a.balance))
+    if to_create:
+        BalanceSnapshot.objects.bulk_create(to_create, ignore_conflicts=True)
+
+
+def net_worth_data(user, max_points=90, days=None):
+    """组装净值趋势图数据：日期标签、净值序列、当前净值、区间/30 天变化、账户构成。
+
+    供 net_worth 视图与首页净值卡片复用。净值 = 当日所有活跃账户余额之和。
+    ``days`` 指定时只取最近 N 天的窗口（用于页面上的区间切换）。
+    """
+    today = timezone.localdate()
+    _ensure_today_snapshots(user, today)
+
+    snaps = BalanceSnapshot.objects.filter(user=user).select_related("account").order_by("date", "account")
+    by_date = {}
+    for s in snaps:
+        by_date[s.date] = by_date.get(s.date, Decimal("0")) + s.balance
+
+    all_dates = sorted(by_date.keys())
+
+    # 区间窗口：days 指定时只取最近 N 天
+    if days and days > 0 and len(all_dates) > days:
+        window = all_dates[-days:]
+    else:
+        window = all_dates
+
+    # 下采样：点数过多时按步长抽稀，但始终保留最后一天
+    if len(window) > max_points:
+        stride = ceil(len(window) / max_points)
+        picked = window[::stride]
+        if picked[-1] != window[-1]:
+            picked.append(window[-1])
+        window = picked
+
+    series = [float(by_date[d]) for d in window]
+    current = by_date[window[-1]] if window else Decimal("0")
+    first = by_date[window[0]] if window else Decimal("0")
+    change = current - first
+    change_pct = int(change / first * 100) if first > 0 else 0
+
+    nw_30 = by_date.get(today - timedelta(days=30))
+    change_30 = (current - nw_30) if nw_30 is not None else None
+
+    acct_qs = Account.objects.filter(user=user, is_deleted=False, is_active=True)
+    total = sum((a.balance for a in acct_qs), Decimal("0")) or Decimal("1")
+    palette = ["#2b56d8", "#4b80f0", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#ec4899"]
+    accounts = []
+    for i, a in enumerate(acct_qs):
+        pct = int(a.balance / total * 100)
+        accounts.append({
+            "obj": a,
+            "balance": a.balance,
+            "pct": pct,
+            "color": palette[i % len(palette)],
+        })
+
+    return {
+        "labels": [d.isoformat() for d in window],
+        "series": series,
+        "current": current,
+        "first": first,
+        "change": change,
+        "change_pct": change_pct,
+        "change_30": change_30,
+        "days": days,
+        "accounts": accounts,
+        "has_data": bool(window),
+    }
 
 
 def resolve_category(user, name):
@@ -131,6 +286,37 @@ def _reminder_window(r, today):
     visible = remind_start <= today <= ne
     countdown = (ne - today).days
     return ne, countdown, visible, lead
+
+
+def _net_worth_sparkline(user, max_points=30, w=100.0, h=30.0, pad=2.0):
+    """为首页净值卡生成轻量 SVG 折线点（只读快照，不引 Chart.js）。
+
+    返回 {"points": "x,y x,y ...", "up": bool}；点数不足 2 时返回 None。
+    用今日快照求和后的逐日净值序列，按 viewBox 归一化，供模板直接画 <polyline>。
+    """
+    snaps = BalanceSnapshot.objects.filter(user=user).values_list("date", "balance")
+    by_date = {}
+    for d, b in snaps:
+        by_date[d] = by_date.get(d, Decimal("0")) + b
+    dates = sorted(by_date.keys())
+    if len(dates) < 2:
+        return None
+    if len(dates) > max_points:
+        stride = ceil(len(dates) / max_points)
+        picked = dates[::stride]
+        if picked[-1] != dates[-1]:
+            picked.append(dates[-1])
+        dates = picked
+    vals = [float(by_date[d]) for d in dates]
+    lo, hi = min(vals), max(vals)
+    rng = (hi - lo) or 1.0
+    n = len(vals)
+    pts = []
+    for i, v in enumerate(vals):
+        x = pad + (w - 2 * pad) * (i / (n - 1))
+        y = pad + (h - 2 * pad) * (1 - (v - lo) / rng)
+        pts.append(f"{x:.1f},{y:.1f}")
+    return {"points": " ".join(pts), "up": vals[-1] >= vals[0]}
 
 
 def home_data(user):
@@ -253,10 +439,68 @@ def home_data(user):
     else:
         default_reminder_time = "10:00"
 
+    # ── 每日记账提醒（2026-08-30 增强）──
+    # logged_today 驱动首页 nudge；daily_log_reminder_enabled 来自 UserProfile。
+    # 启用时把标记提醒的 remind_at 刷新到今天，便于 scan_reminders 定时扫描触发通知
+    # （仅在提醒日期已过期时写一次，避免每次首页加载都写库）。
+    _profile = getattr(user, "profile", None)
+    daily_log_reminder_enabled = bool(getattr(_profile, "daily_log_reminder_enabled", False))
+    logged_today = Expense.objects.filter(
+        user=user, status="confirmed", is_deleted=False,
+        occurred_at__gte=aware_day_start(today), occurred_at__lte=aware_day_end(today),
+    ).exists()
+    if daily_log_reminder_enabled and _profile is not None:
+        from datetime import datetime as _dt
+
+        dr = Reminder.objects.filter(
+            user=user, title="💰 每日记账提醒",
+            recurrence_rule=Reminder.Recurrence.DAILY, is_enabled=True,
+        ).first()
+        if dr is not None and dr.remind_at.date() != today:
+            _dt_obj = _dt.combine(today, _profile.daily_log_reminder_time)
+            _event_at = timezone.make_aware(_dt_obj)
+            dr.event_at = _event_at
+            dr.remind_at = _event_at
+            dr.save(update_fields=["event_at", "remind_at"])
+
+    # ── 储蓄目标（2026-08-30 增强）──
+    # 首页展示前 3 个进行中的目标进度，提供「攒钱」的正向激励入口
+    _all_goals = list(SavingsGoal.objects.filter(user=user, is_active=True))
+    savings_summary = [{
+        "obj": g, "progress_pct": g.progress_pct,
+        "remaining": g.remaining, "is_reached": g.is_reached,
+    } for g in _all_goals[:3]]
+    savings_total_target = sum((g.target_amount for g in _all_goals), Decimal(0))
+    savings_total_current = sum((g.current_amount for g in _all_goals), Decimal(0))
+
+    # ── 净值概览（2026-08-30 增强）──
+    # 优先用「今日余额快照」求和（趋势图同一数据底座）；无快照时退化到各活跃账户实时余额，
+    # 保证首页卡片在用户尚未运行 snapshot_balances 回填时也能显示当前净值。
+    # 懒确保今日快照：让首页迷你走势也包含今天这个点（与净值页同一哲学）。
+    _ensure_today_snapshots(user, today)
+    nw_today = BalanceSnapshot.objects.filter(user=user, date=today).aggregate(s=Sum("balance"))["s"]
+    if nw_today is None:
+        nw_today = sum(
+            (a.balance for a in Account.objects.filter(user=user, is_deleted=False, is_active=True)),
+            Decimal(0),
+        )
+    nw_30 = BalanceSnapshot.objects.filter(user=user, date=today - timedelta(days=30)).aggregate(s=Sum("balance"))["s"]
+    net_worth_now = nw_today if nw_today is not None else Decimal(0)
+    net_worth_change_30 = (net_worth_now - nw_30) if nw_30 is not None else None
+    net_worth_sparkline = _net_worth_sparkline(user)
+
     return {
         "today": today, "top_tasks": top_tasks, "due_today": due_today,
         "near_three_days": near_three_days, "reminders": reminders, "bills": bills, "spent": spent,
         "budget_amount": budget_amount, "budget_pct": budget_pct,
+        # ── 储蓄目标（2026-08-30 增强）──
+        "savings_summary": savings_summary,
+        "savings_total_target": savings_total_target,
+        "savings_total_current": savings_total_current,
+        # ── 净值概览（2026-08-30 增强）──
+        "net_worth_now": net_worth_now,
+        "net_worth_change_30": net_worth_change_30,
+        "net_worth_sparkline": net_worth_sparkline,
         # ── 农历日期 ──
         "lunar_text": format_lunar(today),
         "lunar_year_gz": lunar_year_gz(today),
@@ -273,4 +517,9 @@ def home_data(user):
         "default_reminder_time": default_reminder_time,
         # ── 游戏化：连续记账 / 月度达成度 / 徽章（P2） ──
         **home_gamification(user),
+        # ── 现金流预测（洞察增强：基于余额 + 固定支出推算未来余额） ──
+        "cashflow": cashflow_forecast(user, days=30),
+        # ── 每日记账提醒（2026-08-30 增强）──
+        "logged_today": logged_today,
+        "daily_log_reminder_enabled": daily_log_reminder_enabled,
     }

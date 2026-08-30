@@ -1,0 +1,67 @@
+{% extends "_base.html" %}
+{% block title %}{% if is_edit %}编辑规则{% else %}新建规则{% endif %} · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">{% if is_edit %}编辑规则{% else %}新建规则{% endif %}</h1>
+    <a href="{% url 'category_rule_list' %}" class="lf-page-header__back">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      规则
+    </a>
+  </header>
+
+  <form method="post" class="lf-card lf-card--padded">
+    {% csrf_token %}
+
+    <div class="lf-field">
+      <label class="lf-label">关键字</label>
+      <input type="text" name="pattern" class="lf-input" maxlength="100"
+             value="{{ rule.pattern|default:'' }}" placeholder="如：星巴克 / 滴滴 / 盒马" required>
+      <div class="lf-help">商户名或备注里<strong>包含</strong>这段字（不区分大小写）就命中。可填品牌、店名、支付方式等。</div>
+    </div>
+
+    <div class="lf-field">
+      <label class="lf-label">归入分类</label>
+      <select name="category" class="lf-input" required>
+        <option value="">请选择分类</option>
+        {% for c in categories %}
+        <option value="{{ c.pk }}" {% if rule and rule.category_id == c.pk %}selected{% endif %}>{{ c.icon }} {{ c.name }}（{{ c.get_type_display }}）</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="lf-field">
+      <label class="lf-label">适用范围</label>
+      <select name="type_filter" class="lf-input">
+        <option value="both" {% if rule and rule.type_filter == 'both' or not rule %}selected{% endif %}>全部（支出 + 收入）</option>
+        <option value="expense" {% if rule and rule.type_filter == 'expense' %}selected{% endif %}>仅支出</option>
+        <option value="income" {% if rule and rule.type_filter == 'income' %}selected{% endif %}>仅收入</option>
+      </select>
+    </div>
+
+    <div class="lf-field">
+      <label class="lf-label">优先级</label>
+      <input type="number" name="priority" class="lf-input lf-num" min="0" max="999"
+             value="{{ rule.priority|default:'0' }}">
+      <div class="lf-help">0–999，数值越大越优先。多条规则都能命中时，取优先级最高的那条。</div>
+    </div>
+
+    <label class="lf-ios-row" style="margin-top:6px;">
+      <span>启用</span>
+      <input type="checkbox" name="is_active" {% if not rule or rule.is_active %}checked{% endif %}>
+      <span class="lf-ios-toggle" aria-hidden="true"></span>
+    </label>
+
+    {% if error %}<p class="lf-text-xs" style="color:var(--danger);margin:10px 0 0;">{{ error }}</p>{% endif %}
+
+    <div class="lf-row lf-row--between lf-mt-4">
+      <a href="{% url 'category_rule_list' %}" class="lf-btn lf-btn--ghost">取消</a>
+      <button type="submit" class="lf-btn lf-btn--primary">保存</button>
+    </div>
+  </form>
+
+</main>
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}
+{% endblock %}

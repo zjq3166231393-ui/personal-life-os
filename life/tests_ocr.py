@@ -10,6 +10,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 
 from . import ocr
@@ -152,7 +153,11 @@ class OCRViewTests(TestCase):
         e = Expense.objects.get(note="星巴克咖啡")
         self.assertEqual(e.amount, Decimal("57.00"))
         self.assertEqual(e.source, "ocr")
-        self.assertEqual(e.occurred_at.date().isoformat(), "2026-08-30")
+        # occurred_at 是本地感知时间，「日期」应取本地日期而非 UTC 日期，
+        # 否则在本地已过午夜、UTC 尚未午夜的时间窗内会因时区回退一天而误判
+        self.assertEqual(
+            timezone.localtime(e.occurred_at).date().isoformat(), "2026-08-30"
+        )
 
     def test_save_bad_amount_shows_error(self):
         r = self.client.post(reverse("ocr_save"), {
