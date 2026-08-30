@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.db.models import Q, Sum
 from django.utils import timezone
 
+from .gamification import home_gamification
 from .lunar import format_lunar, lunar_year_gz
 from .models import (
     Budget,
@@ -270,4 +271,6 @@ def home_data(user):
         "cd_total": cd_total,
         "cd_hidden": cd_hidden,
         "default_reminder_time": default_reminder_time,
+        # ── 游戏化：连续记账 / 月度达成度 / 徽章（P2） ──
+        **home_gamification(user),
     }

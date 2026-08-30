@@ -209,6 +209,7 @@ def expense_list(request):
             "diff_pct": round(float((total_amount - last_total) / last_total * 100)) if last_total > 0 else 0,
         },
         "cat_breakdown": cat_breakdown[:EXPENSE_CAT_TOPN_HOME],
+        "all_tags": user_tags(request.user),
         "filters": {
             "date_from": date_from, "date_to": date_to,
             "category": cat_id, "type": typ,
@@ -472,6 +473,8 @@ def task_edit(request, pk):
         task.title = request.POST.get("title", task.title)[:200]
         task.description = request.POST.get("description", "")[:5000]
         task.priority = int(request.POST.get("priority", task.priority))
+        task.important = bool(request.POST.get("important"))
+        task.urgent = bool(request.POST.get("urgent"))
         task.due_at = _parse_aware_dt(request.POST.get("due_at"), None)
         task.source = request.POST.get("source", task.source)
         task.recurrence_rule = request.POST.get("recurrence_rule", task.recurrence_rule)
@@ -509,6 +512,49 @@ def task_delete(request, pk):
         messages.success(request, f"已删除任务「{title}」")
         return redirect("task_list")
     return render(request, "life/task_delete.html", {"task": task})
+
+
+# ── 四象限任务视图（P2） ────────────────────────────────────────────
+@login_required
+def task_quadrant(request):
+    """Eisenhower 四象限：按 重要 × 紧急 把活跃任务分进 4 格。
+
+    只统计未完成的活跃任务（待办 / 进行中），已完成/取消/归档/删除的不进矩阵。
+    """
+    active = Task.objects.filter(
+        user=request.user,
+        is_deleted=False,
+        status__in=[Task.Status.TODO, Task.Status.IN_PROGRESS],
+    )
+    # 视觉顺序：左列=重要，右列=不重要；上行=紧急，下行=不紧急
+    quadrants = [
+        {"key": "q1", "title": "重要且紧急", "hint": "立即做", "cls": "lf-quad--do",
+         "tasks": active.filter(important=True, urgent=True)},
+        {"key": "q3", "title": "不重要但紧急", "hint": "委托 / 尽快处理", "cls": "lf-quad--delegate",
+         "tasks": active.filter(important=False, urgent=True)},
+        {"key": "q2", "title": "重要不紧急", "hint": "计划做", "cls": "lf-quad--plan",
+         "tasks": active.filter(important=True, urgent=False)},
+        {"key": "q4", "title": "不重要不紧急", "hint": "少做 / 删除", "cls": "lf-quad--drop",
+         "tasks": active.filter(important=False, urgent=False)},
+    ]
+    total = sum(q["tasks"].count() for q in quadrants)
+    return render(request, "life/task_quadrant.html", {"quadrants": quadrants, "total": total})
+
+
+@login_required
+@require_POST
+def task_toggle_flag(request, pk):
+    """翻转单条任务的 important / urgent 标记，重定向回四象限页。
+
+    只接受本人、未删除的任务；flag 名白名单校验，越权 pk 直接 404。
+    """
+    flag = request.POST.get("flag")
+    if flag not in ("important", "urgent"):
+        return redirect("task_quadrant")
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
+    setattr(task, flag, not getattr(task, flag))
+    task.save(update_fields=[flag, "updated_at"])
+    return redirect("task_quadrant")
 
 
 # ── Note CRUD ───────────────────────────────────────────────────────

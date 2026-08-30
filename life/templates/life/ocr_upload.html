@@ -1,0 +1,41 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}图片识别记账 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">📷 图片识别记账</h1>
+    <a href="{% url 'expense_list' %}" class="lf-page-header__back">返回账目</a>
+  </header>
+
+  <section class="lf-card lf-card--padded">
+    <p class="lf-text-sm lf-text-faint lf-mb-3" style="line-height:1.6;">
+      拍一张小票 / 账单，自动识别金额、日期与商户，确认后即可记账。当前识别引擎：<b>{{ provider }}</b>。
+    </p>
+    {% if messages %}{% for m in messages %}<div class="lf-alert lf-alert--{{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+    <form method="post" enctype="multipart/form-data" action="{% url 'ocr_upload' %}">
+      {% csrf_token %}
+      <div class="lf-field">
+        <label class="lf-label">选择小票图片</label>
+        <input type="file" name="image" accept="image/png,image/jpeg,image/webp" class="lf-input" required>
+        <p class="lf-text-xs lf-text-faint lf-mt-1">支持 PNG / JPG / WEBP，单次 ≤ 10MB。</p>
+      </div>
+      <div class="lf-row lf-mt-4" style="gap:8px;">
+        <button type="submit" class="lf-btn lf-btn--primary lf-btn--block">识别图片</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="lf-card lf-card--padded lf-mt-3">
+    <h3 class="lf-section-title lf-mb-2">如何启用 OCR 引擎？</h3>
+    <ul class="lf-text-xs lf-text-faint" style="line-height:1.9;padding-left:18px;margin:0;">
+      <li><b>本地 Tesseract（默认）</b>：安装 <a href="https://github.com/tesseract-ocr/tesseract" target="_blank" rel="noopener">Tesseract</a> 后执行 <code>pip install pytesseract pillow</code>。</li>
+      <li><b>外部云服务</b>：在 <code>.env</code> 配置 <code>OCR_PROVIDER=cloud</code>、<code>OCR_CLOUD_ENDPOINT</code>、<code>OCR_CLOUD_API_KEY</code> 即可接入 OCR.space / Azure / 百度等。</li>
+    </ul>
+  </section>
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

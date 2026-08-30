@@ -1662,3 +1662,76 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-tag-picker__opt:has(input:checked){
   background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;
 }
+
+/* ───── 批量操作（P2） ───── */
+.lf-batch-check{
+  display:flex;align-items:center;flex-shrink:0;
+  padding-right:4px;cursor:pointer;
+}
+.lf-batch-check input{width:18px;height:18px;accent-color:var(--brand);cursor:pointer;}
+.lf-batch-row:has(input:checked){background:color-mix(in srgb,var(--brand) 8%,var(--surface-1));}
+.lf-batch-bar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:72px;z-index:120;width:min(680px,calc(100% - 24px));
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:0 8px 28px rgba(0,0,0,.18);
+  padding:10px 12px;
+}
+.lf-batch-bar__inner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.lf-batch-bar__selall{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;}
+.lf-batch-bar__selall input{width:16px;height:16px;accent-color:var(--brand);}
+.lf-batch-bar__count{font-size:13px;color:var(--text-2);}
+.lf-batch-bar__count b{color:var(--brand);font-size:14px;}
+.lf-batch-bar__actions{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+.lf-batch-panel{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+}
+.lf-batch-panel .lf-select{flex:1;min-width:160px;}
+
+/* ───────── 游戏化：连续记账 / 月度达成度 / 徽章墙（P2） ───────── */
+.lf-gm-flame{font-size:22px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.12))}
+.lf-gm-streak-num{font-size:20px;font-weight:800;color:var(--text-1);line-height:1.1}
+.lf-gm-streak-unit{font-size:12px;font-weight:600;color:var(--text-3)}
+.lf-gm-progress{height:8px;border-radius:999px;background:var(--surface-3);overflow:hidden}
+.lf-gm-progress__bar{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--brand),var(--brand-2,#22c55e));transition:width 800ms cubic-bezier(.32,.72,.24,1)}
+.lf-gm-hero{background:linear-gradient(135deg,var(--brand-soft),var(--surface));border:1px solid var(--brand-2,rgba(43,86,216,.18))}
+.lf-gm-hero__streak{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.lf-gm-month{margin-top:4px}
+
+.lf-badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.lf-badge-tile{border:1px solid var(--surface-3);border-radius:var(--r-md);padding:14px 12px;text-align:center;background:var(--surface);transition:transform .15s ease,box-shadow .15s ease}
+.lf-badge-tile.is-earned{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 4px 14px rgba(43,86,216,.1)}
+.lf-badge-tile.is-locked{opacity:.78;filter:grayscale(.35)}
+.lf-badge-tile__icon{font-size:30px;line-height:1;margin-bottom:6px}
+.lf-badge-tile.is-locked .lf-badge-tile__icon{opacity:.5}
+.lf-badge-tile__name{font-size:14px;font-weight:700;color:var(--text-1)}
+.lf-badge-tile__desc{font-size:11px;color:var(--text-3);margin-top:2px;min-height:28px}
+.lf-badge-tile__status{font-size:11px;margin-top:8px;font-weight:600}
+.lf-badge-tile__status--earned{color:var(--brand)}
+.lf-badge-tile__status--locked{color:var(--text-3)}
+.lf-badge-tile__progress{height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden;margin-top:8px}
+
+/* ───── 四象限任务视图（P2） ───── */
+.lf-quad-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+@media (max-width:560px){.lf-quad-grid{grid-template-columns:1fr;}}
+.lf-quad{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-2);padding:12px;display:flex;flex-direction:column;min-height:150px;}
+.lf-quad__head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.lf-quad__title{font-size:14px;font-weight:600;margin:0;}
+.lf-quad__hint{font-size:11px;color:var(--text-2);}
+.lf-quad__count{font-size:12px;font-weight:700;color:var(--text-2);background:var(--surface-3);border-radius:var(--r-pill);padding:1px 8px;flex-shrink:0;}
+.lf-quad__body{display:flex;flex-direction:column;gap:6px;flex:1;overflow:auto;}
+.lf-quad--do{border-top:3px solid var(--danger);}
+.lf-quad--plan{border-top:3px solid var(--success);}
+.lf-quad--delegate{border-top:3px solid #e8a33d;}
+.lf-quad--drop{border-top:3px solid var(--text-3);}
+.lf-quad__flags{display:flex;gap:4px;flex-shrink:0;}
+.lf-flag{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:var(--surface-1);color:var(--text-2);font-size:12px;cursor:pointer;line-height:1;}
+.lf-flag--imp.is-on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:700;}
+.lf-flag--urg.is-on{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:700;}
+.lf-check--inline{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;}
+.lf-check--inline input{width:16px;height:16px;accent-color:var(--brand);}
+
+/* ── 图片识别记账（P2）：识别原文折叠区 ── */
+.lf-ocr-raw{background:var(--surface-3);border:1px solid var(--border-soft);border-radius:var(--r-md);padding:12px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto;margin:0;}
+.lf-badge-tile__progress-bar{height:100%;border-radius:999px;background:var(--brand);transition:width .6s ease}

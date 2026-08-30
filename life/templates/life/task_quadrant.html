@@ -1,0 +1,66 @@
+{% extends "_base.html" %}
+{% block title %}四象限 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">
+      四象限
+      <span class="lf-text-sm lf-text-faint lf-num">活跃任务 {{ total }} 条</span>
+    </h1>
+    <div class="lf-row" style="gap:8px;align-items:center;">
+      <a href="{% url 'task_list' %}" class="lf-btn lf-btn--ghost lf-btn--sm">全部任务</a>
+      <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        首页
+      </a>
+    </div>
+  </header>
+
+  <p class="lf-text-xs lf-text-faint lf-mb-3">按「重要 × 紧急」归类活跃任务。点任务右侧的「重 / 急」可即时翻转标记，任务会自动跳格。</p>
+
+  <div class="lf-quad-grid">
+    {% for q in quadrants %}
+    <section class="lf-quad {{ q.cls }}">
+      <header class="lf-quad__head">
+        <div>
+          <h3 class="lf-quad__title">{{ q.title }}</h3>
+          <span class="lf-quad__hint">{{ q.hint }}</span>
+        </div>
+        <span class="lf-quad__count lf-num">{{ q.tasks.count }}</span>
+      </header>
+      <div class="lf-quad__body">
+        {% for t in q.tasks %}
+        <article class="lf-list-item lf-list-item--hover">
+          <div style="flex:1;min-width:0;">
+            <a href="{% url 'task_edit' t.pk %}" class="lf-text-1" style="text-decoration:none;">{{ t.title }}</a>
+            <div class="lf-row lf-mt-1" style="gap:6px;">
+              <span class="lf-badge lf-badge--outline lf-text-xs">{{ t.get_status_display }}</span>
+              {% if t.due_at %}<span class="lf-text-xs lf-text-faint lf-num">{{ t.due_at|date:"m/d H:i" }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="lf-quad__flags">
+            <form method="post" action="{% url 'task_toggle_flag' t.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="flag" value="important">
+              <button type="submit" class="lf-flag lf-flag--imp {% if t.important %}is-on{% endif %}" title="重要">重</button>
+            </form>
+            <form method="post" action="{% url 'task_toggle_flag' t.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="flag" value="urgent">
+              <button type="submit" class="lf-flag lf-flag--urg {% if t.urgent %}is-on{% endif %}" title="紧急">急</button>
+            </form>
+          </div>
+        </article>
+        {% empty %}
+        <div class="lf-text-xs lf-text-faint lf-mt-2">暂无任务</div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

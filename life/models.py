@@ -114,6 +114,8 @@ class Task(models.Model):
     description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default="todo")
     priority = models.PositiveSmallIntegerField(default=2, help_text="1 高，2 中，3 低")
+    important = models.BooleanField(default=False, help_text="四象限：重要性（对标滴答清单 Eisenhower）")
+    urgent = models.BooleanField(default=False, help_text="四象限：紧急性")
     due_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     source = models.CharField(max_length=20, choices=Source.choices, default="manual")
@@ -134,6 +136,8 @@ class Task(models.Model):
             # 今日/本周/逾期任务：filter(user, is_deleted=False, status__in=[...], due_at__date...)
             models.Index(fields=["user", "is_deleted", "due_at"]),
             models.Index(fields=["user", "is_deleted", "status"]),
+            # 四象限：按 importance×urgency 聚合活跃任务
+            models.Index(fields=["user", "is_deleted", "important", "urgent"]),
         ]
 
     def __str__(self):
@@ -710,3 +714,25 @@ class ParseJob(models.Model):
 
     def __str__(self):
         return f"ParseJob[{self.uuid}] {self.status}"
+
+
+class Badge(models.Model):
+    """用户达成成就的持久化记录（游戏化激励，P2）。
+
+    徽章的展示名/图标/规则定义在 life/gamification.py 的 BADGE_DEFS，
+    这里只存「谁、哪枚、何时点亮」，避免规则与数据耦合。
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="badges")
+    key = models.CharField(max_length=40, help_text="对应 BADGE_DEFS 中的 key")
+    earned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-earned_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "key"], name="unique_badge_per_user"),
+        ]
+        indexes = [models.Index(fields=["user", "key"])]
+
+    def __str__(self):
+        return f"Badge[{self.key}] user={self.user_id}"

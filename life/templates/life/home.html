@@ -65,6 +65,24 @@
     {% endif %}
   </section>
 
+  {# ───── 记账打卡（游戏化 P2） ───── #}
+  {% if streak > 0 or badge_earned > 0 %}
+  <section class="lf-card lf-mb-4 lf-gm-card">
+    <div class="lf-row lf-row--between lf-mb-2">
+      <div class="lf-row" style="gap:8px;align-items:center;">
+        <span class="lf-gm-flame">🔥</span>
+        <div>
+          <div class="lf-gm-streak-num">{{ streak }} <span class="lf-gm-streak-unit">天连续</span></div>
+          <div class="lf-text-xs lf-text-faint">最长 {{ streak_longest }} 天 · 已点亮 {{ badge_earned }}/{{ badge_total }} 枚徽章</div>
+        </div>
+      </div>
+      <a href="{% url 'gamification' %}" class="lf-text-xs lf-text-faint">成就 →</a>
+    </div>
+    <div class="lf-gm-progress"><div class="lf-gm-progress__bar" style="width:{{ month_pct }}%;"></div></div>
+    <div class="lf-text-xs lf-text-faint lf-mt-1">本月已记账 {{ month_logged }}/{{ month_elapsed }} 天</div>
+  </section>
+  {% endif %}
+
   {# ───── Quick input ───── #}
   <section class="lf-card lf-mb-4">
     <form class="lf-hidden-form">{% csrf_token %}</form>
@@ -413,6 +431,15 @@
       <span>
         <span class="lf-quick-tile__label">分类</span>
         <span class="lf-quick-tile__sub">管理账目</span>
+      </span>
+    </a>
+    <a href="{% url 'gamification' %}" class="lf-quick-tile">
+      <span class="lf-quick-tile__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 14l-1 7 4-2 4 2-1-7"/></svg>
+      </span>
+      <span>
+        <span class="lf-quick-tile__label">成就</span>
+        <span class="lf-quick-tile__sub">记账打卡</span>
       </span>
     </a>
   </div>

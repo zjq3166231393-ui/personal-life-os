@@ -3,10 +3,13 @@ from django.urls import path
 from . import (
     views,
     views_account,
+    views_batch,
     views_calendar,
     views_crud,
     views_export,
+    views_gamification,
     views_import,
+    views_ocr,
     views_pwa,
     views_search,
     views_tag,
@@ -47,7 +50,10 @@ urlpatterns = [
     path("expenses/<int:pk>/", views_crud.expense_detail, name="expense_detail"),
     path("expenses/<int:pk>/edit/", views_crud.expense_edit, name="expense_edit"),
     path("expenses/<int:pk>/delete/", views_crud.expense_delete, name="expense_delete"),
+    path("expenses/batch/", views_batch.batch_expense_action, name="batch_expense_action"),
     path("tasks/", views_crud.task_list, name="task_list"),
+    path("tasks/quadrant/", views_crud.task_quadrant, name="task_quadrant"),
+    path("tasks/<int:pk>/toggle-flag/", views_crud.task_toggle_flag, name="task_toggle_flag"),
     path("tasks/<int:pk>/", views_crud.task_detail, name="task_detail"),
     path("tasks/<int:pk>/edit/", views_crud.task_edit, name="task_edit"),
     path("tasks/<int:pk>/delete/", views_crud.task_delete, name="task_delete"),
@@ -98,4 +104,9 @@ urlpatterns = [
     path("reminders/<int:pk>/toggle/", views_crud.reminder_toggle, name="reminder_toggle"),
     path("review/", views_crud.review, name="review"),
     path("suggestion/<int:pk>/<str:fb>/", views_crud.suggestion_feedback, name="suggestion_feedback"),
+    # 游戏化成就（P2：连续记账 / 月度达成度 / 徽章墙）
+    path("gamification/", views_gamification.gamification, name="gamification"),
+    # 图片识别记账（P2：OCR 小票 → 确认记账）
+    path("ocr/", views_ocr.ocr_upload, name="ocr_upload"),
+    path("ocr/save/", views_ocr.ocr_save, name="ocr_save"),
 ]

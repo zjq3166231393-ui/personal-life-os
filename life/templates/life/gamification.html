@@ -1,0 +1,64 @@
+{% extends "_base.html" %}
+{% load static %}
+{% load life_extras %}
+{% block title %}成就 · 记账打卡 · Personal Life OS{% endblock %}
+
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+
+{% block body %}
+<main class="lf-container">
+
+  <div class="lf-row lf-row--between lf-mb-4" style="margin-top:4px;">
+    <h1 class="lf-page-title">🏅 我的成就</h1>
+    <a href="{% url 'home' %}" class="lf-text-xs lf-text-faint">返回首页 →</a>
+  </div>
+
+  {# ── 连续记账 / 月度达成度 ── #}
+  <section class="lf-card lf-mb-4 lf-gm-hero">
+    <div class="lf-gm-hero__streak">
+      <div class="lf-gm-flame">🔥</div>
+      <div>
+        <div class="lf-gm-streak-num">{{ streak }} <span class="lf-gm-streak-unit">天连续记账</span></div>
+        <div class="lf-text-xs lf-text-faint">历史最长 {{ streak_longest }} 天 · 已点亮 {{ earned_count }}/{{ total_count }} 枚徽章</div>
+      </div>
+    </div>
+
+    <div class="lf-gm-month">
+      <div class="lf-row lf-row--between lf-mb-1">
+        <span class="lf-text-sm">本月记账达成度</span>
+        <span class="lf-text-sm lf-num lf-text-bold">{{ month.pct }}%</span>
+      </div>
+      <div class="lf-gm-progress"><div class="lf-gm-progress__bar" style="width:{{ month.pct }}%;"></div></div>
+      <div class="lf-text-xs lf-text-faint lf-mt-1">
+        已记账 {{ month.logged }}/{{ month.elapsed }} 天{% if month.is_full %} · 💯 全勤达成！{% endif %}
+      </div>
+    </div>
+  </section>
+
+  {# ── 徽章墙 ── #}
+  <section class="lf-card">
+    <div class="lf-row lf-row--between lf-mb-3">
+      <h3 class="lf-section-title lf-mb-0">徽章墙</h3>
+      <span class="lf-text-xs lf-text-faint">{{ earned_count }} / {{ total_count }} 已点亮</span>
+    </div>
+    <div class="lf-badge-grid">
+      {% for b in badges %}
+      <div class="lf-badge-tile {% if b.earned %}is-earned{% else %}is-locked{% endif %}">
+        <div class="lf-badge-tile__icon">{{ b.icon }}</div>
+        <div class="lf-badge-tile__name">{{ b.name }}</div>
+        <div class="lf-badge-tile__desc">{{ b.desc }}</div>
+        {% if b.earned %}
+          <div class="lf-badge-tile__status lf-badge-tile__status--earned">已点亮</div>
+        {% else %}
+          <div class="lf-badge-tile__progress"><div class="lf-badge-tile__progress-bar" style="width:{{ b.progress }}%;"></div></div>
+          <div class="lf-badge-tile__status lf-badge-tile__status--locked">{{ b.current }}/{{ b.target }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

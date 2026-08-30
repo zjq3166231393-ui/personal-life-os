@@ -198,7 +198,10 @@
 
   <section class="lf-card lf-card--flush">
     {% for e in page_obj %}
-    <article class="lf-list-item lf-list-item--hover">
+    <article class="lf-list-item lf-list-item--hover lf-batch-row">
+      <label class="lf-batch-check" aria-label="选择此账目">
+        <input type="checkbox" class="lf-batch-cb" value="{{ e.pk }}">
+      </label>
       <div style="flex:1;min-width:0;">
         <div class="lf-row" style="gap:6px;">
           <span class="lf-badge {% if e.type == 'income' %}lf-badge--success{% elif e.type == 'transfer' %}lf-badge--info{% else %}lf-badge--outline{% endif %}">{{ e.get_type_display }}</span>
@@ -231,6 +234,119 @@
     </div>
   </nav>
   {% endif %}
+
+  {# ───── 批量操作条（多选后浮现） ───── #}
+  <div id="lfBatchBar" class="lf-batch-bar" hidden>
+    <div class="lf-batch-bar__inner">
+      <label class="lf-batch-bar__selall">
+        <input type="checkbox" id="lfBatchSelAll"> 全选本页
+      </label>
+      <span class="lf-batch-bar__count">已选 <b id="lfBatchCount">0</b> 项</span>
+      <div class="lf-batch-bar__actions">
+        <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" data-act="tag">加标签</button>
+        <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" data-act="account">设账户</button>
+        <button type="button" class="lf-btn lf-btn--danger lf-btn--sm" data-act="delete">删除</button>
+        <button type="button" class="lf-btn lf-btn--sm" data-act="cancel">取消</button>
+      </div>
+    </div>
+    <div id="lfBatchPanel" class="lf-batch-panel" hidden>
+      <select id="lfBatchTagSel" class="lf-select" hidden>
+        <option value="">— 选择标签 —</option>
+        {% for t in all_tags %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}
+      </select>
+      <select id="lfBatchAccSel" class="lf-select" hidden>
+        <option value="">— 选择账户 —</option>
+        {% for a in active_accounts %}<option value="{{ a.pk }}">{{ a.icon }} {{ a.name }}</option>{% endfor %}
+      </select>
+      <button type="button" class="lf-btn lf-btn--primary lf-btn--sm" id="lfBatchApply">确定</button>
+      <button type="button" class="lf-btn lf-btn--ghost lf-btn--sm" id="lfBatchPanelCancel">关闭</button>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var bar = document.getElementById('lfBatchBar');
+    var panel = document.getElementById('lfBatchPanel');
+    var tagSel = document.getElementById('lfBatchTagSel');
+    var accSel = document.getElementById('lfBatchAccSel');
+    var countEl = document.getElementById('lfBatchCount');
+    var selAll = document.getElementById('lfBatchSelAll');
+
+    function cbs() { return Array.prototype.slice.call(document.querySelectorAll('.lf-batch-cb')); }
+    function selectedIds() {
+      return cbs().filter(function (c) { return c.checked; }).map(function (c) { return c.value; });
+    }
+    function update() {
+      var n = selectedIds().length;
+      countEl.textContent = n;
+      bar.hidden = n === 0;
+      if (n === 0) { panel.hidden = true; tagSel.hidden = true; accSel.hidden = true; selAll.checked = false; }
+    }
+    cbs().forEach(function (c) { c.addEventListener('change', update); });
+    selAll.addEventListener('change', function () {
+      cbs().forEach(function (c) { c.checked = selAll.checked; });
+      update();
+    });
+
+    bar.querySelectorAll('[data-act]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var act = btn.getAttribute('data-act');
+        if (act === 'cancel') {
+          cbs().forEach(function (c) { c.checked = false; });
+          update();
+          return;
+        }
+        if (act === 'delete') { doDelete(); return; }
+        tagSel.hidden = act !== 'tag';
+        accSel.hidden = act !== 'account';
+        panel.hidden = false;
+        (act === 'tag' ? tagSel : accSel).focus();
+      });
+    });
+    document.getElementById('lfBatchPanelCancel').addEventListener('click', function () {
+      panel.hidden = true; tagSel.hidden = true; accSel.hidden = true;
+    });
+    document.getElementById('lfBatchApply').addEventListener('click', function () {
+      if (!tagSel.hidden) { doTag(); }
+      else if (!accSel.hidden) { doAccount(); }
+    });
+
+    function getCookie(name) {
+      var m = document.cookie.match(new RegExp('(^|; )' + name + '=([^;]*)'));
+      return m ? decodeURIComponent(m[2]) : '';
+    }
+    function post(payload) {
+      return fetch("{% url 'batch_expense_action' %}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); });
+    }
+    function doDelete() {
+      var ids = selectedIds();
+      if (!confirm('确定删除选中的 ' + ids.length + ' 笔账目？删除后将从列表与账户余额中移除（保留审计记录）。')) return;
+      post({ action: 'delete', ids: ids }).then(function (d) {
+        if (d.ok) { location.reload(); } else { alert(d.error || '操作失败'); }
+      });
+    }
+    function doTag() {
+      var t = tagSel.value;
+      if (!t) { alert('请选择标签'); return; }
+      post({ action: 'add_tag', ids: selectedIds(), tag_ids: [t] }).then(function (d) {
+        if (d.ok) { location.reload(); } else { alert(d.error || '操作失败'); }
+      });
+    }
+    function doAccount() {
+      var a = accSel.value;
+      if (!a) { alert('请选择账户'); return; }
+      post({ action: 'set_account', ids: selectedIds(), account_id: a }).then(function (d) {
+        if (d.ok) { location.reload(); } else { alert(d.error || '操作失败'); }
+      });
+    }
+
+    update();
+  })();
+  </script>
 
 </main>
 {% endblock %}

@@ -208,6 +208,14 @@ LOGGING = {
     },
 }
 
+# ── OCR（图片识别记账）──────────────────────────────────────────
+# 引擎：tesseract（默认，本地）| cloud（外部云服务）| mock（测试）
+OCR_PROVIDER = os.getenv("OCR_PROVIDER", "tesseract")
+OCR_TESSERACT_LANG = os.getenv("OCR_TESSERACT_LANG", "chi_sim+eng")
+OCR_CLOUD_ENDPOINT = os.getenv("OCR_CLOUD_ENDPOINT", "")
+OCR_CLOUD_API_KEY = os.getenv("OCR_CLOUD_API_KEY", "")
+OCR_CLOUD_TYPE = os.getenv("OCR_CLOUD_TYPE", "generic")
+
 # ── Static files ────────────────────────────────────────────────
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
