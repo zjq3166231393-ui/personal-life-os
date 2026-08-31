@@ -696,6 +696,12 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   .lf-fab { right: 16px; bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 12px); width: 52px; height: 52px; }
 }
 
+/* iOS 聚焦缩放：触摸设备下 <16px 的输入框获得焦点会触发整页缩放，
+   统一在移动端（≤1023px，即底部导航模式）把表单控件提到 16px。 */
+@media (max-width: 1023px) {
+  .lf-input, .lf-select, .lf-textarea, .lf-quick-amount { font-size: 16px; }
+}
+
 /* ============================================================
    Toast notifications (Django messages → auto-rendered)
    ============================================================ */

@@ -569,6 +569,66 @@
       </span>
     </a>
   </div>{# /lf-quick-grid #}
+
+  {# ───── 更多功能（补齐移动端底部导航未覆盖的入口） ───── #}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-row lf-row--between lf-mb-3">
+      <div class="lf-row" style="gap:8px;align-items:center;">
+        <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>
+        <h3 class="lf-section-title lf-mb-0">更多功能</h3>
+      </div>
+    </div>
+    <div class="lf-quick-grid">
+      <a href="{% url 'reports' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+        <span><span class="lf-quick-tile__label">报表</span><span class="lf-quick-tile__sub">收支统计</span></span>
+      </a>
+      <a href="{% url 'calendar' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        <span><span class="lf-quick-tile__label">日历</span><span class="lf-quick-tile__sub">按日看账</span></span>
+      </a>
+      <a href="{% url 'account_list' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><circle cx="7" cy="14.5" r="1.2" fill="currentColor" stroke="none"/></svg></span>
+        <span><span class="lf-quick-tile__label">账户</span><span class="lf-quick-tile__sub">资产归集</span></span>
+      </a>
+      <a href="{% url 'trash' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span>
+        <span><span class="lf-quick-tile__label">回收站</span><span class="lf-quick-tile__sub">误删恢复</span></span>
+      </a>
+      <a href="{% url 'task_quadrant' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>
+        <span><span class="lf-quick-tile__label">象限</span><span class="lf-quick-tile__sub">要事分级</span></span>
+      </a>
+      <a href="{% url 'category_rule_list' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 7.5 12 3l9 4.5"/><path d="M3 7.5V17l9 4.5 9-4.5V7.5"/><path d="M12 12l9-4.5M12 12v9"/></svg></span>
+        <span><span class="lf-quick-tile__label">自动分类</span><span class="lf-quick-tile__sub">规则记账</span></span>
+      </a>
+      <a href="{% url 'export_index' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <span><span class="lf-quick-tile__label">数据导出</span><span class="lf-quick-tile__sub">备份留存</span></span>
+      </a>
+      <a href="{% url 'import_index' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+        <span><span class="lf-quick-tile__label">数据导入</span><span class="lf-quick-tile__sub">迁移合并</span></span>
+      </a>
+      <a href="{% url 'annual_summary' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
+        <span><span class="lf-quick-tile__label">年度账单</span><span class="lf-quick-tile__sub">年度回顾</span></span>
+      </a>
+      <a href="{% url 'tag_list' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+        <span><span class="lf-quick-tile__label">标签</span><span class="lf-quick-tile__sub">多维归集</span></span>
+      </a>
+      <a href="{% url 'ocr_upload' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16h12"/></svg></span>
+        <span><span class="lf-quick-tile__label">图片记账</span><span class="lf-quick-tile__sub">拍照识别</span></span>
+      </a>
+      <a href="{% url 'envelopes' %}" class="lf-quick-tile">
+        <span class="lf-quick-tile__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg></span>
+        <span><span class="lf-quick-tile__label">信封预算</span><span class="lf-quick-tile__sub">分类限额</span></span>
+      </a>
+    </div>
+  </section>
   </aside>{# /lf-home__side #}
   </div>{# /lf-home #}
 

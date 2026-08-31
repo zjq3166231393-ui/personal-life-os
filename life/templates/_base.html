@@ -286,6 +286,9 @@
 (function () {
   var prefersReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var supportsVT = typeof document.startViewTransition === 'function';
+  // 滑动过渡仅在移动端（底部导航模式）启用：桌面端侧边栏是常驻框架，
+  // 让整页（含侧边栏）滑动会显得“框架在动”，不符合桌面原生预期，故桌面直接即时跳转。
+  var isMobileNav = !!(window.matchMedia && window.matchMedia('(max-width: 1023px)').matches);
 
   function sameOrigin(href) {
     try { return new URL(href, location.href).origin === location.origin; }
@@ -300,7 +303,7 @@
   function clearDir() { document.documentElement.removeAttribute('data-nav-dir'); }
 
   function backWithTransition() {
-    if (supportsVT && !prefersReduce) {
+    if (supportsVT && !prefersReduce && isMobileNav) {
       document.documentElement.setAttribute('data-nav-dir', 'back');
       var vt = document.startViewTransition(function () { window.history.back(); });
       if (vt && vt.finished) vt.finished.finally(clearDir);
@@ -309,7 +312,7 @@
     }
   }
   function forwardWithTransition(href) {
-    if (supportsVT && !prefersReduce) {
+    if (supportsVT && !prefersReduce && isMobileNav) {
       document.documentElement.setAttribute('data-nav-dir', 'forward');
       var vt = document.startViewTransition(function () { window.location.href = href; });
       if (vt && vt.finished) vt.finished.finally(clearDir);
@@ -331,7 +334,7 @@
     var a = ev.target.closest && ev.target.closest('a');
     if (!a) return;
     var href = a.getAttribute('href');
-    if (!href || href === '#' || href.charAt(0) === '#') return;
+    if (!href || href === '#' || href.charAt(0) === '#' || href.charAt(0) === '?') return;
     if (a.hasAttribute('target') && a.getAttribute('target') !== '_self') return;
     if (a.hasAttribute('download')) return;
     if (a.hasAttribute('data-no-transition')) return;
@@ -350,7 +353,8 @@
   var sx = 0, sy = 0, dx = 0, drag = false, horiz = false, decided = false;
 
   document.addEventListener('pointerdown', function (e) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    // 左边缘滑动返回是移动端原生手势，桌面鼠标不应触发（避免误伤文本选择拖拽）。
+    if (e.pointerType === 'mouse') return;
     if (e.clientX > EDGE) return;
     if (e.target.closest && e.target.closest('[data-swipe]')) return;
     sx = e.clientX; sy = e.clientY; dx = 0;
