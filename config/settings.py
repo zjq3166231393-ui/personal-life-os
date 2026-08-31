@@ -37,6 +37,7 @@ MIDDLEWARE = [
     "life.middleware.LoginRateLimitMiddleware",
     "life.middleware.ApiRateLimitMiddleware",
     "life.middleware.NoBrowserCacheMiddleware",
+    "life.middleware.AdminAccessMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

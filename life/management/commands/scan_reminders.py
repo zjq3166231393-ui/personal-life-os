@@ -106,14 +106,22 @@ class Command(BaseCommand):
             created += 1
         return created
 
+    # 邮件正文固定使用泛化文案：docs/privacy-and-data.md 承诺「邮件通知不发送
+    # 金额、分类细节」。站内通知正文（notification.body）可能含分类名
+    # （如「每月5日 · 住房」），直接外发会违背该承诺。
+    EMAIL_BODY = "你有一条新的提醒，请登录 Personal Life OS 查看。"
+
     def _try_email(self, notification, user, title, important_only=False):
         """Try sending email. Update notification with retry/error on failure.
-        Never includes amount or category details in the email."""
+
+        隐私契约：邮件正文使用固定泛化文案，**不使用** ``notification.body``。
+        失败只累加 ``email_retry_count``、记录截断后的错误信息，不抛异常。
+        """
         if not hasattr(user, 'profile') or not user.profile.email_notifications:
             return
         if user.profile.email_important_only and not important_only:
             return
-        ok, err = send_notification_email(user, title, notification.body)
+        ok, err = send_notification_email(user, title, self.EMAIL_BODY)
         if ok:
             notification.status = "delivered"
             notification.delivered_at = timezone.now()

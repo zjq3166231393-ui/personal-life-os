@@ -1,8 +1,9 @@
 """Custom middleware: login rate limiting, API rate limiting, session timeout, no-cache for app pages."""
+import os
 import time
 
 from django.core.cache import cache
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import add_never_cache_headers
@@ -140,3 +141,56 @@ class ApiRateLimitMiddleware:
         if xff:
             return xff.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR", "127.0.0.1")
+
+
+# ── /admin/ 访问控制 ──────────────────────────────────────────
+# 默认**不生效**：未设置任何环境变量时行为与以前完全一致，不会把本地开发挡在门外。
+# 生产可用环境变量收紧：
+#   ADMIN_ENABLED=false      → 完全关闭 /admin/
+#   ADMIN_ALLOWED_IPS=a,b,c  → 仅白名单 IP 可访问
+#   ADMIN_TRUST_PROXY=true   → 反代后取真实客户端 IP（否则用 REMOTE_ADDR）
+ADMIN_PREFIX = "/admin/"
+
+
+def _env_flag(name, default=False):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+class AdminAccessMiddleware:
+    """限制 Django Admin 的访问来源，缩小暴力破解与信息泄露面。
+
+    设计原则：
+    * **默认不生效**——未配置环境变量时完全放行，本地开发不受影响。
+    * 拒绝时返回 **404 而非 403**，不向外界确认 ``/admin/`` 是否存在。
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if not request.path.startswith(ADMIN_PREFIX):
+            return self.get_response(request)
+
+        # ADMIN_ENABLED 未设置时视为 true（向后兼容，避免误伤本地开发）
+        if os.getenv("ADMIN_ENABLED") is not None and not _env_flag(
+            "ADMIN_ENABLED", True
+        ):
+            raise Http404
+
+        allowed_raw = os.getenv("ADMIN_ALLOWED_IPS", "").strip()
+        if allowed_raw:
+            allowed = {ip.strip() for ip in allowed_raw.split(",") if ip.strip()}
+            if self._client_ip(request) not in allowed:
+                raise Http404
+
+        return self.get_response(request)
+
+    def _client_ip(self, request):
+        if _env_flag("ADMIN_TRUST_PROXY"):
+            xff = request.META.get("HTTP_X_FORWARDED_FOR")
+            if xff:
+                return xff.split(",")[0].strip()
+        return request.META.get("REMOTE_ADDR", "")
