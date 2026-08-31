@@ -1,6 +1,10 @@
 # Personal Life OS — V1 发布前工程审计报告
 
 > 审计日期：2026-08-11 | 分支：`release/v0.9.0` | 测试：190 OK | Django 5.2.17
+>
+> **复核更新（2026-08-31）**：原审计时 190 测试 / 20 迁移 / 分支名 `release/v0.9.0`（实际为 `release-v0.9.0`）。
+> 当前：测试 **726 OK**、迁移 `life 0038 / accounts 0009 / common 0005`（合计 50+）、分支 `release-v0.9.0`。
+> 原审计中的多数 P2 项已在 V0.9 落地，详见文末「十五、2026-08-31 复核更新」。
 
 ---
 
@@ -275,3 +279,48 @@ personal-life-os/     (70 Python files, 40 templates, 20 migrations)
 | P2 | Admin 访问限制 | V0.9-03 |
 | P2 | 更新架构文档 | V0.9-04 |
 | P2 | Dashboard N+1 优化 | V0.9-05 |
+
+---
+
+## 十五、2026-08-31 复核更新
+
+> 距原审计（2026-08-11）已近 3 周，V0.9 大量落地。本节约审计中的 **P2 项现状**，避免后续误判。
+
+### 15.1 数字更正
+
+| 指标 | 审计时（8/11） | 当前（8/31） |
+|------|---------------|-------------|
+| 测试数 | 190 OK | **726 OK**（`-W error::RuntimeWarning`） |
+| 迁移数 | 20（life:15/common:2/accounts:1/其他） | **life 0038 / accounts 0009 / common 0005**（合计 50+） |
+| 分支名 | `release/v0.9.0` | **`release-v0.9.0`**（无斜杠） |
+| Django | 5.2.17 | `>=5.0,<6.0`（实际 5.2.x） |
+
+### 15.2 原 P2 项已解决（✅）
+
+| 原审计条目 | 位置 | 当前状态 |
+|-----------|------|---------|
+| LocMemCache 多进程不共享 | 二 / P2 | ✅ 已支持 `REDIS_URL` 自动切换；redis 包缺失时优雅降级回 LocMemCache 并告警 |
+| 遗留 Entry 模型 | 三 / P2 | ✅ `life.Entry` 已不存在（`grep class Entry` → 0） |
+| Admin 无 IP 限制 | 五 / P2 | ✅ 新增 `AdminAccessMiddleware`：`ADMIN_ENABLED=false` 关闭、`ADMIN_ALLOWED_IPS` 白名单、`ADMIN_TRUST_PROXY` 取真实 IP；拒绝返回 404 |
+| 通知推送失败处理（缺失覆盖） | 八 / P2 | ✅ `common/tests_email_push.py` 26 项覆盖 |
+| 邮件发送重试边界（缺失覆盖） | 八 / P2 | ✅ 同上 |
+| 恢复命令端到端（缺失覆盖） | 八 / P2 | ✅ `life/tests_backup_restore.py` 12 项覆盖 |
+| 无数据库索引 | 十二 / P2 | ✅ `life/models.py` 已含 26 处 `db_index`/`indexes` |
+| Dashboard N+1 | 十二 / P2 | ✅ P1-9 已用 `select_related`/`prefetch_related` + `CaptureQueriesContext` 锁回归 |
+| 模型集中 life/ | 三 / P2 | ⚠ 仍集中（16+ 模型），V1 后拆分，未做 |
+| README / 架构文档过时 | 十 / P2 | ⚠ 部分（本审计与竞品分析已加复核章节；架构/数据模型文档仍偏旧，见 10.2） |
+
+### 15.3 仍未解决（保留 P2）
+
+| 项 | 影响 |
+|----|------|
+| 模型集中在 `life/models.py` | 单文件过大，维护困难；V1 后按领域拆分 |
+| 架构/数据模型文档（V0.2 内容） | 新贡献者难了解现状 |
+| 推送**发送**功能未实现 | `common` 仅存 `PushSubscription` 订阅，无 `pywebpush` 发送；测试聚焦订阅管理，发送端待 V1 |
+| 多人协同 / 银行自动同步 / 桌面小组件 / 番茄钟 / 投资追踪 | 竞品分析判定为不做或低优先级（详见其 V0.9 落地状态表） |
+
+### 15.4 复核结论
+
+原审计 **13 项 P2 中 9 项已解决**（Cache / Entry / Admin / 3 项测试缺口 / 索引 / N+1 / 部分文档），
+剩余 4 项（模型拆分、架构文档、推送发送、低优先级功能）留待 V1 之后。
+**当前无 P0/P1 阻塞项**，测试 726 全绿，可进入发布准备收尾。
