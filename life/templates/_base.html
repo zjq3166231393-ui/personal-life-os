@@ -280,26 +280,117 @@
 </script>
 <script src="{% static 'js/i18n.js' %}?v=2" defer></script>
 <script>
-// Smart back: any link with [data-back="history"] uses the browser's history
-// stack when the previous page belongs to this app (same-origin), and falls
-// back to the link's href otherwise. This is how Notion / Apple Notes /
-// Bear all behave: edit pages always bring you back where you came from.
-(function(){
-  document.addEventListener('click', function(ev){
-    var a = ev.target.closest && ev.target.closest('a[data-back="history"]');
-    if(!a) return;
+// 页面前进 / 返回过渡 + 智能返回 + 左边缘滑动返回。
+// 全部基于 View Transitions API 做渐进增强：浏览器不支持，或用户偏好
+// “减少动效”时，自动降级为普通跳转，功能不受影响。
+(function () {
+  var prefersReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var supportsVT = typeof document.startViewTransition === 'function';
+
+  function sameOrigin(href) {
+    try { return new URL(href, location.href).origin === location.origin; }
+    catch (e) { return false; }
+  }
+  // 仅当站内有上一页时才回退，避免退回刷新态或站外。
+  function canGoBack() {
+    if (window.history.length <= 1) return false;
+    var ref = document.referrer;
+    return !!ref && ref.indexOf(location.origin) === 0;
+  }
+  function clearDir() { document.documentElement.removeAttribute('data-nav-dir'); }
+
+  function backWithTransition() {
+    if (supportsVT && !prefersReduce) {
+      document.documentElement.setAttribute('data-nav-dir', 'back');
+      var vt = document.startViewTransition(function () { window.history.back(); });
+      if (vt && vt.finished) vt.finished.finally(clearDir);
+    } else {
+      window.history.back();
+    }
+  }
+  function forwardWithTransition(href) {
+    if (supportsVT && !prefersReduce) {
+      document.documentElement.setAttribute('data-nav-dir', 'forward');
+      var vt = document.startViewTransition(function () { window.location.href = href; });
+      if (vt && vt.finished) vt.finished.finally(clearDir);
+    } else {
+      window.location.href = href;
+    }
+  }
+  // 智能返回：能回退则回退（带滑动），否则跳到 href（列表页兜底）。
+  function smartBack(href) {
+    if (canGoBack()) { backWithTransition(); }
+    else if (href && href !== '#') { forwardWithTransition(href); }
+    else { window.history.back(); }
+  }
+  window.__lifeosGoBack = smartBack;
+
+  // 统一拦截站内普通链接：data-back 走返回，其余走前进滑动。
+  document.addEventListener('click', function (ev) {
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var a = ev.target.closest && ev.target.closest('a');
+    if (!a) return;
     var href = a.getAttribute('href');
-    if(!href || href === '#') return;
-    try {
-      // Came from inside this app? Go back. Otherwise follow the link target.
-      var ref = document.referrer;
-      if(ref && ref.indexOf(window.location.origin) === 0){
-        ev.preventDefault();
-        if(window.history.length > 1){ window.history.back(); }
-        else { window.location.href = href; }
-      }
-    } catch(e) { /* ignore — let the link do its default thing */ }
+    if (!href || href === '#' || href.charAt(0) === '#') return;
+    if (a.hasAttribute('target') && a.getAttribute('target') !== '_self') return;
+    if (a.hasAttribute('download')) return;
+    if (a.hasAttribute('data-no-transition')) return;
+    if (href.indexOf('/api/') === 0) return;     // 内部 API 不拦截
+    if (!sameOrigin(href)) return;                // 站外链接走默认
+
+    ev.preventDefault();
+    if (a.hasAttribute('data-back')) smartBack(href);
+    else forwardWithTransition(href);
   });
+
+  // 左边缘滑动返回（移动端原生手势）。
+  // 仅从最左 24px 触发，且不与列表行左滑（[data-swipe]）冲突。
+  var EDGE = 24, THRESH = 60;
+  var main = document.querySelector('main') || document.body;
+  var sx = 0, sy = 0, dx = 0, drag = false, horiz = false, decided = false;
+
+  document.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.clientX > EDGE) return;
+    if (e.target.closest && e.target.closest('[data-swipe]')) return;
+    sx = e.clientX; sy = e.clientY; dx = 0;
+    drag = true; decided = false; horiz = false;
+  }, { passive: true });
+
+  document.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var mx = e.clientX - sx, my = e.clientY - sy;
+    if (!decided) {
+      if (Math.abs(mx) > 8 || Math.abs(my) > 8) {
+        decided = true; horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz && e.cancelable) e.preventDefault();
+      }
+    }
+    if (decided && horiz) {
+      // 只允许向右拖 + 越界阻尼
+      dx = mx > 0 ? (mx > THRESH ? THRESH + (mx - THRESH) * 0.3 : mx) : 0;
+      main.style.transition = 'none';
+      main.style.transform = 'translateX(' + dx + 'px)';
+      main.style.willChange = 'transform';
+    }
+  }, { passive: false });
+
+  function endSwipe() {
+    if (!drag) return;
+    drag = false;
+    main.style.willChange = '';
+    if (decided && horiz && dx >= THRESH && canGoBack()) {
+      main.style.transition = '';
+      main.style.transform = '';
+      backWithTransition();
+    } else {
+      main.style.transition = 'transform .2s ease';
+      main.style.transform = '';
+      setTimeout(function () { main.style.transition = ''; }, 220);
+    }
+  }
+  document.addEventListener('pointerup', endSwipe);
+  document.addEventListener('pointercancel', endSwipe);
 })();
 </script>
 <script>
