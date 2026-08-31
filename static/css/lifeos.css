@@ -215,6 +215,10 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   background: linear-gradient(135deg, #b91c1c 0%, #dc2626 55%, #ef4444 100%);
   box-shadow: 0 24px 56px -16px rgba(220,38,38,.35), inset 0 1px 0 rgba(255,255,255,.15);
 }
+.lf-hero--brand {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2b56d8 55%, #4b80f0 100%);
+  color: #fff;
+}
 .lf-hero__progress {
   height: 4px; background: rgba(255,255,255,.18); border-radius: 2px; margin-top: 18px; overflow: hidden;
 }
@@ -309,6 +313,56 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 
+/* Switch（每日记账提醒开关，2026-08-30 增强） */
+.lf-switch { position: relative; display: inline-flex; flex: 0 0 auto; cursor: pointer; }
+.lf-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.lf-switch__track {
+  width: 46px; height: 26px; border-radius: 999px; background: var(--surface-3);
+  border: 1px solid var(--border-strong); transition: background var(--t-base) var(--ease);
+  display: inline-flex; align-items: center; padding: 0 3px;
+}
+.lf-switch__thumb {
+  width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(15,23,42,.25); transition: transform var(--t-base) var(--ease);
+}
+.lf-switch input:checked + .lf-switch__track { background: var(--brand); border-color: var(--brand); }
+.lf-switch input:checked + .lf-switch__track .lf-switch__thumb { transform: translateX(20px); }
+.lf-switch input:focus-visible + .lf-switch__track { box-shadow: 0 0 0 3px var(--brand-soft); }
+
+/* ── iOS 风格开关行（countdown_edit / recurring_edit 共用）──
+   此前 .lf-ios-row / .lf-ios-toggle 只有模板在用、CSS 从未定义，开关退化为裸 checkbox。
+   视觉状态用 :has() 直接跟随 input，不依赖 JS 同步 is-on 类（避免点击 input 时失同步）。 */
+.lf-ios-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.lf-ios-row:last-of-type { border-bottom: none; }
+.lf-ios-row__label { font-size: 14px; color: var(--text-1); }
+.lf-ios-toggle {
+  position: relative; display: inline-flex; flex: 0 0 auto;
+  width: 46px; height: 26px; border-radius: 999px; cursor: pointer;
+  background: var(--surface-3); border: 1px solid var(--border-strong);
+  transition: background var(--t-base) var(--ease), border-color var(--t-base) var(--ease);
+}
+.lf-ios-toggle > input[type="checkbox"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer;
+}
+.lf-ios-toggle::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .25);
+  transition: transform var(--t-base) var(--ease);
+}
+.lf-ios-toggle:has(input:checked),
+.lf-ios-toggle.is-on { background: var(--brand); border-color: var(--brand); }
+.lf-ios-toggle:has(input:checked)::after,
+.lf-ios-toggle.is-on::after { transform: translateX(20px); }
+.lf-ios-toggle:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--brand-soft); }
+@media (prefers-reduced-motion: reduce) {
+  .lf-ios-toggle, .lf-ios-toggle::after { transition: none; }
+}
+
 /* Badge / pill */
 .lf-badge {
   display: inline-flex; align-items: center; gap: 4px;
@@ -353,6 +407,14 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-list-item:last-child { border-bottom: 0; }
 .lf-list-item--hover:hover { background: var(--surface-2); }
 
+/* BEM 变体（账户构成 / 储蓄 / 信封列表复用） */
+.lf-list__item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--border-soft); }
+.lf-list__item:last-child { border-bottom: 0; }
+.lf-list__icon { width: 34px; height: 34px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 17px; background: var(--surface-3); border-radius: 10px; }
+.lf-list__body { flex: 1; min-width: 0; }
+.lf-list__title { font-size: 14.5px; font-weight: 600; color: var(--text-1); }
+.lf-dot { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; display: inline-block; }
+
 /* Bottom nav dead block removed (2026-08-25): the real .lf-bottom-nav
    definition lives further down (~line 678) and the old .lf-nav-item class
    was never referenced by any template. Keep this area clean. */
@@ -363,8 +425,43 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   padding: 16px 0; margin-bottom: 20px; border-bottom: 1px solid var(--border-soft);
 }
 .lf-page-header__title { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
-.lf-page-header__back { color: var(--text-2); font-size: 14px; display: inline-flex; align-items: center; gap: 4px; }
-.lf-page-header__back:hover { color: var(--text-1); }
+.lf-page-header__back {
+  color: var(--text-2);
+  font-size: 14px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 8px 10px 8px 6px;            /* 扩大命中区到约 40px 高，贴近 44px 触控规范 */
+  margin: -8px 0 -8px -6px;             /* 抵消 padding，不撑高 header */
+  border-radius: var(--r-md, 12px);
+  border: 1px solid transparent;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .18s ease, color .18s ease, transform .12s ease, border-color .18s ease;
+  cursor: pointer;
+}
+.lf-page-header__back:hover { color: var(--text-1); background: var(--surface-2, rgba(127,127,127,.08)); }
+.lf-page-header__back:active { color: var(--text-1); background: rgba(var(--brand-rgb, 43 86 216), .12); transform: scale(.94); }
+.lf-page-header__back:focus-visible { outline: none; border-color: rgba(var(--brand-rgb, 43 86 216), .5); box-shadow: 0 0 0 3px rgba(var(--brand-rgb, 43 86 216), .18); }
+.lf-page-header__back svg { transition: transform .18s cubic-bezier(.16, 1, .3, 1); }
+.lf-page-header__back:active svg { transform: translateX(-2px); }  /* 按压时箭头轻微左移，强化回退语义 */
+
+/* 页面前进 / 返回滑动过渡（View Transitions API，渐进增强） */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(root) { animation-duration: .3s; }
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: .3s;
+    animation-timing-function: cubic-bezier(.16, 1, .3, 1);
+    animation-fill-mode: both;
+  }
+  html[data-nav-dir="forward"]::view-transition-old(root) { animation-name: lf-vt-out-left; }
+  html[data-nav-dir="forward"]::view-transition-new(root) { animation-name: lf-vt-in-right; }
+  html[data-nav-dir="back"]::view-transition-old(root) { animation-name: lf-vt-out-right; }
+  html[data-nav-dir="back"]::view-transition-new(root) { animation-name: lf-vt-in-left; }
+}
+@keyframes lf-vt-out-left  { to { transform: translateX(-22%); opacity: .35; } }
+@keyframes lf-vt-in-right  { from { transform: translateX(22%); opacity: .35; } }
+@keyframes lf-vt-out-right { to { transform: translateX(22%); opacity: .35; } }
+@keyframes lf-vt-in-left   { from { transform: translateX(-22%); opacity: .35; } }
 
 /* Empty */
 .lf-empty { text-align: center; padding: 48px 24px; color: var(--text-3); }
@@ -377,6 +474,12 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-alert--success { background: var(--success-soft); border-color: rgba(5,150,105,.2); color: var(--success); }
 .lf-alert--warning { background: var(--warning-soft); border-color: rgba(217,119,6,.2); color: var(--warning); }
 .lf-alert--danger { background: var(--danger-soft); border-color: rgba(220,38,38,.2); color: var(--danger); }
+
+/* 每日记账提醒 nudge（2026-08-30 增强） */
+.lf-nudge--remind { background: linear-gradient(135deg, var(--brand-soft), var(--surface-2)); border: 1px solid rgba(43,86,216,.18); }
+.lf-nudge__icon { font-size: 26px; line-height: 1; flex: 0 0 auto; }
+.lf-nudge__title { font-weight: 700; font-size: 15px; color: var(--text-1); }
+.lf-row--center { align-items: center; }
 
 /* Divider */
 .lf-divider { height: 1px; background: var(--border-soft); border: 0; margin: 16px 0; }
@@ -591,6 +694,12 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
   .lf-stat-grid { grid-template-columns: repeat(2, 1fr); }
   .lf-stat-mini__value { font-size: 20px; }
   .lf-fab { right: 16px; bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 12px); width: 52px; height: 52px; }
+}
+
+/* iOS 聚焦缩放：触摸设备下 <16px 的输入框获得焦点会触发整页缩放，
+   统一在移动端（≤1023px，即底部导航模式）把表单控件提到 16px。 */
+@media (max-width: 1023px) {
+  .lf-input, .lf-select, .lf-textarea, .lf-quick-amount { font-size: 16px; }
 }
 
 /* ============================================================
@@ -1187,6 +1296,34 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
    快捷宫格（首页）
    ============================================================ */
 .lf-quick-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* ─── Home command center (redesign: ①A grid + ⑤B unified icons + ③A tiles) ─── */
+@media (min-width: 1024px) {
+  .lf-container--home { max-width: 1040px; }
+  .lf-home {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .lf-home > .lf-hero.lf-home__hero { grid-column: 1 / -1; margin-bottom: 0; }
+  .lf-home__main { min-width: 0; }
+  .lf-home__side { position: sticky; top: 24px; min-width: 0; }
+}
+@media (min-width: 1280px) {
+  .lf-container--home { max-width: 1140px; }
+}
+.lf-icon-tile {
+  width: 38px; height: 38px; flex: 0 0 auto;
+  border-radius: var(--r-md);
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: flex; align-items: center; justify-content: center;
+}
+.lf-icon-tile svg { width: 20px; height: 20px; display: block; }
+.lf-section-head { display: flex; align-items: center; gap: 12px; }
+.lf-section-head__main { flex: 1; min-width: 0; }
+.lf-section-head__action { flex: 0 0 auto; }
 .lf-quick-tile {
   position: relative; display: flex; align-items: center; gap: 12px;
   padding: 16px; background: var(--surface); border: 1px solid var(--border);
@@ -1476,3 +1613,390 @@ h1 { font-size: 24px; } h2 { font-size: 20px; } h3 { font-size: 16px; } h4 { fon
 .lf-cd-row-h{gap:10px}
 .lf-cd-empty{padding:12px 4px 4px;text-align:center;font-size:13px}
 .lf-cd-row-h .lf-text-faint.lf-num{min-width:48px;text-align:right;flex-shrink:0}
+
+
+/* ===== Global search (2026-08-29) ===== */
+.lf-search-form{display:flex;gap:8px;align-items:center}
+.lf-search-form__box{position:relative;flex:1;min-width:0;display:flex;align-items:center}
+.lf-search-form__icon{position:absolute;left:12px;color:var(--text-3);pointer-events:none;flex-shrink:0}
+.lf-search-form__input{
+  width:100%;padding:11px 36px 11px 38px;
+  border:1px solid var(--border);border-radius:var(--r-pill);
+  background:var(--surface-2);color:var(--text-1);font-size:14px;
+  transition:border-color .18s var(--ease),box-shadow .18s var(--ease),background .18s var(--ease);
+  -webkit-appearance:none;appearance:none;
+}
+.lf-search-form__input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.lf-search-form__input:focus{outline:none;border-color:var(--brand);background:var(--surface);box-shadow:var(--shadow-focus)}
+.lf-search-form__clear{
+  position:absolute;right:10px;width:22px;height:22px;border-radius:50%;border:none;
+  background:var(--surface-3);color:var(--text-2);cursor:pointer;font-size:15px;line-height:1;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.lf-search-form__clear:hover{background:var(--border);color:var(--text-1)}
+
+/* 类型筛选 chip */
+.lf-chip{
+  display:inline-flex;align-items:center;padding:5px 12px;border-radius:var(--r-pill);
+  border:1px solid var(--border);background:var(--surface);
+  font-size:12.5px;color:var(--text-2);text-decoration:none;
+  transition:all .18s var(--ease);white-space:nowrap;
+}
+.lf-chip:hover{border-color:var(--border-strong);color:var(--text-1)}
+.lf-chip.is-active{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+
+/* 搜索结果行 */
+.lf-result-row{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;margin-bottom:8px;
+  background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--r-md);
+  text-decoration:none;color:inherit;
+  transition:border-color .18s var(--ease),box-shadow .18s var(--ease),transform .18s var(--ease);
+}
+.lf-result-row:hover{border-color:var(--brand);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.lf-result-row__main{flex:1;min-width:0}
+.lf-result-row__title{font-size:14.5px;font-weight:600;color:var(--text-1);line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lf-result-row__desc{font-size:12.5px;color:var(--text-3);margin-top:3px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lf-result-row__meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:5px;font-size:11.5px;color:var(--text-3)}
+.lf-result-row__amount{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;flex-shrink:0}
+.lf-result-row__amount.is-income{color:var(--success)}
+.lf-result-row__amount.is-expense{color:var(--text-1)}
+
+/* 关键词高亮 */
+.lf-hl{background:rgba(var(--brand-rgb),.16);color:inherit;border-radius:3px;padding:0 1px;font-weight:700}
+
+/* 账户：列表行（在 lf-card 内无缝堆叠，底部细分隔线） */
+.lf-acc-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border-soft)}
+.lf-acc-row:last-child{border-bottom:none}
+.lf-acc-icon{width:34px;height:34px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;font-size:18px;background:var(--surface-2);border-radius:10px}
+
+/* Task 状态 badge 映射（与 Task.Status 取值对齐） */
+.lf-badge--todo{background:var(--surface-3);color:var(--text-2)}
+.lf-badge--in_progress{background:var(--info-soft);color:var(--info)}
+.lf-badge--completed{background:var(--success-soft);color:var(--success)}
+.lf-badge--cancelled{background:var(--danger-soft);color:var(--danger)}
+.lf-badge--archived{background:var(--surface-3);color:var(--text-3)}
+
+
+/* ===== Quick-add FAB (2026-08-29) ===== */
+.lf-fab{
+  position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom, 0px));
+  z-index:60;width:54px;height:54px;border-radius:50%;border:none;
+  background:var(--brand);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 24px -6px rgba(var(--brand-rgb),.55),0 2px 8px rgba(15,23,42,.12);
+  transition:transform .18s var(--ease),box-shadow .18s var(--ease),opacity .18s var(--ease);
+}
+.lf-fab:hover{transform:scale(1.06);box-shadow:0 12px 30px -6px rgba(var(--brand-rgb),.65),0 2px 8px rgba(15,23,42,.14)}
+.lf-fab:active{transform:scale(.96)}
+.lf-fab.is-hidden{opacity:0;pointer-events:none;transform:scale(.8)}
+@media (min-width:1024px){
+  .lf-fab{left:calc(50% + 130px);right:auto;bottom:28px}
+}
+
+/* 快速记账面板 */
+.lf-quick-amount{
+  width:100%;padding:12px 14px;font-size:26px;font-weight:800;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;
+  border:1px solid var(--border);border-radius:var(--r-md);
+  background:var(--surface-2);color:var(--text-1);
+}
+.lf-quick-amount:focus{outline:none;border-color:var(--brand);background:var(--surface);box-shadow:var(--shadow-focus)}
+.lf-quick-cats{display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow-y:auto}
+.lf-quick-cat{
+  padding:6px 12px;border-radius:var(--r-pill);border:1px solid var(--border);
+  background:var(--surface);font-size:13px;color:var(--text-2);cursor:pointer;
+  transition:all .15s var(--ease);user-select:none;
+}
+.lf-quick-cat:hover{border-color:var(--border-strong)}
+.lf-quick-cat.is-active{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.lf-quick-seg{display:flex;border:1px solid var(--border);border-radius:var(--r-pill);overflow:hidden;background:var(--surface-2)}
+.lf-quick-seg__btn{
+  flex:1;padding:8px 0;border:none;background:transparent;color:var(--text-2);
+  font-size:13px;cursor:pointer;transition:all .15s var(--ease);
+}
+.lf-quick-seg__btn.is-active{background:var(--brand);color:#fff;font-weight:600}
+.lf-quick-hint{font-size:11.5px;color:var(--text-3);margin-top:8px;line-height:1.5}
+.lf-quick-err{font-size:12.5px;color:var(--danger);margin-top:6px;display:none}
+.lf-quick-err.is-shown{display:block}
+
+
+/* ===== Data import (2026-08-29) ===== */
+.lf-code-block{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;line-height:1.7;color:var(--text-2);
+  background:var(--surface-3);border:1px solid var(--border-soft);
+  border-radius:var(--r-sm);padding:10px 12px;word-break:break-all;
+}
+.lf-table{width:100%;border-collapse:collapse;font-size:13px}
+.lf-table th{
+  text-align:left;font-size:11.5px;font-weight:600;color:var(--text-3);
+  padding:10px 12px;background:var(--surface-2);
+  border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;
+}
+.lf-table td{padding:10px 12px;border-bottom:1px solid var(--border-soft);color:var(--text-1)}
+.lf-table tbody tr:last-child td{border-bottom:none}
+.lf-table tbody tr:hover{background:var(--surface-2)}
+
+
+/* ===== Calendar view (2026-08-29) ===== */
+.lf-cal-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.lf-cal-nav__title{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.lf-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.lf-cal-dow{
+  text-align:center;font-size:11.5px;font-weight:600;color:var(--text-3);
+  padding:6px 0;
+}
+.lf-cal-cell{
+  position:relative;min-height:62px;padding:6px 4px 18px;
+  border:1px solid var(--border-soft);border-radius:var(--r-sm);
+  background:var(--surface);cursor:pointer;text-align:left;
+  transition:border-color .15s var(--ease),background .15s var(--ease);
+  display:flex;flex-direction:column;gap:2px;
+}
+.lf-cal-cell:hover{border-color:var(--brand);background:var(--surface-2)}
+.lf-cal-cell.is-outside{opacity:.35;background:transparent}
+.lf-cal-cell.is-today{border-color:var(--brand);box-shadow:0 0 0 2px rgba(var(--brand-rgb),.12)}
+.lf-cal-cell.is-selected{background:var(--brand-soft);border-color:var(--brand)}
+.lf-cal-cell__day{font-size:12px;font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+.lf-cal-cell.is-today .lf-cal-cell__day{color:var(--brand);font-weight:800}
+.lf-cal-cell__amount{
+  font-size:10.5px;color:var(--text-2);font-variant-numeric:tabular-nums;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.lf-cal-cell__dots{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);display:flex;gap:3px}
+.lf-cal-dot{width:5px;height:5px;border-radius:50%}
+.lf-cal-dot--task{background:var(--brand)}
+.lf-cal-dot--reminder{background:var(--warning)}
+.lf-cal-dot--countdown{background:var(--danger)}
+.lf-cal-dot--checkin{background:var(--success)}
+@media (max-width:520px){
+  .lf-cal-cell{min-height:52px;padding:4px 2px 16px}
+  .lf-cal-cell__amount{font-size:9.5px}
+}
+
+
+/* ===== Tags (2026-08-29) ===== */
+.lf-tag-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-bottom:1px solid var(--border-soft);
+}
+.lf-tag-row:last-child{border-bottom:none}
+.lf-tag-picker{display:flex;flex-wrap:wrap;gap:6px}
+.lf-tag-picker__opt{
+  padding:5px 11px;border-radius:var(--r-pill);border:1px solid var(--border);
+  background:var(--surface);font-size:12.5px;color:var(--text-2);cursor:pointer;
+  transition:all .15s var(--ease);user-select:none;
+}
+.lf-tag-picker__opt:hover{border-color:var(--border-strong)}
+.lf-tag-picker__opt.is-active{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.lf-tag-inline{display:inline-flex;flex-wrap:wrap;gap:4px}
+.lf-tag-mini{
+  font-size:10.5px;padding:1px 7px;border-radius:var(--r-pill);
+  background:var(--surface-3);color:var(--text-2);white-space:nowrap;
+}
+/* 选中态：用 :has() 免去额外的 JS（现代浏览器均支持） */
+.lf-tag-picker__opt:has(input:checked){
+  background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;
+}
+
+/* ───── 批量操作（P2） ───── */
+.lf-batch-check{
+  display:flex;align-items:center;flex-shrink:0;
+  padding-right:4px;cursor:pointer;
+}
+.lf-batch-check input{width:18px;height:18px;accent-color:var(--brand);cursor:pointer;}
+.lf-batch-row:has(input:checked){background:color-mix(in srgb,var(--brand) 8%,var(--surface-1));}
+.lf-batch-bar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:72px;z-index:120;width:min(680px,calc(100% - 24px));
+  background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:0 8px 28px rgba(0,0,0,.18);
+  padding:10px 12px;
+}
+.lf-batch-bar__inner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.lf-batch-bar__selall{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-2);cursor:pointer;}
+.lf-batch-bar__selall input{width:16px;height:16px;accent-color:var(--brand);}
+.lf-batch-bar__count{font-size:13px;color:var(--text-2);}
+.lf-batch-bar__count b{color:var(--brand);font-size:14px;}
+.lf-batch-bar__actions{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}
+.lf-batch-panel{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+}
+.lf-batch-panel .lf-select{flex:1;min-width:160px;}
+
+/* ───────── 游戏化：连续记账 / 月度达成度 / 徽章墙（P2） ───────── */
+.lf-gm-flame{font-size:22px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.12))}
+.lf-gm-streak-num{font-size:20px;font-weight:800;color:var(--text-1);line-height:1.1}
+.lf-gm-streak-unit{font-size:12px;font-weight:600;color:var(--text-3)}
+.lf-gm-progress{height:8px;border-radius:999px;background:var(--surface-3);overflow:hidden}
+.lf-gm-progress__bar{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--brand),var(--brand-2,#22c55e));transition:width 800ms cubic-bezier(.32,.72,.24,1)}
+.lf-gm-hero{background:linear-gradient(135deg,var(--brand-soft),var(--surface));border:1px solid var(--brand-2,rgba(43,86,216,.18))}
+.lf-gm-hero__streak{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.lf-gm-month{margin-top:4px}
+
+.lf-badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.lf-badge-tile{border:1px solid var(--surface-3);border-radius:var(--r-md);padding:14px 12px;text-align:center;background:var(--surface);transition:transform .15s ease,box-shadow .15s ease}
+.lf-badge-tile.is-earned{border-color:var(--brand);background:var(--brand-soft);box-shadow:0 4px 14px rgba(43,86,216,.1)}
+.lf-badge-tile.is-locked{opacity:.78;filter:grayscale(.35)}
+.lf-badge-tile__icon{font-size:30px;line-height:1;margin-bottom:6px}
+.lf-badge-tile.is-locked .lf-badge-tile__icon{opacity:.5}
+.lf-badge-tile__name{font-size:14px;font-weight:700;color:var(--text-1)}
+.lf-badge-tile__desc{font-size:11px;color:var(--text-3);margin-top:2px;min-height:28px}
+.lf-badge-tile__status{font-size:11px;margin-top:8px;font-weight:600}
+.lf-badge-tile__status--earned{color:var(--brand)}
+.lf-badge-tile__status--locked{color:var(--text-3)}
+.lf-badge-tile__progress{height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden;margin-top:8px}
+
+/* ───── 四象限任务视图（P2） ───── */
+.lf-quad-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+@media (max-width:560px){.lf-quad-grid{grid-template-columns:1fr;}}
+.lf-quad{border:1px solid var(--border);border-radius:var(--r-lg);background:var(--surface-2);padding:12px;display:flex;flex-direction:column;min-height:150px;}
+.lf-quad__head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.lf-quad__title{font-size:14px;font-weight:600;margin:0;}
+.lf-quad__hint{font-size:11px;color:var(--text-2);}
+.lf-quad__count{font-size:12px;font-weight:700;color:var(--text-2);background:var(--surface-3);border-radius:var(--r-pill);padding:1px 8px;flex-shrink:0;}
+.lf-quad__body{display:flex;flex-direction:column;gap:6px;flex:1;overflow:auto;}
+.lf-quad--do{border-top:3px solid var(--danger);}
+.lf-quad--plan{border-top:3px solid var(--success);}
+.lf-quad--delegate{border-top:3px solid #e8a33d;}
+.lf-quad--drop{border-top:3px solid var(--text-3);}
+.lf-quad__flags{display:flex;gap:4px;flex-shrink:0;}
+.lf-flag{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:var(--surface-1);color:var(--text-2);font-size:12px;cursor:pointer;line-height:1;}
+.lf-flag--imp.is-on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:700;}
+.lf-flag--urg.is-on{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:700;}
+.lf-check--inline{display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;}
+.lf-check--inline input{width:16px;height:16px;accent-color:var(--brand);}
+
+/* ── 图片识别记账（P2）：识别原文折叠区 ── */
+.lf-ocr-raw{background:var(--surface-3);border:1px solid var(--border-soft);border-radius:var(--r-md);padding:12px;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto;margin:0;}
+.lf-badge-tile__progress-bar{height:100%;border-radius:999px;background:var(--brand);transition:width .6s ease}
+
+/* ── 现金流预测（洞察增强）：首页卡片 + 详情页 ── */
+.lf-cf-icon{font-size:22px;line-height:1;}
+.lf-cf-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+.lf-cf-num{font-size:17px;font-weight:800;color:var(--text-1);margin-top:2px;}
+
+/* ── 语音记账（增强）：麦克风按钮 + 录音态 ── */
+.lf-quick-voice__row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.lf-mic{width:46px;height:46px;border-radius:50%;border:1px solid var(--border-soft);background:var(--surface-2);color:var(--brand);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;transition:transform .15s ease,box-shadow .15s ease;}
+.lf-mic:hover{transform:scale(1.05);}
+.lf-mic.is-recording{background:var(--brand);color:#fff;animation:lf-pulse 1.4s infinite;}
+@keyframes lf-pulse{0%{box-shadow:0 0 0 0 rgba(43,86,216,.45)}70%{box-shadow:0 0 0 12px rgba(43,86,216,0)}100%{box-shadow:0 0 0 0 rgba(43,86,216,0)}}
+.lf-cf-num--danger{color:var(--danger,#dc2626);}
+.lf-cf-chart-wrap{position:relative;height:260px;}
+
+/* ── 全局快捷键帮助弹窗 ── */
+.lf-kbd-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
+.lf-kbd-list li{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--text-2);}
+.lf-kbd{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 8px;background:var(--surface-2,#f2f4f8);border:1px solid rgba(127,127,127,.28);border-bottom-width:2px;border-radius:7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;font-weight:700;color:var(--text-1);}
+/* ── 页面 Hero 入场微动效（储蓄 / 信封 / 净值三页共用，视觉统一） ── */
+@keyframes lf-fade-up { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform:none; } }
+.lf-hero-anim { animation: lf-fade-up .5s cubic-bezier(.32,.72,.24,1) both; }
+@media (prefers-reduced-motion: reduce) { .lf-hero-anim { animation: none; } }
+
+/* ── 删除后「撤销」条（P0-4 回收站 / 撤销） ── */
+/* 贴在页面内容顶部、容器宽度内对齐；不自动消失，直到用户操作或离开页面。 */
+.lf-undo-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 28px);
+  max-width: 720px;
+  margin: 12px auto 0;
+  padding: 10px 12px;
+  background: var(--surface-2, #f2f4f8);
+  border: 1px solid var(--border, rgba(127,127,127,.24));
+  border-radius: var(--r-md, 12px);
+}
+.lf-undo-bar__main { flex: 1; min-width: 0; }
+.lf-undo-bar__main > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .lf-undo-bar { flex-wrap: wrap; }
+  .lf-undo-bar__main { flex: 1 1 60%; }
+}
+
+/* ── 凭证附件（P0-3）──────────────────────────────────────────── */
+.lf-attach-grid {
+  display: grid; gap: 12px; margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+.lf-attach {
+  margin: 0; border: 1px solid var(--border); border-radius: var(--r-md);
+  overflow: hidden; background: var(--surface-1);
+}
+.lf-attach__thumb {
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 4 / 3; background: var(--surface-2);
+  border-bottom: 1px solid var(--border-soft); color: var(--text-3);
+  overflow: hidden;
+}
+.lf-attach__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lf-attach__thumb svg { width: 28px; height: 28px; }
+.lf-attach__meta {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding: 7px 9px 0; font-size: 11px; color: var(--text-2);
+}
+.lf-attach__actions {
+  display: flex; gap: 6px; padding: 6px 9px 9px;
+}
+.lf-attach__actions .lf-btn { padding: 3px 8px; font-size: 11px; }
+.lf-attach-form { display: flex; gap: 8px; align-items: center; }
+.lf-attach-form .lf-input { flex: 1; min-width: 0; font-size: 12px; }
+@media (max-width: 600px) {
+  .lf-attach-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .lf-attach-form { flex-wrap: wrap; }
+  .lf-attach-form .lf-input { flex: 1 1 100%; }
+}
+
+/* ── 年度账单（P1-7）──────────────────────────────────────────── */
+.lf-insight {
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.lf-bar-list { display: flex; flex-direction: column; gap: 12px; }
+.lf-bar-row { display: flex; flex-direction: column; gap: 5px; }
+.lf-bar-track {
+  height: 8px; border-radius: 999px; overflow: hidden;
+  background: var(--surface-2);
+}
+.lf-bar-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand) 0%, var(--brand-strong) 100%);
+  transition: width 420ms var(--ease);
+}
+.lf-py-3 { padding: 16px 0; }
+.lf-text-center { text-align: center; }
+.lf-input--ghost {
+  background: transparent; border-color: var(--border);
+}
+.lf-input--ghost:focus { border-color: var(--brand); }
+
+/* ── 移动端滑动手势（P1-6）：左滑揭示「编辑/删除」操作 ── */
+.lf-swipe { position: relative; overflow: hidden; }
+.lf-swipe__content {
+  position: relative; z-index: 2;
+  transition: transform .22s ease;
+  touch-action: pan-y;
+}
+.lf-swipe__actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; z-index: 1;
+}
+.lf-swipe__action {
+  width: 76px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; color: #fff; text-decoration: none;
+  font-size: 12px; line-height: 1;
+}
+.lf-swipe__action svg { width: 18px; height: 18px; }
+.lf-swipe__action--edit { background: var(--brand); }
+.lf-swipe__action--delete { background: var(--danger, #ef4444); }
+.lf-swipe.is-open .lf-swipe__content { transform: translateX(-152px); }
+/* 仅在支持精确悬停（桌面）时隐藏滑动操作提示，避免移动端误触 */
+@media (hover: none) {
+  .lf-list-item--hover:hover { background: var(--surface); }
+}

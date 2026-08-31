@@ -1,0 +1,51 @@
+{% extends "_base.html" %}
+{% block title %}数据导出 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">数据导出</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <p class="lf-text-sm lf-text-faint lf-mb-4" style="margin-top:-8px;">
+    把你的数据导出为 CSV，可用 Excel / 数字表格打开。
+    <strong>数据是你的</strong>——随时可以完整带走，不锁定在任何一个平台。
+  </p>
+
+  {% for it in items %}
+    <section class="lf-card lf-mb-3">
+      <div class="lf-row" style="justify-content:space-between;align-items:center;gap:12px;">
+        <div style="min-width:0;">
+          <div class="lf-text-sm" style="font-weight:600;">{{ it.label }}
+            <span class="lf-text-faint" style="font-weight:400;">· {{ it.count }} 条</span>
+          </div>
+          <div class="lf-text-xs lf-text-faint" style="margin-top:2px;">{{ it.desc }}</div>
+        </div>
+        {% if it.count %}
+          <a href="{% url 'export_csv' it.key %}" class="lf-btn lf-btn--primary lf-btn--sm" style="flex-shrink:0;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            导出
+          </a>
+        {% else %}
+          <span class="lf-text-xs lf-text-faint" style="flex-shrink:0;">暂无数据</span>
+        {% endif %}
+      </div>
+    </section>
+  {% endfor %}
+
+  <div class="lf-card" style="background:var(--surface-2);">
+    <div class="lf-text-xs lf-text-faint" style="line-height:1.7;">
+      <strong style="color:var(--text-2);">关于编码</strong><br>
+      导出文件使用 UTF-8 with BOM 编码，Excel 双击打开即可正确显示中文，无需手动选择编码。
+    </div>
+  </div>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

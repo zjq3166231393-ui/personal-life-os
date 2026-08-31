@@ -1,0 +1,94 @@
+{% extends "_base.html" %}
+{% block title %}回收站 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">回收站</h1>
+    <div class="lf-row" style="gap:8px;">
+      {% if items %}
+      <form method="post" action="{% url 'trash_empty' %}" onsubmit="return confirm('确定清空回收站？{{ total }} 条记录将被永久删除，无法恢复。');" style="margin:0;">
+        {% csrf_token %}
+        <button type="submit" class="lf-btn lf-btn--ghost lf-btn--sm" style="color:var(--danger);">清空回收站</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        首页
+      </a>
+    </div>
+  </header>
+
+  {# ───── 说明：保留策略 ───── #}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      </span>
+      <div class="lf-section-head__main">
+        <h3 class="lf-section-title lf-mb-0">回收站</h3>
+        <div class="lf-text-xs lf-text-faint" style="margin-top:2px;">共 {{ total }} 条 · 删除超过 {{ retention_days }} 天的记录会自动清除</div>
+      </div>
+    </div>
+
+    {% if counts %}
+    <div class="lf-row" style="gap:8px;flex-wrap:wrap;">
+      {% for c in counts.values %}
+      <span class="lf-chip lf-text-xs">{{ c.label }} <span class="lf-num">{{ c.n }}</span></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  {# ───── 条目列表 ───── #}
+  {% if items %}
+  <section class="lf-card">
+    <ul class="lf-list">
+      {% for it in items %}
+      <li class="lf-list__item" style="align-items:flex-start;">
+        <div style="min-width:0;flex:1;">
+          <div class="lf-row" style="gap:8px;margin-bottom:2px;">
+            <span class="lf-badge lf-badge--soft lf-text-xs">{{ it.kind_label }}</span>
+            <span class="lf-text-sm lf-text-bold" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ it.title }}</span>
+          </div>
+          {% if it.subtitle %}<div class="lf-text-xs lf-text-faint lf-num" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ it.subtitle }}</div>{% endif %}
+          {% if it.deleted_at %}<div class="lf-text-xs lf-text-faint" style="margin-top:2px;">删除于 {{ it.deleted_at|date:"Y-m-d H:i" }}</div>{% endif %}
+        </div>
+
+        <div class="lf-row" style="gap:6px;flex:0 0 auto;">
+          <form method="post" action="{% url 'trash_restore' it.kind it.pk %}" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="lf-btn lf-btn--secondary lf-btn--sm" title="恢复">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+              恢复
+            </button>
+          </form>
+          <form method="post" action="{% url 'trash_purge' it.kind it.pk %}" onsubmit="return confirm('彻底删除「{{ it.title }}」？此操作不可恢复。');" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="lf-btn lf-btn--ghost lf-btn--sm" style="color:var(--danger);" title="彻底删除">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              彻底删除
+            </button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  {% else %}
+  {# ───── 空状态 ───── #}
+  <section class="lf-card">
+    <div style="text-align:center;padding:32px 16px;">
+      <span class="lf-icon-tile" style="width:48px;height:48px;margin:0 auto 12px;" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:26px;height:26px;"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      </span>
+      <div class="lf-text-sm lf-text-bold" style="margin-bottom:4px;">回收站是空的</div>
+      <div class="lf-text-xs lf-text-faint">删除的账目、任务、随心记会先放到这里，{{ retention_days }} 天内都可以恢复。</div>
+    </div>
+  </section>
+  {% endif %}
+
+</main>
+{% endblock %}

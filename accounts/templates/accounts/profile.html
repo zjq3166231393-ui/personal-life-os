@@ -259,6 +259,28 @@ LifeOS — 个人主页（合并原 profile + appearance）。
         <p class="lf-help">语音/文字说「提醒我 X」但没指定几点时，默认用这个时间（建议 10:00，比 12:00 早）。</p>
       </div>
 
+      {# 每日记账提醒（2026-08-30 增强） #}
+      <div class="lf-setting-row lf-mt-2" style="align-items:flex-start;">
+        <div class="lf-row lf-row--between lf-row--wrap" style="gap:8px;width:100%;">
+          <div style="flex:1;min-width:200px;">
+            <div class="lf-setting-row__label">每日记账提醒</div>
+            <div class="lf-setting-row__hint">开启后，当天还没记账时首页会提示你，并生成一条每日提醒</div>
+          </div>
+          <label class="lf-switch lf-mt-1">
+            <input type="checkbox" name="daily_log_reminder_enabled" id="id_daily_log_reminder_enabled"
+                   {% if form.daily_log_reminder_enabled.value %}checked{% endif %}>
+            <span class="lf-switch__track"><span class="lf-switch__thumb"></span></span>
+          </label>
+        </div>
+        <div class="lf-field lf-mt-3" id="dailyReminderTimeWrap"
+             style="{% if not form.daily_log_reminder_enabled.value %}display:none;{% endif %}">
+          <label for="id_daily_log_reminder_time" class="lf-label">提醒时间（当天未记账时提示）</label>
+          <input type="time" name="daily_log_reminder_time" id="id_daily_log_reminder_time"
+                 class="lf-input lf-num" value="{{ form.daily_log_reminder_time.value|default:'21:00' }}">
+          <p class="lf-help">每天到了这个时间还没记账，就会在首页收到「今天还没记账」的提醒。</p>
+        </div>
+      </div>
+
       <label class="lf-checkbox lf-mt-2">
         <input type="checkbox" name="ai_parsing_enabled" id="id_ai_parsing_enabled"
                {% if form.ai_parsing_enabled.value %}checked{% endif %}>
@@ -372,6 +394,16 @@ LifeOS — 个人主页（合并原 profile + appearance）。
 
   // 显示名：同时更新本页 hero + 首页 hero（如果有打开的）
   var nameInput  = document.getElementById('displayName');
+
+  // 每日记账提醒开关 → 显示/隐藏「提醒时间」输入（2026-08-30 增强）
+  var drToggle = document.getElementById('id_daily_log_reminder_enabled');
+  var drTimeWrap = document.getElementById('dailyReminderTimeWrap');
+  if(drToggle && drTimeWrap){
+    drToggle.addEventListener('change', function(){
+      drTimeWrap.style.display = drToggle.checked ? '' : 'none';
+    });
+  }
+
   var heroName   = document.getElementById('profilePreviewName');
   var heroAvatar = document.getElementById('profileAvatar');
   function applyName(v){

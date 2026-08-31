@@ -6,7 +6,7 @@
   <header class="lf-page-header">
     <h1 class="lf-page-header__title">编辑任务</h1>
     <a href="{% url 'task_list' %}" class="lf-page-header__back" data-back="history">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       返回
     </a>
   </header>
@@ -30,6 +30,17 @@
             <option value="3" {% if task.priority == 3 %}selected{% endif %}>低</option>
           </select>
         </div>
+      </div>
+      <div class="lf-row lf-row--between lf-mt-3" style="gap:12px;">
+        <label class="lf-check lf-check--inline">
+          <input type="checkbox" name="important" value="1" {% if task.important %}checked{% endif %}>
+          <span>重要</span>
+        </label>
+        <label class="lf-check lf-check--inline">
+          <input type="checkbox" name="urgent" value="1" {% if task.urgent %}checked{% endif %}>
+          <span>紧急</span>
+        </label>
+        <span class="lf-text-xs lf-text-faint">用于四象限视图归类</span>
       </div>
       <div class="lf-field">
         <label class="lf-label">描述</label>
@@ -66,6 +77,8 @@
           <input type="number" name="recurrence_days_before" class="lf-input lf-num" min="0" value="{{ task.recurrence_days_before|default:'0' }}">
         </div>
       </div>
+      {% include "life/_tag_picker.html" %}
+
       <div class="lf-row lf-mt-6" style="gap:8px;">
         <button type="submit" class="lf-btn lf-btn--primary">保存</button>
         <a href="{% url 'task_list' %}" class="lf-btn lf-btn--ghost">取消</a>

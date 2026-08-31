@@ -7,13 +7,13 @@
   <header class="lf-page-header">
     <h1 class="lf-page-header__title">{{ month_start|date:"Y年n月" }} 预算</h1>
     <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       首页
     </a>
   </header>
 
   {# ───── Hero：超支时红底，但内部文字强制白色保证对比度 ───── #}
-  <section class="lf-card lf-card--padded lf-mb-4 {% if over_total %}lf-hero--danger{% endif %}" style="{% if not over_total %}background:linear-gradient(135deg,#1e3a8a,#2b56d8 55%,#4b80f0);color:#fff;{% endif %}padding:24px;">
+  <section class="lf-card lf-card--padded lf-mb-4 {% if over_total %}lf-hero--danger{% else %}lf-hero--brand{% endif %}">
     <div class="lf-row" style="gap:24px;align-items:center;">
       <div style="flex:1;min-width:0;">
         <div class="lf-text-sm" style="{% if not over_total %}opacity:.85;{% else %}color:rgba(255,255,255,.85);{% endif %}">总预算</div>
@@ -52,9 +52,10 @@
   {# ───── 30 天趋势 sparkline ───── #}
   {% if trend_30 %}
   <section class="lf-card lf-mb-4">
-    <div class="lf-row lf-row--between lf-mb-3">
-      <h3 class="lf-section-title lf-mb-0">近 30 天支出趋势</h3>
-      <span class="lf-text-xs lf-text-faint">每日合计</span>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">近 30 天支出趋势</h3></div>
+      <span class="lf-section-head__action lf-text-xs lf-text-faint">每日合计</span>
     </div>
     <div class="lf-sparkline">
       {% for d in trend_30 %}
@@ -73,13 +74,13 @@
   {% if savings_tip %}
   <section class="lf-card lf-card--tight lf-mb-4 lf-row" style="gap:12px;align-items:flex-start;padding:16px;">
     {% if savings_tip.tone == 'success' %}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success);flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success);flex-shrink:0;margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>
     {% elif savings_tip.tone == 'danger' %}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger);flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger);flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     {% elif savings_tip.tone == 'warning' %}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning);flex-shrink:0;margin-top:2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning);flex-shrink:0;margin-top:2px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
     {% else %}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info);flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info);flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
     {% endif %}
     <div style="flex:1;min-width:0;">
       <div class="lf-text-sm lf-text-bold" style="margin-bottom:4px;">
@@ -92,7 +93,10 @@
 
   {# ───── 设置总预算 ───── #}
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">设置总预算</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span>
+      <h3 class="lf-section-title lf-mb-0">设置总预算</h3>
+    </div>
     <form method="post">{% csrf_token %}
       <div class="lf-row" style="gap:8px;">
         <div style="flex:1;">
@@ -106,7 +110,10 @@
   {# ───── 分类预算（Top 3 + 全部） ───── #}
   {% if top_spending_cats %}
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">本月支出 Top 3</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+      <h3 class="lf-section-title lf-mb-0">本月支出 Top 3</h3>
+    </div>
     {% for row in top_spending_cats %}
     <div class="lf-row" style="padding:10px 0;border-bottom:1px solid var(--border-soft);{% if forloop.last %}border-bottom:0;{% endif %}">
       <span class="lf-badge {% if forloop.counter == 1 %}lf-badge--danger{% elif forloop.counter == 2 %}lf-badge--warning{% else %}lf-badge--outline{% endif %}" style="min-width:28px;justify-content:center;">{{ forloop.counter }}</span>
@@ -118,7 +125,10 @@
   {% endif %}
 
   <section class="lf-card">
-    <h3 class="lf-section-title">分类预算</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+      <h3 class="lf-section-title lf-mb-0">分类预算</h3>
+    </div>
     <form method="post">{% csrf_token %}
       {% for row in cat_rows %}
       <div class="lf-list-item" style="display:block;padding:14px 0;">

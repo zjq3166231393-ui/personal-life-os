@@ -1,0 +1,75 @@
+{% extends "_base.html" %}
+{% block title %}数据导入 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">数据导入</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <p class="lf-text-sm lf-text-faint lf-mb-4" style="margin-top:-8px;">
+    把其他记账软件的数据导进来。<strong>先上传预览，确认无误后才写入</strong>，不会一上来就改你的数据。
+  </p>
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </span>
+      <div class="lf-section-head__main">
+        <h3 class="lf-section-title lf-mb-0">① 支持这三种文件</h3>
+      </div>
+    </div>
+
+    <ul class="lf-text-sm" style="line-height:1.9;margin:0 0 12px;padding-left:18px;">
+      <li><strong>支付宝账单</strong> — 支付宝 App：我的 → 账单 → 右上角「…」→ 开具交易流水证明 → 用于个人对账 → 发到邮箱</li>
+      <li><strong>微信支付账单</strong> — 微信：我 → 服务 → 钱包 → 账单 → 右上角「常见问题」→ 下载账单 → 用于个人对账 → 发到邮箱</li>
+      <li><strong>LifeOS 导出</strong> — 本应用导出的 CSV，表头为 <span class="lf-num">{{ expected_header|join:"、" }}</span></li>
+    </ul>
+
+    <p class="lf-text-xs lf-text-faint" style="line-height:1.75;">
+      邮箱收到的是<strong>加密压缩包</strong>，解压出里面的 <span class="lf-num">.csv</span> 再上传。<br>
+      两家导出的文件都是 GBK 编码、且带十几行前置说明——这些会自动识别，<strong>直接传原文件就行，不用手工整理</strong>。
+    </p>
+
+    <details class="lf-mt-3">
+      <summary class="lf-text-xs lf-text-faint" style="cursor:pointer;">更多关于过滤规则与自家 CSV 格式…</summary>
+      <div class="lf-text-xs lf-text-faint lf-mt-2" style="line-height:1.75;">
+        · <strong>自动过滤</strong>：交易关闭、已退款、支付失败的单据不计入账目<br>
+        · <strong>不计收支</strong>：余额宝转入、零钱提现这类内部划转不算消费，会跳过<br>
+        · <strong>分类</strong>：按账单自带的「交易分类 / 交易类型」归类，找不到会为你新建<br>
+        · <strong>去重</strong>：按订单号精确判重，同一份账单导入两次也不会翻倍<br>
+        · 自家 CSV 的<strong>日期</strong>支持 2026-08-29 或 2026-08-29 14:30；<strong>类型</strong>填 支出 / 收入 / 转账；<strong>金额</strong>为纯数字；状态与来源两列可留空
+      </div>
+      <div class="lf-mt-2">
+        <a href="{% url 'export_csv' 'expense' %}" class="lf-btn lf-btn--ghost lf-btn--sm">先导出一份当作模板</a>
+      </div>
+    </details>
+  </section>
+
+  <section class="lf-card lf-card--padded">
+    <h2 class="lf-text-sm" style="font-weight:600;margin-bottom:10px;">② 上传并预览</h2>
+    <form method="post" action="{% url 'import_expense' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="lf-field">
+        <input type="file" name="file" id="csvFile" accept=".csv,text/csv" required class="lf-input">
+      </div>
+      <div class="lf-modal__foot" style="margin-top:16px;">
+        <button type="submit" class="lf-btn lf-btn--primary">上传并预览</button>
+        <a href="{% url 'home' %}" class="lf-btn lf-btn--ghost">取消</a>
+      </div>
+    </form>
+    <p class="lf-quick-hint" style="margin-top:14px;">
+      单次最多 {{ max_rows }} 行、5MB。重复记录（同日期 + 同金额 + 同备注）会自动跳过。
+    </p>
+  </section>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

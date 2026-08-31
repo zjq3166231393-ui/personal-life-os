@@ -52,7 +52,7 @@
   };
 })();
 </script>
-<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=7">
+<link rel="stylesheet" href="{% static 'css/lifeos.css' %}?v=17">
 <style>
 /* 密码可见性切换按钮（眼睛图标） */
 .lf-field--pw{position:relative}
@@ -82,8 +82,104 @@
 })();
 </script>
 {% endif %}
+{% if undo_item %}
+{# 删除后的撤销条：URL 带合法 undo token 时由 context processor 注入（P0-4） #}
+<div class="lf-undo-bar" role="status" aria-live="polite">
+  <span class="lf-icon-tile" style="width:34px;height:34px;" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+  </span>
+  <div class="lf-undo-bar__main">
+    <div class="lf-text-sm lf-text-bold">已删除{{ undo_item.kind_label }}「{{ undo_item.title }}」</div>
+    <div class="lf-text-xs lf-text-faint">24 小时内可撤销，也可到回收站恢复</div>
+  </div>
+  <form method="post" action="{% url 'trash_undo' %}" style="margin:0;flex:0 0 auto;">
+    {% csrf_token %}
+    <input type="hidden" name="token" value="{{ undo_item.token }}">
+    <button type="submit" class="lf-btn lf-btn--secondary lf-btn--sm">撤销</button>
+  </form>
+  <a href="{% url 'trash' %}" class="lf-text-xs" style="color:var(--brand);flex:0 0 auto;">回收站</a>
+</div>
+{% endif %}
 {% block body %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
+
+{% comment %}
+全站「快速记账」悬浮按钮（FAB）。
+目标：3 秒记一笔——只填金额即可提交，分类与备注都可选。
+仅已登录的应用页显示（DOM 中存在 .lf-bottom-nav / .lf-sidebar 才显示，
+登录页等静态页自动豁免，与 onboardModal 同一套判定逻辑）。
+{% endcomment %}
+<button type="button" id="quickFab" class="lf-fab is-hidden" aria-label="快速记账" title="快速记账（按 N 键）">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+</button>
+
+<div id="quickModal" class="lf-modal" aria-hidden="true">
+  <div class="lf-modal__mask" data-qclose></div>
+  <div class="lf-modal__panel" role="dialog" aria-modal="true" aria-labelledby="quickTitle">
+    <div class="lf-modal__head">
+      <h3 id="quickTitle" class="lf-modal__title">快速记账</h3>
+      <button type="button" class="lf-modal__x" data-qclose aria-label="关闭">×</button>
+    </div>
+
+    <div class="lf-quick-seg" role="group" aria-label="收支类型">
+      <button type="button" class="lf-quick-seg__btn is-active" data-qtype="expense">支出</button>
+      <button type="button" class="lf-quick-seg__btn" data-qtype="income">收入</button>
+    </div>
+
+    <div class="lf-quick-voice" id="quickVoice" style="margin-top:12px;display:none;">
+      <div class="lf-quick-voice__row">
+        <button type="button" id="quickMic" class="lf-mic" aria-label="语音记账">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg>
+        </button>
+        <span id="quickVoiceStatus" class="lf-text-xs lf-text-faint">点麦克风，说一句「午饭 18 元」</span>
+      </div>
+      <textarea id="quickVoiceText" class="lf-input lf-textarea" rows="2" placeholder="语音转写内容会显示在这里…" readonly></textarea>
+    </div>
+
+    <div class="lf-row" style="gap:8px;margin-top:12px;">
+      <input type="text" id="quickAmount" class="lf-quick-amount" inputmode="decimal"
+             placeholder="0.00" autocomplete="off" aria-label="金额" style="flex:2;">
+      <select id="quickCurrency" class="lf-select" style="flex:1;" aria-label="币种">
+        <option value="CNY">CNY</option>
+        <option value="USD">USD</option>
+        <option value="HKD">HKD</option>
+        <option value="TWD">TWD</option>
+        <option value="JPY">JPY</option>
+        <option value="EUR">EUR</option>
+        <option value="GBP">GBP</option>
+        <option value="KRW">KRW</option>
+        <option value="SGD">SGD</option>
+        <option value="AUD">AUD</option>
+        <option value="THB">THB</option>
+        <option value="MYR">MYR</option>
+      </select>
+    </div>
+
+    <div class="lf-quick-cats" id="quickCats" style="margin-top:10px;">
+      <span class="lf-text-xs lf-text-faint">分类加载中…</span>
+    </div>
+
+    <div style="margin-top:10px;">
+      <input type="text" id="quickNote" class="lf-input" placeholder="备注（可选）" autocomplete="off" maxlength="100">
+    </div>
+
+    <div style="margin-top:10px;">
+      <label class="lf-label" for="quickAccount">账户（可选）</label>
+      <select id="quickAccount" class="lf-select">
+        <option value="">未指定</option>
+        {% for a in active_accounts %}<option value="{{ a.pk }}">{{ a.display_icon }} {{ a.name }}</option>{% endfor %}
+      </select>
+    </div>
+
+    <div class="lf-quick-err" id="quickErr"></div>
+    <p class="lf-quick-hint">只填金额即可保存，分类与备注都可以留空。按 Esc 关闭。</p>
+
+    <div class="lf-modal__foot">
+      <button type="button" class="lf-btn lf-btn--ghost" data-qclose>取消</button>
+      <button type="button" class="lf-btn lf-btn--primary" id="quickSave">保存</button>
+    </div>
+  </div>
+</div>
 {% comment %}新用户首次引导弹窗：localStorage 'lifeos-onboarded' 控制只弹一次；仅已登录 app 页（DOM 中存在 .lf-bottom-nav/.lf-sidebar）弹出，login 等静态页自动豁免。{% endcomment %}
 <div id="onboardModal" class="lf-modal" aria-hidden="true">
   <div class="lf-modal__mask" data-close></div>
@@ -98,29 +194,207 @@
     </div>
   </div>
 </div>
+{% comment %}全局快捷键帮助弹窗：按 ? 打开，列出 N/S//Esc 等快捷键。仅在非输入态触发。{% endcomment %}
+<div id="shortcutHelp" class="lf-modal" aria-hidden="true">
+  <div class="lf-modal__mask" data-shclose></div>
+  <div class="lf-modal__panel" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+    <div class="lf-modal__head">
+      <h3 id="shTitle" class="lf-modal__title">⌨️ 键盘快捷键</h3>
+      <button type="button" class="lf-modal__x" data-shclose aria-label="关闭">×</button>
+    </div>
+    <ul class="lf-kbd-list">
+      <li><span class="lf-kbd">N</span><span>快速记账（打开记账弹窗）</span></li>
+      <li><span class="lf-kbd">S</span><span>前往搜索</span></li>
+      <li><span class="lf-kbd">/</span><span>聚焦 / 打开搜索框</span></li>
+      <li><span class="lf-kbd">?</span><span>显示本帮助</span></li>
+      <li><span class="lf-kbd">Esc</span><span>关闭弹窗</span></li>
+    </ul>
+    <div class="lf-modal__foot">
+      <button type="button" class="lf-btn lf-btn--primary" data-shclose>知道了</button>
+    </div>
+  </div>
+</div>
 {% block scripts %}{% endblock %}
+<script>
+// 移动端滑动手势（P1-6）：列表项左滑揭示「编辑 / 删除」操作。
+// 用 Pointer Events 同时兼容触摸与鼠标拖拽；竖滑照常滚动页面。
+(function () {
+  var OPEN = 152; // 与 CSS 中两个动作宽度（2×76）一致
+  function init() {
+    document.querySelectorAll('[data-swipe]').forEach(function (row) {
+      if (row._swipeBound) return;
+      row._swipeBound = true;
+      var content = row.querySelector('.lf-swipe__content');
+      if (!content) return;
+      var startX = 0, startY = 0, dx = 0, dragging = false, decided = false, horiz = false;
+
+      row.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        startX = e.clientX; startY = e.clientY; dx = 0;
+        dragging = true; decided = false; horiz = false;
+        content.style.transition = 'none';
+      });
+      row.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var mx = e.clientX - startX, my = e.clientY - startY;
+        if (!decided) {
+          if (Math.abs(mx) > 8 || Math.abs(my) > 8) {
+            decided = true;
+            horiz = Math.abs(mx) > Math.abs(my);
+            if (horiz) e.preventDefault();
+          }
+        }
+        if (decided && horiz) {
+          dx = mx;
+          if (dx > 0) dx = dx * 0.3;                       // 右滑回弹
+          if (dx < -OPEN) dx = -OPEN + (dx + OPEN) * 0.3;  // 左滑越界阻尼
+          content.style.transform = 'translateX(' + dx + 'px)';
+        }
+      });
+      function end() {
+        if (!dragging) return;
+        dragging = false;
+        content.style.transition = '';
+        if (decided && horiz && dx < -OPEN / 2) {
+          row.classList.add('is-open');
+          content.style.transform = '';
+        } else {
+          row.classList.remove('is-open');
+          content.style.transform = '';
+        }
+      }
+      row.addEventListener('pointerup', end);
+      row.addEventListener('pointercancel', end);
+      row.addEventListener('click', function (e) {
+        if (!row.classList.contains('is-open')) return;
+        if (e.target.closest('.lf-swipe__action')) return; // 让操作按钮正常触发
+        e.preventDefault();
+        row.classList.remove('is-open');
+        content.style.transform = '';
+      });
+    });
+  }
+  if (document.readyState !== 'loading') init();
+  else document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
 <script src="{% static 'js/i18n.js' %}?v=2" defer></script>
 <script>
-// Smart back: any link with [data-back="history"] uses the browser's history
-// stack when the previous page belongs to this app (same-origin), and falls
-// back to the link's href otherwise. This is how Notion / Apple Notes /
-// Bear all behave: edit pages always bring you back where you came from.
-(function(){
-  document.addEventListener('click', function(ev){
-    var a = ev.target.closest && ev.target.closest('a[data-back="history"]');
-    if(!a) return;
+// 页面前进 / 返回过渡 + 智能返回 + 左边缘滑动返回。
+// 全部基于 View Transitions API 做渐进增强：浏览器不支持，或用户偏好
+// “减少动效”时，自动降级为普通跳转，功能不受影响。
+(function () {
+  var prefersReduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  var supportsVT = typeof document.startViewTransition === 'function';
+  // 滑动过渡仅在移动端（底部导航模式）启用：桌面端侧边栏是常驻框架，
+  // 让整页（含侧边栏）滑动会显得“框架在动”，不符合桌面原生预期，故桌面直接即时跳转。
+  var isMobileNav = !!(window.matchMedia && window.matchMedia('(max-width: 1023px)').matches);
+
+  function sameOrigin(href) {
+    try { return new URL(href, location.href).origin === location.origin; }
+    catch (e) { return false; }
+  }
+  // 仅当站内有上一页时才回退，避免退回刷新态或站外。
+  function canGoBack() {
+    if (window.history.length <= 1) return false;
+    var ref = document.referrer;
+    return !!ref && ref.indexOf(location.origin) === 0;
+  }
+  function clearDir() { document.documentElement.removeAttribute('data-nav-dir'); }
+
+  function backWithTransition() {
+    if (supportsVT && !prefersReduce && isMobileNav) {
+      document.documentElement.setAttribute('data-nav-dir', 'back');
+      var vt = document.startViewTransition(function () { window.history.back(); });
+      if (vt && vt.finished) vt.finished.finally(clearDir);
+    } else {
+      window.history.back();
+    }
+  }
+  function forwardWithTransition(href) {
+    if (supportsVT && !prefersReduce && isMobileNav) {
+      document.documentElement.setAttribute('data-nav-dir', 'forward');
+      var vt = document.startViewTransition(function () { window.location.href = href; });
+      if (vt && vt.finished) vt.finished.finally(clearDir);
+    } else {
+      window.location.href = href;
+    }
+  }
+  // 智能返回：能回退则回退（带滑动），否则跳到 href（列表页兜底）。
+  function smartBack(href) {
+    if (canGoBack()) { backWithTransition(); }
+    else if (href && href !== '#') { forwardWithTransition(href); }
+    else { window.history.back(); }
+  }
+  window.__lifeosGoBack = smartBack;
+
+  // 统一拦截站内普通链接：data-back 走返回，其余走前进滑动。
+  document.addEventListener('click', function (ev) {
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var a = ev.target.closest && ev.target.closest('a');
+    if (!a) return;
     var href = a.getAttribute('href');
-    if(!href || href === '#') return;
-    try {
-      // Came from inside this app? Go back. Otherwise follow the link target.
-      var ref = document.referrer;
-      if(ref && ref.indexOf(window.location.origin) === 0){
-        ev.preventDefault();
-        if(window.history.length > 1){ window.history.back(); }
-        else { window.location.href = href; }
-      }
-    } catch(e) { /* ignore — let the link do its default thing */ }
+    if (!href || href === '#' || href.charAt(0) === '#' || href.charAt(0) === '?') return;
+    if (a.hasAttribute('target') && a.getAttribute('target') !== '_self') return;
+    if (a.hasAttribute('download')) return;
+    if (a.hasAttribute('data-no-transition')) return;
+    if (href.indexOf('/api/') === 0) return;     // 内部 API 不拦截
+    if (!sameOrigin(href)) return;                // 站外链接走默认
+
+    ev.preventDefault();
+    if (a.hasAttribute('data-back')) smartBack(href);
+    else forwardWithTransition(href);
   });
+
+  // 左边缘滑动返回（移动端原生手势）。
+  // 仅从最左 24px 触发，且不与列表行左滑（[data-swipe]）冲突。
+  var EDGE = 24, THRESH = 60;
+  var main = document.querySelector('main') || document.body;
+  var sx = 0, sy = 0, dx = 0, drag = false, horiz = false, decided = false;
+
+  document.addEventListener('pointerdown', function (e) {
+    // 左边缘滑动返回是移动端原生手势，桌面鼠标不应触发（避免误伤文本选择拖拽）。
+    if (e.pointerType === 'mouse') return;
+    if (e.clientX > EDGE) return;
+    if (e.target.closest && e.target.closest('[data-swipe]')) return;
+    sx = e.clientX; sy = e.clientY; dx = 0;
+    drag = true; decided = false; horiz = false;
+  }, { passive: true });
+
+  document.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var mx = e.clientX - sx, my = e.clientY - sy;
+    if (!decided) {
+      if (Math.abs(mx) > 8 || Math.abs(my) > 8) {
+        decided = true; horiz = Math.abs(mx) > Math.abs(my);
+        if (horiz && e.cancelable) e.preventDefault();
+      }
+    }
+    if (decided && horiz) {
+      // 只允许向右拖 + 越界阻尼
+      dx = mx > 0 ? (mx > THRESH ? THRESH + (mx - THRESH) * 0.3 : mx) : 0;
+      main.style.transition = 'none';
+      main.style.transform = 'translateX(' + dx + 'px)';
+      main.style.willChange = 'transform';
+    }
+  }, { passive: false });
+
+  function endSwipe() {
+    if (!drag) return;
+    drag = false;
+    main.style.willChange = '';
+    if (decided && horiz && dx >= THRESH && canGoBack()) {
+      main.style.transition = '';
+      main.style.transform = '';
+      backWithTransition();
+    } else {
+      main.style.transition = 'transform .2s ease';
+      main.style.transform = '';
+      setTimeout(function () { main.style.transition = ''; }, 220);
+    }
+  }
+  document.addEventListener('pointerup', endSwipe);
+  document.addEventListener('pointercancel', endSwipe);
 })();
 </script>
 <script>
@@ -158,6 +432,302 @@ if ('serviceWorker' in navigator) {
 })();
 </script>
 <script>
+// ── 全站快速记账（FAB）────────────────────────────────────────────
+// 只在已登录的应用页激活（DOM 里存在 .lf-bottom-nav / .lf-sidebar）。
+// 分类按需懒加载：面板首次打开时才请求 /api/quick-categories/，
+// 避免给每个页面都加一次数据库查询。
+(function(){
+  var fab = document.getElementById('quickFab');
+  var modal = document.getElementById('quickModal');
+  if(!fab || !modal) return;
+  // 静态页（登录/注册等）没有导航，直接跳过且不显示按钮
+  if(!document.querySelector('.lf-bottom-nav, .lf-sidebar')) return;
+
+  var amountEl = document.getElementById('quickAmount');
+  var noteEl = document.getElementById('quickNote');
+  var accountEl = document.getElementById('quickAccount');
+  var catsEl = document.getElementById('quickCats');
+  var errEl = document.getElementById('quickErr');
+  var saveBtn = document.getElementById('quickSave');
+  var typeBtns = modal.querySelectorAll('[data-qtype]');
+
+  var currentType = 'expense';
+  var currentCatId = null;
+  var userPickedCat = false;  // 用户是否手动点过分类；手动选了就以用户的为准
+  var catsLoadedFor = null;   // 缓存：记录已加载过哪个类型的分类
+  var submitting = false;
+  var suggestTimer = null;
+
+  // ── 语音记账（Web Speech API，zh-CN）────────────────────────
+  // 浏览器不支持时静默隐藏麦克风入口，不影响手动记账。
+  var voiceWrap = document.getElementById('quickVoice');
+  var micBtn = document.getElementById('quickMic');
+  var voiceStatus = document.getElementById('quickVoiceStatus');
+  var voiceText = document.getElementById('quickVoiceText');
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recog = null, recognizing = false;
+  if(voiceWrap){
+    if(!SR){
+      voiceWrap.style.display = 'none';
+    } else {
+      voiceWrap.style.display = '';
+      recog = new SR();
+      recog.lang = 'zh-CN';
+      recog.interimResults = false;
+      recog.maxAlternatives = 1;
+      recog.onresult = function(e){
+        var transcript = (e.results && e.results[0] && e.results[0][0].transcript || '').trim();
+        if(voiceText) voiceText.value = transcript;
+        if(transcript) submitVoice(transcript);
+      };
+      recog.onerror = function(e){
+        setVoiceStatus('没听清，再试一次或手动记账');
+        stopMic();
+      };
+      recog.onend = function(){ if(recognizing) stopMic(); };
+
+      if(micBtn) micBtn.addEventListener('click', function(){
+        if(recognizing){ stopMic(); return; }
+        try { recog.start(); } catch(e){ return; }
+        recognizing = true;
+        micBtn.classList.add('is-recording');
+        setVoiceStatus('聆听中…说完自动记账');
+      });
+    }
+  }
+  function setVoiceStatus(msg){ if(voiceStatus) voiceStatus.textContent = msg; }
+  function stopMic(){
+    recognizing = false;
+    if(micBtn) micBtn.classList.remove('is-recording');
+    if(recog) { try { recog.stop(); } catch(e){} }
+  }
+  function submitVoice(transcript){
+    setVoiceStatus('识别中…');
+    fetch('/api/voice-expense/', {
+      method:'POST', credentials:'same-origin',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},
+      body: JSON.stringify({text: transcript})
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      stopMic();
+      if(d && d.ok){
+        toast((d.type_display||'已记录') + ' ¥' + d.amount + (d.category ? ' · ' + d.category : '') + (d.note ? ' · ' + d.note : ''));
+        if(voiceText) voiceText.value = '';
+        setVoiceStatus('点麦克风，说一句「午饭 18 元」');
+        close();
+      } else {
+        // 没识别成账（如无金额/是任务）：把文本放进备注，交回手动记账
+        if(noteEl && d && d.title){ noteEl.value = d.title; }
+        if(amountEl) amountEl.focus();
+        setVoiceStatus((d && d.error) ? d.error : '未识别为账单，已放入备注');
+      }
+    })
+    .catch(function(){ stopMic(); setVoiceStatus('网络异常，请手动记账'); });
+  }
+
+  fab.classList.remove('is-hidden');
+
+  function csrf(){
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function showErr(msg){
+    if(!errEl) return;
+    errEl.textContent = msg || '';
+    errEl.classList.toggle('is-shown', !!msg);
+  }
+
+  function open(){
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    showErr('');
+    loadCats(currentType);
+    if(amountEl) setTimeout(function(){ amountEl.focus(); amountEl.select(); }, 60);
+  }
+
+  function close(){
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    if(amountEl) amountEl.value = '';
+    if(noteEl) noteEl.value = '';
+    if(accountEl) accountEl.value = '';
+    currentCatId = null;
+    showErr('');
+    // 语音 UI 复位（麦克风态/转写文本/状态文案）
+    stopMic();
+    var vt = document.getElementById('quickVoiceText'); if(vt) vt.value = '';
+    var vs = document.getElementById('quickVoiceStatus'); if(vs) vs.textContent = '点麦克风，说一句「午饭 18 元」';
+  }
+
+  function loadCats(type){
+    if(catsLoadedFor === type && catsEl && catsEl.dataset.ready === '1') return;
+    if(!catsEl) return;
+    catsEl.innerHTML = '<span class="lf-text-xs lf-text-faint">分类加载中…</span>';
+    fetch('/api/quick-categories/?type=' + encodeURIComponent(type), {credentials:'same-origin'})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data.ok || !data.categories.length){
+          catsEl.innerHTML = '<span class="lf-text-xs lf-text-faint">暂无可用分类，可先到「分类」页添加</span>';
+          return;
+        }
+        catsEl.innerHTML = '';
+        data.categories.forEach(function(c){
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'lf-quick-cat';
+          b.textContent = c.name;
+          b.setAttribute('data-cid', c.id);
+          b.addEventListener('click', function(){
+            catsEl.querySelectorAll('.lf-quick-cat').forEach(function(x){ x.classList.remove('is-active'); });
+            b.classList.add('is-active');
+            currentCatId = c.id;
+            userPickedCat = true;
+          });
+          catsEl.appendChild(b);
+        });
+        catsEl.dataset.ready = '1';
+        catsLoadedFor = type;
+      })
+      .catch(function(){
+        catsEl.innerHTML = '<span class="lf-text-xs lf-text-faint">分类加载失败，可跳过</span>';
+      });
+  }
+
+  function setType(t){
+    currentType = t;
+    currentCatId = null;
+    userPickedCat = false;
+    if(typeBtns.forEach) typeBtns.forEach(function(b){ b.classList.toggle('is-active', b.getAttribute('data-qtype') === t); });
+    if(catsEl) catsEl.dataset.ready = '0';
+    loadCats(t);
+  }
+
+  // 输入备注时实时向规则引擎问「该归哪类」，用户没手动选过才自动预选
+  function onNoteInput(){
+    if(userPickedCat) return;
+    var q = (noteEl && noteEl.value || '').trim();
+    if(suggestTimer) clearTimeout(suggestTimer);
+    suggestTimer = setTimeout(function(){
+      if(!q){ return; }
+      fetch('/api/suggest-category/?q=' + encodeURIComponent(q) + '&type=' + encodeURIComponent(currentType), {credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(!d.ok || !d.category_id) return;
+          var chip = catsEl && catsEl.querySelector('.lf-quick-cat[data-cid="' + d.category_id + '"]');
+          if(!chip) return;
+          catsEl.querySelectorAll('.lf-quick-cat').forEach(function(x){ x.classList.remove('is-active'); });
+          chip.classList.add('is-active');
+          currentCatId = d.category_id;
+        })
+        .catch(function(){});
+    }, 350);
+  }
+
+  function toast(msg){
+    var stack = document.getElementById('lf-toast-stack');
+    if(!stack){
+      stack = document.createElement('div');
+      stack.id = 'lf-toast-stack';
+      stack.className = 'lf-toast-stack';
+      document.body.appendChild(stack);
+    }
+    var t = document.createElement('div');
+    t.className = 'lf-toast lf-toast--success';
+    t.setAttribute('role', 'status');
+    t.textContent = msg;
+    stack.appendChild(t);
+    setTimeout(function(){
+      t.classList.add('is-leaving');
+      setTimeout(function(){ t.remove(); }, 240);
+    }, 2200);
+  }
+
+  function submit(){
+    if(submitting) return;
+    var raw = (amountEl && amountEl.value || '').trim();
+    if(!raw){ showErr('请输入金额'); if(amountEl) amountEl.focus(); return; }
+    // 前端先做一次轻量校验，避免无谓请求；真正的校验以后端为准
+    if(!/^\d+(\.\d{1,2})?$/.test(raw)){ showErr('金额格式不对，最多两位小数'); if(amountEl) amountEl.focus(); return; }
+
+    submitting = true;
+    if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = '保存中…'; }
+    showErr('');
+
+    fetch('/api/quick-expense/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify({
+        amount: raw,
+        type: currentType,
+        currency: (document.getElementById('quickCurrency') || {}).value || 'CNY',
+        category_id: currentCatId,
+        account_id: accountEl ? (accountEl.value || null) : null,
+        note: noteEl ? noteEl.value.trim() : ''
+      })
+    })
+    .then(function(r){ return r.json().then(function(d){ return {status: r.status, data: d}; }); })
+    .then(function(res){
+      if(!res.data.ok){
+        showErr(res.data.error || '保存失败，请重试');
+        return;
+      }
+      var d = res.data;
+      toast('已记录 ' + d.type_display + ' ¥' + d.amount + (d.note ? ' · ' + d.note : ''));
+      close();
+    })
+    .catch(function(){
+      showErr('网络异常，请重试');
+    })
+    .then(function(){
+      submitting = false;
+      if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = '保存'; }
+    });
+  }
+
+  fab.addEventListener('click', open);
+  if(saveBtn) saveBtn.addEventListener('click', submit);
+  if(typeBtns.forEach) typeBtns.forEach(function(b){ b.addEventListener('click', function(){ setType(b.getAttribute('data-qtype')); }); });
+  if(amountEl) amountEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); submit(); }
+  });
+  if(noteEl) noteEl.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault(); submit(); }
+  });
+  if(noteEl) noteEl.addEventListener('input', onNoteInput);
+  var qclosers = modal.querySelectorAll('[data-qclose]');
+  if(qclosers.forEach) qclosers.forEach(function(el){ el.addEventListener('click', close); });
+  function isTyping(e){
+    var tag = (e.target && e.target.tagName || '').toLowerCase();
+    if(tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!(e.target && e.target.isContentEditable);
+  }
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && modal.classList.contains('is-open')){ close(); return; }
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(isTyping(e)) return;
+    if(modal.classList.contains('is-open')) return;
+
+    if(e.key === 'n' || e.key === 'N'){
+      // N：快速记账
+      e.preventDefault();
+      open();
+    } else if(e.key === '/'){
+      // /：打开搜索（已在搜索页则聚焦输入框并全选）
+      var si = document.getElementById('searchInput');
+      if(si){ e.preventDefault(); si.focus(); si.select(); }
+      else { e.preventDefault(); window.location.href = '/search/'; }
+    }
+  });
+
+  // 暴露给首页 nudge「记一笔」按钮（2026-08-30 增强）
+  window.__openQuickAdd = open;
+})();
+</script>
+<script>
 // 密码可见性切换：点击眼睛图标在 password / text 之间切换，便于核对输入
 (function(){
   var EYE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -176,6 +746,50 @@ if ('serviceWorker' in navigator) {
     });
   }
   document.querySelectorAll('.lf-pw-toggle').forEach(bind);
+})();
+</script>
+<script>
+// ── 全局快捷键（S 搜索 / ? 帮助） ──
+// N 与 / 已由快速记账 FAB 模块处理；此处补齐 S 与 ?。
+// 规则：组合键（Ctrl/Meta/Alt）或正在输入框打字时不触发，避免与正常输入冲突。
+(function(){
+  function isTyping(e){
+    var tag = (e.target && e.target.tagName || '').toLowerCase();
+    if(tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return !!(e.target && e.target.isContentEditable);
+  }
+  function openHelp(){
+    var m = document.getElementById('shortcutHelp');
+    if(!m) return;
+    m.classList.add('is-open'); m.setAttribute('aria-hidden', 'false');
+  }
+  function closeHelp(){
+    var m = document.getElementById('shortcutHelp');
+    if(!m) return;
+    m.classList.remove('is-open'); m.setAttribute('aria-hidden', 'true');
+  }
+  function helpOpen(){
+    var m = document.getElementById('shortcutHelp');
+    return m && m.classList.contains('is-open');
+  }
+  document.addEventListener('keydown', function(e){
+    if(e.metaKey || e.ctrlKey || e.altKey) return;
+    if(isTyping(e)) return;
+    if(e.key === '?'){ e.preventDefault(); openHelp(); return; }
+    if((e.key === 's' || e.key === 'S') && !helpOpen()){
+      e.preventDefault();
+      var si = document.getElementById('searchInput');
+      if(si){ si.focus(); si.select(); } else { window.location.href = '/search/'; }
+      return;
+    }
+    if(e.key === 'Escape'){ closeHelp(); }
+  });
+  var m = document.getElementById('shortcutHelp');
+  if(m){
+    m.addEventListener('click', function(e){
+      if(e.target && e.target.getAttribute && e.target.getAttribute('data-shclose') !== null) closeHelp();
+    });
+  }
 })();
 </script>
 </body>

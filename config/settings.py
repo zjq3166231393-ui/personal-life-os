@@ -37,6 +37,7 @@ MIDDLEWARE = [
     "life.middleware.LoginRateLimitMiddleware",
     "life.middleware.ApiRateLimitMiddleware",
     "life.middleware.NoBrowserCacheMiddleware",
+    "life.middleware.AdminAccessMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -48,6 +49,8 @@ TEMPLATES = [{
         "django.template.context_processors.request",
         "django.contrib.auth.context_processors.auth",
         "django.contrib.messages.context_processors.messages",
+        "life.context_processors.accounts",
+        "life.context_processors.undo_state",
     ]},
 }]
 WSGI_APPLICATION = "config.wsgi.application"
@@ -206,6 +209,14 @@ LOGGING = {
         "django.security": {"handlers": ["error_file"], "level": "WARNING", "propagate": False},
     },
 }
+
+# ── OCR（图片识别记账）──────────────────────────────────────────
+# 引擎：tesseract（默认，本地）| cloud（外部云服务）| mock（测试）
+OCR_PROVIDER = os.getenv("OCR_PROVIDER", "tesseract")
+OCR_TESSERACT_LANG = os.getenv("OCR_TESSERACT_LANG", "chi_sim+eng")
+OCR_CLOUD_ENDPOINT = os.getenv("OCR_CLOUD_ENDPOINT", "")
+OCR_CLOUD_API_KEY = os.getenv("OCR_CLOUD_API_KEY", "")
+OCR_CLOUD_TYPE = os.getenv("OCR_CLOUD_TYPE", "generic")
 
 # ── Static files ────────────────────────────────────────────────
 STATIC_ROOT = BASE_DIR / "staticfiles"

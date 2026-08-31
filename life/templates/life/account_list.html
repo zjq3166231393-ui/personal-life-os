@@ -1,0 +1,86 @@
+{% extends "_base.html" %}
+{% block title %}账户 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:720px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">账户</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  <p class="lf-text-sm lf-text-faint lf-mb-4" style="margin-top:-8px;">
+    账户回答「<strong>钱从哪出</strong>」，分类回答「钱花在哪」——两者独立。
+    余额由流水自动推算：<strong>初始余额 + 收入 − 支出 − 转出 + 转入</strong>。
+  </p>
+
+  {# ───── 总资产 ───── #}
+  <section class="lf-card lf-card--padded lf-mb-3" style="background:linear-gradient(135deg,rgba(var(--brand-rgb),.08),transparent);">
+    <div class="lf-text-xs lf-text-faint">总资产（各账户余额合计）</div>
+    <div class="lf-amount lf-amount--lg lf-num lf-mt-1">¥{{ total|floatformat:2 }}</div>
+    <div class="lf-text-xs lf-text-faint lf-mt-1">共 {{ count }} 个账户</div>
+  </section>
+
+  {# ───── 账户列表 ───── #}
+  {% if rows %}
+    <section class="lf-card" style="padding:0;overflow:hidden;">
+      {% for r in rows %}
+        <div class="lf-acc-row">
+          <a href="{% url 'account_detail' r.obj.pk %}" style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-decoration:none;color:inherit;">
+            <span class="lf-acc-icon">{{ r.obj.display_icon }}</span>
+            <span style="flex:1;min-width:0;">
+              <span class="lf-result-row__title" style="display:block;">{{ r.obj.name }}</span>
+              <span class="lf-result-row__meta" style="margin-top:2px;">
+                <span>{{ r.obj.get_type_display }}</span>
+                {% if not r.obj.is_active %}<span class="lf-badge lf-badge--soft">已停用</span>{% endif %}
+              </span>
+            </span>
+            <span class="lf-result-row__amount lf-num {% if r.balance < 0 %}is-negative{% else %}is-expense{% endif %}">¥{{ r.balance|floatformat:2 }}</span>
+          </a>
+          <a href="{% url 'account_edit' r.obj.pk %}" class="lf-btn lf-btn--ghost lf-btn--sm" title="编辑">编辑</a>
+        </div>
+      {% endfor %}
+    </section>
+  {% else %}
+    <div class="lf-card lf-empty">
+      <svg class="lf-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+      <p class="lf-empty__text">还没有账户</p>
+      <p class="lf-text-xs lf-text-faint">先建一个「现金」和「支付宝」，之后记账就能分清钱从哪出。</p>
+    </div>
+  {% endif %}
+
+  {# ───── 新建账户 ───── #}
+  <section class="lf-card lf-card--padded lf-mt-3">
+    <h2 class="lf-text-sm" style="font-weight:600;margin-bottom:10px;">新建账户</h2>
+    <form method="post" action="{% url 'account_create' %}">
+      {% csrf_token %}
+      <div class="lf-row lf-row--wrap" style="gap:10px;align-items:flex-end;">
+        <div class="lf-field" style="flex:2;min-width:140px;">
+          <label for="accName" class="lf-label">名称</label>
+          <input type="text" name="name" id="accName" class="lf-input" placeholder="如：招商银行卡" maxlength="50" required>
+        </div>
+        <div class="lf-field" style="flex:1;min-width:110px;">
+          <label for="accType" class="lf-label">类型</label>
+          <select name="type" id="accType" class="lf-select">
+            {% for val, label in types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="lf-field" style="flex:1;min-width:100px;">
+          <label for="accInit" class="lf-label">初始余额</label>
+          <input type="text" name="initial_balance" id="accInit" class="lf-input lf-num" placeholder="0.00" inputmode="decimal">
+        </div>
+      </div>
+      <div class="lf-modal__foot" style="margin-top:16px;">
+        <button type="submit" class="lf-btn lf-btn--primary">+ 创建账户</button>
+      </div>
+    </form>
+    <p class="lf-quick-hint">初始余额只填「现在这一刻」的余额，之后由流水自动推算，不需要重复录入历史。</p>
+  </section>
+
+</main>
+{% endblock %}
+
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

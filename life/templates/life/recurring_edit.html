@@ -7,7 +7,7 @@
   <header class="lf-page-header">
     <h1 class="lf-page-header__title">{% if item %}编辑{% else %}新增{% endif %}固定支出</h1>
     <a href="{% url 'recurring_list' %}" class="lf-page-header__back" data-back="history">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       返回
     </a>
   </header>
@@ -52,6 +52,15 @@
           <label class="lf-label">结束日期</label>
           <input type="date" name="end_date" class="lf-input" value="{{ item.end_date|date:'Y-m-d'|default:'' }}" placeholder="留空=无截止">
         </div>
+      </div>
+      <div class="lf-ios-row">
+        <label class="lf-ios-row__label">到期自动入账</label>
+        <label class="lf-ios-toggle {% if item.auto_post or not item %}is-on{% endif %}">
+          <input type="checkbox" name="auto_post" {% if item.auto_post or not item %}checked{% endif %}>
+        </label>
+      </div>
+      <div class="lf-field" style="margin-top:-4px;">
+        <div class="lf-help">开启后，每到扣款日自动生成一笔账目（已手动记过的会跳过，不会重复）。关闭则只提醒、不记账。</div>
       </div>
       <div class="lf-field">
         <label class="lf-label">提前提醒天数</label>

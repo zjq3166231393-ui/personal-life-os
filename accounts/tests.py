@@ -158,7 +158,7 @@ class UserProfileTests(TestCase):
             "display_name": "小明", "timezone": "Asia/Tokyo",
             "currency": "JPY", "monthly_budget": "5000.00",
             "ai_parsing_enabled": "on", "daily_ai_limit": "10",
-            "default_reminder_time": "10:00",
+            "default_reminder_time": "10:00", "daily_log_reminder_time": "21:00",
         })
         self.assertRedirects(response, reverse("profile"))
         profile = user.profile

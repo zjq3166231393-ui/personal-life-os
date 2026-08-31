@@ -14,10 +14,11 @@ def my_audit_log(request):
 
 @login_required
 def notification_list(request):
-    notifs = NotificationLog.objects.filter(user=request.user).order_by(
-        "-scheduled_at"
-    )[:50]
-    unread_count = notifs.filter(status__in=["pending", "delivered"]).count()
+    base = NotificationLog.objects.filter(user=request.user)
+    # 先聚合、后切片：切片后的 queryset 不能再 filter，否则抛
+    # "Cannot filter a query once a slice has been taken"
+    unread_count = base.filter(status__in=["pending", "delivered"]).count()
+    notifs = base.order_by("-scheduled_at")[:50]
     return render(request, "common/notification_list.html", {
         "notifications": notifs,
         "unread_count": unread_count,

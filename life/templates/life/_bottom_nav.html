@@ -7,37 +7,37 @@ Active state computed from request.resolver_match.url_name.
 <nav class="lf-bottom-nav" role="navigation" aria-label="主导航">
   <a href="{% url 'home' %}" class="lf-bottom-nav__item {% if url_name == 'home' or url_name == '' %}is-active{% endif %}">
     <span class="lf-bottom-nav__icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 4l9 5.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5z"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 4l9 5.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5z"/></svg>
     </span>
     <span>首页</span>
   </a>
   <a href="{% url 'expense_list' %}" class="lf-bottom-nav__item {% if url_name == 'expense_list' or url_name == 'expense_detail' or url_name == 'expense_edit' %}is-active{% endif %}">
     <span class="lf-bottom-nav__icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
     </span>
     <span>账目</span>
   </a>
   <a href="{% url 'daily_list' %}" class="lf-bottom-nav__item {% if url_name == 'daily_list' or url_name == 'daily_create' or url_name == 'daily_edit' %}is-active{% endif %}">
     <span class="lf-bottom-nav__icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
     </span>
     <span>打卡</span>
   </a>
   <a href="{% url 'dashboard' %}" class="lf-bottom-nav__item {% if url_name == 'dashboard' %}is-active{% endif %}">
     <span class="lf-bottom-nav__icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
     </span>
     <span>看板</span>
   </a>
   <a href="{% url 'note_list' %}" class="lf-bottom-nav__item {% if url_name == 'note_list' or url_name == 'note_detail' or url_name == 'note_edit' or url_name == 'note_create' %}is-active{% endif %}">
     <span class="lf-bottom-nav__icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     </span>
     <span>随心记</span>
   </a>
   <a href="{% url 'profile' %}" class="lf-bottom-nav__item {% if url_name == 'profile' or url_name == 'appearance' or url_name == 'delete_account' %}is-active{% endif %}">
     <span class="lf-bottom-nav__icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18a6 6 0 0 1 11 0"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18a6 6 0 0 1 11 0"/></svg>
     </span>
     <span>我的</span>
   </a>
@@ -55,53 +55,121 @@ bottom nav is shown there instead.
   </div>
   <div class="lf-sidebar__section">主导航</div>
   <a href="{% url 'home' %}" class="lf-sidebar__item {% if url_name == 'home' or url_name == '' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 4l9 5.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5z"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 4l9 5.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V9.5z"/></svg></span>
     <span>首页</span>
   </a>
   <a href="{% url 'expense_list' %}" class="lf-sidebar__item {% if url_name == 'expense_list' or url_name == 'expense_detail' or url_name == 'expense_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
     <span>账目</span>
   </a>
   <a href="{% url 'daily_list' %}" class="lf-sidebar__item {% if url_name == 'daily_list' or url_name == 'daily_create' or url_name == 'daily_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
     <span>打卡</span>
   </a>
   <a href="{% url 'dashboard' %}" class="lf-sidebar__item {% if url_name == 'dashboard' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
     <span>看板</span>
   </a>
+  <a href="{% url 'reports' %}" class="lf-sidebar__item {% if url_name == 'reports' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+    <span>报表</span>
+  </a>
+  <a href="{% url 'calendar' %}" class="lf-sidebar__item {% if url_name == 'calendar' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+    <span>日历</span>
+  </a>
   <a href="{% url 'note_list' %}" class="lf-sidebar__item {% if url_name == 'note_list' or url_name == 'note_detail' or url_name == 'note_edit' or url_name == 'note_create' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></span>
     <span>随心记</span>
   </a>
   <a href="{% url 'profile' %}" class="lf-sidebar__item {% if url_name == 'profile' or url_name == 'appearance' or url_name == 'delete_account' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18a6 6 0 0 1 11 0"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="10" r="3"/><path d="M6.5 18a6 6 0 0 1 11 0"/></svg></span>
     <span>我的</span>
+  </a>
+  <a href="{% url 'search' %}" class="lf-sidebar__item {% if url_name == 'search' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+    <span>搜索</span>
   </a>
   <div class="lf-sidebar__section">功能</div>
   <a href="{% url 'task_list' %}" class="lf-sidebar__item {% if url_name == 'task_list' or url_name == 'task_create' or url_name == 'task_detail' or url_name == 'task_edit' or url_name == 'task_complete' or url_name == 'task_postpone' or url_name == 'task_cancel' or url_name == 'task_archive' or url_name == 'task_renew' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
     <span>任务</span>
   </a>
+  <a href="{% url 'task_quadrant' %}" class="lf-sidebar__item {% if url_name == 'task_quadrant' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></span>
+    <span>象限</span>
+  </a>
   <a href="{% url 'countdown_list' %}" class="lf-sidebar__item {% if url_name == 'countdown_list' or url_name == 'countdown_create' or url_name == 'countdown_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
     <span>倒计时</span>
   </a>
   <a href="{% url 'recurring_list' %}" class="lf-sidebar__item {% if url_name == 'recurring_list' or url_name == 'recurring_create' or url_name == 'recurring_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
     <span>固定支出</span>
   </a>
   <a href="{% url 'installment_list' %}" class="lf-sidebar__item {% if url_name == 'installment_list' or url_name == 'installment_create' or url_name == 'installment_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
     <span>分期</span>
   </a>
   <a href="{% url 'reminder_list' %}" class="lf-sidebar__item {% if url_name == 'reminder_list' or url_name == 'reminder_create' or url_name == 'reminder_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
     <span>提醒</span>
   </a>
   <a href="{% url 'category_list' %}" class="lf-sidebar__item {% if url_name == 'category_list' or url_name == 'category_create' or url_name == 'category_edit' %}is-active{% endif %}">
-    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
     <span>分类</span>
+  </a>
+  <a href="{% url 'category_rule_list' %}" class="lf-sidebar__item {% if url_name == 'category_rule_list' or url_name == 'category_rule_create' or url_name == 'category_rule_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 7.5 12 3l9 4.5"/><path d="M3 7.5V17l9 4.5 9-4.5V7.5"/><path d="M12 12l9-4.5M12 12v9"/></svg></span>
+    <span>自动分类</span>
+  </a>
+  <a href="{% url 'export_index' %}" class="lf-sidebar__item {% if url_name == 'export_index' or url_name == 'export_csv' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+    <span>数据导出</span>
+  </a>
+  <a href="{% url 'annual_summary' %}" class="lf-sidebar__item {% if url_name == 'annual_summary' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
+    <span>年度账单</span>
+  </a>
+  <a href="{% url 'tag_list' %}" class="lf-sidebar__item {% if url_name == 'tag_list' or url_name == 'tag_create' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+    <span>标签</span>
+  </a>
+  <a href="{% url 'import_index' %}" class="lf-sidebar__item {% if url_name == 'import_index' or url_name == 'import_expense' or url_name == 'import_expense_confirm' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+    <span>数据导入</span>
+  </a>
+  <a href="{% url 'trash' %}" class="lf-sidebar__item {% if url_name == 'trash' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></span>
+    <span>回收站</span>
+  </a>
+  <a href="{% url 'account_list' %}" class="lf-sidebar__item {% if url_name == 'account_list' or url_name == 'account_detail' or url_name == 'account_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><circle cx="7" cy="14.5" r="1.2" fill="currentColor" stroke="none"/></svg></span>
+    <span>账户</span>
+  </a>
+  <a href="{% url 'gamification' %}" class="lf-sidebar__item {% if url_name == 'gamification' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M9 14l-1 7 4-2 4 2-1-7"/></svg></span>
+    <span>成就</span>
+  </a>
+  <a href="{% url 'ocr_upload' %}" class="lf-sidebar__item {% if url_name == 'ocr_upload' or url_name == 'ocr_save' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M15 9h3M15 13h3M6 16h12"/></svg></span>
+    <span>图片记账</span>
+  </a>
+  <a href="{% url 'cashflow_forecast' %}" class="lf-sidebar__item {% if url_name == 'cashflow_forecast' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg></span>
+    <span>现金流</span>
+  </a>
+  <a href="{% url 'savings_goals' %}" class="lf-sidebar__item {% if url_name == 'savings_goals' or url_name == 'savings_goal_create' or url_name == 'savings_goal_edit' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10.5a2.5 2.5 0 0 1 2.5-2.5h1A2 2 0 0 1 14.5 10a2 2 0 0 1-2 2h-1a2 2 0 0 0-2 2v.5A2.5 2.5 0 0 0 13 17h1a2.5 2.5 0 0 0 2.5-2.5"/></svg></span>
+    <span>储蓄目标</span>
+  </a>
+  <a href="{% url 'envelopes' %}" class="lf-sidebar__item {% if url_name == 'envelopes' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg></span>
+    <span>信封预算</span>
+  </a>
+  <a href="{% url 'net_worth' %}" class="lf-sidebar__item {% if url_name == 'net_worth' %}is-active{% endif %}">
+    <span class="lf-sidebar__icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg></span>
+    <span>净值趋势</span>
   </a>
   <div class="lf-sidebar__spacer"></div>
   <div class="lf-sidebar__foot">Personal Life OS · v0.9.0</div>

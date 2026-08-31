@@ -12,7 +12,7 @@
       {% if is_current %}综合看板{% else %}{{ sel_year }}年{{ sel_month }}月 历史看板{% endif %}
     </h1>
     <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       首页
     </a>
   </header>
@@ -95,9 +95,10 @@
 
   {# ───── 7 日任务 / 打卡柱状条（轻量图表）───── #}
   <section class="lf-card lf-mb-3" style="padding:14px;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
-      <h3 class="lf-section-title" style="margin:0;">近 7 天 · 任务与打卡</h3>
-      <span style="font-size:11px;color:var(--text-faint);">{{ task_trend|first|date:"m-d" }} ~ {{ today|date:"m-d" }}</span>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">近 7 天 · 任务与打卡</h3></div>
+      <span class="lf-section-head__action lf-text-xs lf-text-faint">{{ task_trend|first|date:"m-d" }} ~ {{ today|date:"m-d" }}</span>
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
       <div>
@@ -136,9 +137,10 @@
   {# ───── 倒计时小板块（首屏位置，iOS 风）───── #}
   {% if cd_list %}
   <section class="lf-card lf-mb-3" style="padding:14px;">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-      <h3 class="lf-section-title" style="margin:0;">倒计时</h3>
-      <a href="{% url 'countdown_list' %}" style="font-size:12px;color:var(--brand);text-decoration:none;">全部 ›</a>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">倒计时</h3></div>
+      <a href="{% url 'countdown_list' %}" class="lf-section-head__action" style="font-size:12px;color:var(--brand);text-decoration:none;">全部 ›</a>
     </div>
     <div style="display:flex;flex-direction:column;gap:0;">
       {% for c in cd_list %}
@@ -170,7 +172,7 @@
   <section class="lf-card lf-mb-4" style="background:linear-gradient(135deg,#fff8e6 0%,#fef3c7 100%);border:1px solid rgba(234,179,8,.25);">
     <div class="lf-row lf-row--between lf-mb-3">
       <h3 class="lf-section-title lf-mb-0 lf-row" style="gap:6px;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#d97706;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#d97706;"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
         生活建议
       </h3>
       <span class="lf-text-xs lf-text-faint lf-num">{{ life_suggestions|length }} 条</span>
@@ -189,13 +191,19 @@
   {% endif %}
 
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">月度收支趋势</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">月度收支趋势</h3></div>
+    </div>
     <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
   </section>
 
   <section class="lf-row lf-mb-4" style="gap:12px;flex-wrap:wrap;">
     <div class="lf-card" style="flex:1;min-width:260px;">
-      <h3 class="lf-section-title">分类占比</h3>
+      <div class="lf-section-head lf-mb-3">
+        <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span>
+        <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">分类占比</h3></div>
+      </div>
       <div class="chart-wrap"><canvas id="chartCategory"></canvas></div>
     </div>
     <div style="flex:1;min-width:260px;" class="lf-stack-sm">
@@ -220,7 +228,10 @@
   </section>
 
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">月末预测</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">月末预测</h3></div>
+    </div>
     <div class="lf-row" style="gap:24px;">
       <div style="flex:1;">
         <div class="lf-text-xs lf-text-faint">预测月末总支出</div>
@@ -238,13 +249,19 @@
   </section>
 
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">每日消费趋势</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">每日消费趋势</h3></div>
+    </div>
     <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
   </section>
 
   {% if suggestions %}
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">建议</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">建议</h3></div>
+    </div>
     {% for s in suggestions %}
     <div class="lf-list-item" style="padding-left:0;padding-right:0;">
       <div style="flex:1;min-width:0;">
@@ -253,10 +270,10 @@
       </div>
       <div class="lf-row" style="gap:4px;">
         <a href="{% url 'suggestion_feedback' s.pk 'useful' %}" class="lf-btn lf-btn--ghost lf-btn--icon lf-btn--sm" title="有用">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
         </a>
         <a href="{% url 'suggestion_feedback' s.pk 'not_useful' %}" class="lf-btn lf-btn--ghost lf-btn--icon lf-btn--sm" title="没用" style="color:var(--danger);">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
         </a>
       </div>
     </div>
@@ -266,7 +283,10 @@
 
   {% if anomalies %}
   <section class="lf-card lf-mb-4" style="border-left:3px solid var(--danger);">
-    <h3 class="lf-section-title lf-text-danger">异常提醒</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0 lf-text-danger">异常提醒</h3></div>
+    </div>
     {% for a in anomalies %}
     <div class="lf-list-item" style="padding-left:0;padding-right:0;">
       <span class="lf-badge lf-badge--danger">{{ a.type }}</span>
@@ -278,7 +298,10 @@
   {% endif %}
 
   <section class="lf-card lf-mb-4">
-    <h3 class="lf-section-title">行动力分析</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">行动力分析</h3></div>
+    </div>
     <div class="lf-row" style="gap:12px;">
       <div style="flex:1;text-align:center;padding:8px;background:var(--surface-2);border-radius:12px;">
         <div class="lf-text-xs lf-text-faint">本周完成率</div>
@@ -306,7 +329,10 @@
 
   {% if upcoming %}
   <section class="lf-card">
-    <h3 class="lf-section-title">即将到期账单</h3>
+    <div class="lf-section-head lf-mb-3">
+      <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/></svg></span>
+      <div class="lf-section-head__main"><h3 class="lf-section-title lf-mb-0">即将到期账单</h3></div>
+    </div>
     <ul class="lf-list">
       {% for b in upcoming %}
       <li class="lf-list-item">

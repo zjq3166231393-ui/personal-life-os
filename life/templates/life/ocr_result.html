@@ -1,0 +1,75 @@
+{% extends "_base.html" %}
+{% load static %}
+{% block title %}确认记账 · 图片识别 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container" style="max-width:560px;">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">确认记账</h1>
+    <a href="{% url 'ocr_upload' %}" class="lf-page-header__back">重新上传</a>
+  </header>
+
+  {% if messages %}{% for m in messages %}<div class="lf-alert lf-alert--{{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+
+  <section class="lf-card lf-card--padded lf-mb-3">
+    <form method="post" action="{% url 'ocr_save' %}">
+      {% csrf_token %}
+      <input type="hidden" name="raw_text" value="{{ raw_text }}">
+
+      <div class="lf-row" style="gap:12px;">
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">类型</label>
+          <select name="type" class="lf-select">
+            <option value="expense" {% if type != 'income' %}selected{% endif %}>支出</option>
+            <option value="income" {% if type == 'income' %}selected{% endif %}>收入</option>
+          </select>
+        </div>
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">金额</label>
+          <input type="text" name="amount" class="lf-input lf-num" inputmode="decimal" value="{{ amount }}" required>
+        </div>
+      </div>
+
+      <div class="lf-field">
+        <label class="lf-label">日期</label>
+        <input type="date" name="date" class="lf-input" value="{{ date }}">
+        <p class="lf-text-xs lf-text-faint lf-mt-1">留空则记为今天。</p>
+      </div>
+
+      <div class="lf-field">
+        <label class="lf-label">备注 / 商户</label>
+        <input type="text" name="note" class="lf-input" value="{{ merchant }}" maxlength="500" placeholder="例如：星巴克咖啡">
+      </div>
+
+      <div class="lf-row" style="gap:12px;">
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">分类</label>
+          <select name="category_id" class="lf-select">
+            <option value="">不分类</option>
+            {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="lf-field" style="flex:1;margin-bottom:16px;">
+          <label class="lf-label">账户</label>
+          <select name="account_id" class="lf-select">
+            <option value="">不关联</option>
+            {% for a in accounts %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <details class="lf-mt-2 lf-mb-3">
+        <summary class="lf-text-xs lf-text-faint">查看识别原文</summary>
+        <pre class="lf-ocr-raw">{{ raw_text }}</pre>
+      </details>
+
+      <div class="lf-row lf-mt-2" style="gap:8px;">
+        <button type="submit" class="lf-btn lf-btn--primary lf-btn--block">保存为记账</button>
+      </div>
+    </form>
+  </section>
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

@@ -1,6 +1,7 @@
 from calendar import monthrange
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from math import ceil
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -44,7 +45,9 @@ from .constants import (
     UPCOMING_TOPN,
     WEEK_TREND_DAYS,
 )
+from .currency import CURRENCY_CHOICES
 from .models import (
+    Account,
     Budget,
     Category,
     Expense,
@@ -53,15 +56,34 @@ from .models import (
     RecurringExpense,
     Reminder,
     Review,
+    SavingsGoal,
     Suggestion,
     Task,
 )
 from .models_daily import DailyCheckin
-from .services import aware_day_end, aware_day_start
+from .services import aware_day_end, aware_day_start, net_worth_data
+from .views_tag import apply_tags, parse_tag_ids, user_tags
+from .views_trash import undo_redirect
 
 
 def _user_queryset(model, request):
     return model.objects.filter(user=request.user, is_deleted=False)
+
+
+def _parse_aware_dt(raw, fallback):
+    """把表单（datetime-local）提交的字符串解析为感知时区的 datetime。
+
+    直接把字符串赋给 DateTimeField 会让 Django 收到 naive datetime 而告警，
+    在 UTC 部署时还会被按服务器时区解释而错位——与已修复的时区 bug 属同类问题。
+    """
+    if not raw:
+        return fallback
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return timezone.make_aware(datetime.strptime(raw.strip(), fmt))
+        except ValueError:
+            continue
+    return fallback
 
 
 # ── Expense CRUD ────────────────────────────────────────────────────
@@ -191,6 +213,7 @@ def expense_list(request):
             "diff_pct": round(float((total_amount - last_total) / last_total * 100)) if last_total > 0 else 0,
         },
         "cat_breakdown": cat_breakdown[:EXPENSE_CAT_TOPN_HOME],
+        "all_tags": user_tags(request.user),
         "filters": {
             "date_from": date_from, "date_to": date_to,
             "category": cat_id, "type": typ,
@@ -202,27 +225,76 @@ def expense_list(request):
 @login_required
 def expense_detail(request, pk):
     expense = get_object_or_404(Expense, pk=pk, user=request.user, is_deleted=False)
-    return render(request, "life/expense_detail.html", {"expense": expense})
+    attachments = expense.attachments.filter(is_deleted=False)
+    return render(request, "life/expense_detail.html", {
+        "expense": expense,
+        "attachments": attachments,
+    })
 
 @login_required
 def expense_edit(request, pk):
     from django.db.models import Q
     expense = get_object_or_404(Expense, pk=pk, user=request.user, is_deleted=False)
     categories = Category.objects.filter(Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True)
+    # 账户选择器：启用中的账户；若本笔已关联一个已停用的账户，也一并纳入，避免编辑时丢关联
+    accounts = Account.objects.filter(user=request.user, is_deleted=False, is_active=True)
+    if expense.account_id and not accounts.filter(pk=expense.account_id).exists():
+        accounts = Account.objects.filter(
+            Q(user=request.user, is_deleted=False, is_active=True) | Q(pk=expense.account_id)
+        )
+    accounts = accounts.order_by("type", "name")
     if request.method == "POST":
         expense.note = request.POST.get("note", expense.note)[:500]
         expense.amount = request.POST.get("amount", expense.amount)
         expense.type = request.POST.get("type", expense.type)
-        expense.occurred_at = request.POST.get("occurred_at", expense.occurred_at)
+        expense.occurred_at = _parse_aware_dt(request.POST.get("occurred_at"), expense.occurred_at)
         expense.merchant = request.POST.get("merchant", expense.merchant)[:200]
         expense.source = request.POST.get("source", expense.source)
+        # 多币种（P1-5）：币种 + 汇率
+        from decimal import Decimal as _D
+        from decimal import InvalidOperation as _IO
+
+        from .currency import CURRENCY_META
+
+        cur = request.POST.get("currency", expense.currency)
+        if cur in CURRENCY_META:
+            expense.currency = cur
+        raw_rate = request.POST.get("rate")
+        if raw_rate not in (None, ""):
+            try:
+                r = _D(str(raw_rate))
+                if r > 0:
+                    expense.rate = r
+            except (_IO, ValueError):
+                pass
         cat_id = request.POST.get("category")
         if cat_id:
             expense.category_id = int(cat_id)
+        # 账户：只能选自己的、且启用中的；空值或越权的 account_id 置空（不报错，避免阻断编辑）
+        acc_id = request.POST.get("account")
+        expense.account = Account.objects.filter(
+            pk=acc_id, user=request.user, is_deleted=False, is_active=True
+        ).first() if acc_id else None
+        # 只有转账才有「转入账户」；非转账必须清空，避免脏数据拖累余额推算
+        if expense.type == "transfer":
+            tacc_id = request.POST.get("transfer_to_account")
+            expense.transfer_to_account = Account.objects.filter(
+                pk=tacc_id, user=request.user, is_deleted=False, is_active=True
+            ).first() if tacc_id else None
+        else:
+            expense.transfer_to_account = None
         expense.save()
-        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.note or expense.merchant}")
+        apply_tags(expense, request.user, parse_tag_ids(request.POST))
+        record(request.user, "expense.update", expense.pk, f"修改支出: {expense.display_title}")
         return redirect("expense_list")
-    return render(request, "life/expense_edit.html", {"expense": expense, "categories": categories})
+    return render(request, "life/expense_edit.html", {
+        "expense": expense,
+        "categories": categories,
+        "accounts": accounts,
+        "all_tags": user_tags(request.user),
+        "cur_tag_ids": {t.id for t in expense.tags.all()},
+        "currency_choices": CURRENCY_CHOICES,
+    })
 
 @login_required
 @require_POST
@@ -232,10 +304,10 @@ def expense_delete(request, pk):
         expense.is_deleted = True
         expense.deleted_at = timezone.now()
         expense.save()
-        _disp = expense.note or expense.merchant or "未命名"
+        _disp = expense.display_title
         record(request.user, "expense.delete", expense.pk, f"删除支出: {_disp}")
-        messages.success(request, f"已删除支出「{_disp}」")
-        return redirect("expense_list")
+        messages.success(request, f"已删除支出「{_disp}」— 可撤销，或在回收站恢复")
+        return undo_redirect("expense_list", "expense", expense.pk)
     return render(request, "life/expense_delete.html", {"expense": expense})
 
 
@@ -427,7 +499,9 @@ def task_edit(request, pk):
         task.title = request.POST.get("title", task.title)[:200]
         task.description = request.POST.get("description", "")[:5000]
         task.priority = int(request.POST.get("priority", task.priority))
-        task.due_at = request.POST.get("due_at") or None
+        task.important = bool(request.POST.get("important"))
+        task.urgent = bool(request.POST.get("urgent"))
+        task.due_at = _parse_aware_dt(request.POST.get("due_at"), None)
         task.source = request.POST.get("source", task.source)
         task.recurrence_rule = request.POST.get("recurrence_rule", task.recurrence_rule)
         task.recurrence_day = int(request.POST.get("recurrence_day") or 0) or None
@@ -439,12 +513,17 @@ def task_edit(request, pk):
             task.completed_at = None
         task.status = new_status
         task.save()
+        apply_tags(task, request.user, parse_tag_ids(request.POST))
         if new_status == "completed":
             record(request.user, "task.complete", task.pk, f"完成任务: {task.title}")
         else:
             record(request.user, "task.update", task.pk, f"修改任务: {task.title}")
         return redirect("task_list")
-    return render(request, "life/task_edit.html", {"task": task})
+    return render(request, "life/task_edit.html", {
+        "task": task,
+        "all_tags": user_tags(request.user),
+        "cur_tag_ids": {t.id for t in task.tags.all()},
+    })
 
 @login_required
 @require_POST
@@ -456,9 +535,52 @@ def task_delete(request, pk):
         task.deleted_at = timezone.now()
         task.save()
         record(request.user, "task.delete", task.pk, f"删除任务: {title}")
-        messages.success(request, f"已删除任务「{title}」")
-        return redirect("task_list")
+        messages.success(request, f"已删除任务「{title}」— 可撤销，或在回收站恢复")
+        return undo_redirect("task_list", "task", task.pk)
     return render(request, "life/task_delete.html", {"task": task})
+
+
+# ── 四象限任务视图（P2） ────────────────────────────────────────────
+@login_required
+def task_quadrant(request):
+    """Eisenhower 四象限：按 重要 × 紧急 把活跃任务分进 4 格。
+
+    只统计未完成的活跃任务（待办 / 进行中），已完成/取消/归档/删除的不进矩阵。
+    """
+    active = Task.objects.filter(
+        user=request.user,
+        is_deleted=False,
+        status__in=[Task.Status.TODO, Task.Status.IN_PROGRESS],
+    )
+    # 视觉顺序：左列=重要，右列=不重要；上行=紧急，下行=不紧急
+    quadrants = [
+        {"key": "q1", "title": "重要且紧急", "hint": "立即做", "cls": "lf-quad--do",
+         "tasks": active.filter(important=True, urgent=True)},
+        {"key": "q3", "title": "不重要但紧急", "hint": "委托 / 尽快处理", "cls": "lf-quad--delegate",
+         "tasks": active.filter(important=False, urgent=True)},
+        {"key": "q2", "title": "重要不紧急", "hint": "计划做", "cls": "lf-quad--plan",
+         "tasks": active.filter(important=True, urgent=False)},
+        {"key": "q4", "title": "不重要不紧急", "hint": "少做 / 删除", "cls": "lf-quad--drop",
+         "tasks": active.filter(important=False, urgent=False)},
+    ]
+    total = sum(q["tasks"].count() for q in quadrants)
+    return render(request, "life/task_quadrant.html", {"quadrants": quadrants, "total": total})
+
+
+@login_required
+@require_POST
+def task_toggle_flag(request, pk):
+    """翻转单条任务的 important / urgent 标记，重定向回四象限页。
+
+    只接受本人、未删除的任务；flag 名白名单校验，越权 pk 直接 404。
+    """
+    flag = request.POST.get("flag")
+    if flag not in ("important", "urgent"):
+        return redirect("task_quadrant")
+    task = get_object_or_404(Task, pk=pk, user=request.user, is_deleted=False)
+    setattr(task, flag, not getattr(task, flag))
+    task.save(update_fields=[flag, "updated_at"])
+    return redirect("task_quadrant")
 
 
 # ── Note CRUD ───────────────────────────────────────────────────────
@@ -472,7 +594,7 @@ def note_list(request):
     interval_label_map = {"all": "全部", "today": "今天", "week": "本周", "month": "本月", "year": "今年"}
     if interval not in interval_label_map:
         interval = "all"
-    base = _user_queryset(Note, request).order_by("-created_at")
+    base = _user_queryset(Note, request).select_related("user").order_by("-created_at")
 
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
@@ -537,10 +659,15 @@ def note_edit(request, pk):
         note.raw_text = request.POST.get("raw_text", note.raw_text) or ""
         note.occurred_on = request.POST.get("occurred_on") or None
         note.save()
+        apply_tags(note, request.user, parse_tag_ids(request.POST))
         record(request.user, "note.update", note.pk, f"修改随心记: {note.title}")
         messages.success(request, "已保存")
         return redirect("note_list")
-    return render(request, "life/note_edit.html", {"note": note})
+    return render(request, "life/note_edit.html", {
+        "note": note,
+        "all_tags": user_tags(request.user),
+        "cur_tag_ids": {t.id for t in note.tags.all()},
+    })
 
 @login_required
 @require_POST
@@ -552,8 +679,8 @@ def note_delete(request, pk):
         note.deleted_at = timezone.now()
         note.save()
         record(request.user, "note.delete", note.pk, f"删除随心记: {title}")
-        messages.success(request, f"已删除随心记「{title}」")
-        return redirect("note_list")
+        messages.success(request, f"已删除随心记「{title}」— 可撤销，或在回收站恢复")
+        return undo_redirect("note_list", "note", note.pk)
     return render(request, "life/note_delete.html", {"note": note})
 
 
@@ -776,6 +903,290 @@ def _budget_savings_tip(user, today, total_amount, spent_total, cat_rows, last_m
     return None
 
 
+# ── Savings Goals（储蓄目标 / 心愿单） ────────────────────────────────
+
+@login_required
+def savings_goals(request):
+    """储蓄目标列表页。"""
+    all_goals = list(SavingsGoal.objects.filter(user=request.user, is_active=True))
+    today = _tz_localdate()
+    items = []
+    for g in all_goals:
+        days_left = None
+        overdue = False
+        monthly_needed = None
+        months_left = None
+        if g.deadline:
+            days_left = (g.deadline - today).days
+            overdue = days_left < 0
+            if not g.is_reached and days_left > 0 and g.remaining > 0:
+                months_left = max(1, ceil(days_left / 30))
+                monthly_needed = g.remaining / months_left
+        items.append({
+            "obj": g, "days_left": days_left, "overdue": overdue,
+            "monthly_needed": monthly_needed, "months_left": months_left,
+        })
+    total_target = sum((g.target_amount for g in all_goals), Decimal(0))
+    total_current = sum((g.current_amount for g in all_goals), Decimal(0))
+    overall_pct = min(int(total_current / total_target * 100), 100) if total_target > 0 else 0
+    return render(request, "life/savings.html", {
+        "goals": items, "today": today,
+        "total_target": total_target, "total_current": total_current,
+        "overall_pct": overall_pct, "goals_count": len(all_goals),
+    })
+
+
+@login_required
+def savings_goal_create(request):
+    """创建储蓄目标（GET 渲染表单，POST 入库）。"""
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip() or "我的储蓄目标"
+        try:
+            target = Decimal(request.POST.get("target_amount") or "0")
+        except Exception:
+            target = Decimal(0)
+        if target <= 0:
+            target = Decimal(100)
+        try:
+            current = Decimal(request.POST.get("current_amount") or "0")
+        except Exception:
+            current = Decimal(0)
+        current = max(current, Decimal(0))
+        icon = (request.POST.get("icon") or "🎯")[:8] or "🎯"
+        deadline = None
+        deadline_raw = request.POST.get("deadline") or ""
+        if deadline_raw:
+            try:
+                deadline = datetime.strptime(deadline_raw, "%Y-%m-%d").date()
+            except ValueError:
+                deadline = None
+        SavingsGoal.objects.create(
+            user=request.user, name=name, target_amount=target,
+            current_amount=current, icon=icon, deadline=deadline,
+            note=(request.POST.get("note") or "")[:500],
+        )
+        messages.success(request, "储蓄目标已创建 ✓")
+        return redirect("savings_goals")
+    return render(request, "life/savings_edit.html", {"g": None, "today": _tz_localdate().isoformat()})
+
+
+@login_required
+def savings_goal_edit(request, pk):
+    """编辑储蓄目标（GET 渲染表单，POST 更新）。"""
+    g = get_object_or_404(SavingsGoal, pk=pk, user=request.user, is_active=True)
+    if request.method == "POST":
+        g.name = (request.POST.get("name") or "").strip() or g.name
+        ta_raw = request.POST.get("target_amount") or ""
+        try:
+            ta = Decimal(ta_raw)
+        except Exception:
+            ta = None
+        if ta is not None and ta >= 0:
+            g.target_amount = ta
+        cur_raw = request.POST.get("current_amount") or ""
+        try:
+            cur = Decimal(cur_raw)
+        except Exception:
+            cur = None
+        if cur is not None:
+            g.current_amount = max(cur, Decimal(0))
+        g.icon = (request.POST.get("icon") or "🎯")[:8] or "🎯"
+        deadline_raw = request.POST.get("deadline") or ""
+        if deadline_raw:
+            try:
+                parsed = datetime.strptime(deadline_raw, "%Y-%m-%d").date()
+            except ValueError:
+                parsed = None
+            if parsed is not None:
+                g.deadline = parsed
+        else:
+            g.deadline = None
+        g.note = (request.POST.get("note") or "")[:500]
+        g.save()
+        messages.success(request, "已更新 ✓")
+        return redirect("savings_goals")
+    return render(request, "life/savings_edit.html", {"g": g, "today": _tz_localdate().isoformat()})
+
+
+@login_required
+@require_POST
+def savings_goal_delete(request, pk):
+    """软删除储蓄目标（仅 POST）。"""
+    g = get_object_or_404(SavingsGoal, pk=pk, user=request.user)
+    g.is_active = False
+    g.save(update_fields=["is_active", "updated_at"])
+    messages.success(request, "已删除目标")
+    return safe_next(request, default="savings_goals", allow_referer=False)
+
+
+@login_required
+@require_POST
+def savings_goal_adjust(request, pk):
+    """存入 / 取出：adjust 当前金额，保证不为负。"""
+    g = get_object_or_404(SavingsGoal, pk=pk, user=request.user, is_active=True)
+    try:
+        amt = Decimal(request.POST.get("amount") or "0")
+    except Exception:
+        amt = Decimal(0)
+    if amt != 0:
+        g.current_amount = max(g.current_amount + amt, Decimal(0))
+        g.save(update_fields=["current_amount", "updated_at"])
+        verb = "存入" if amt > 0 else "取出"
+        messages.success(request, f"{verb} ¥{abs(amt):.2f} ✓")
+    return safe_next(request, default="savings_goals", allow_referer=False)
+
+
+# ── Envelope Budget（信封预算） ───────────────────────────────────────
+
+@login_required
+def envelopes(request):
+    """信封预算：把月度分类预算当成「信封」，展示每个信封的余额与进度。
+
+    纯展示 + 编辑层，复用已有的 Budget（category__isnull=False 即分类预算）。
+    """
+    from django.db.models import Q
+
+    today = timezone.localdate()
+    month_start = date(today.year, today.month, 1)
+    _, last_day = monthrange(today.year, today.month)
+    month_end = date(today.year, today.month, last_day)
+    days_elapsed = (today - month_start).days + 1
+    total_days = last_day
+    days_left = total_days - days_elapsed
+    month_elapsed_pct = int(days_elapsed / total_days * 100) if total_days else 0
+
+    if request.method == "POST":
+        for key, val in request.POST.items():
+            if key.startswith("env_") and val:
+                try:
+                    cat_id = int(key[4:])
+                except ValueError:
+                    continue
+                Budget.objects.update_or_create(
+                    user=request.user, category_id=cat_id, month=month_start,
+                    defaults={"amount": Decimal(val)},
+                )
+        # 「添加信封」：new_cat + new_amount
+        new_cat = request.POST.get("new_cat")
+        new_amount = request.POST.get("new_amount")
+        if new_cat and new_amount:
+            try:
+                Budget.objects.update_or_create(
+                    user=request.user, category_id=int(new_cat), month=month_start,
+                    defaults={"amount": Decimal(new_amount)},
+                )
+            except (ValueError, TypeError):
+                pass
+        messages.success(request, "信封预算已保存 ✓")
+        return redirect("envelopes")
+
+    total_budget = Budget.objects.filter(user=request.user, category__isnull=True, month=month_start).first()
+    total_amount = total_budget.amount if total_budget else Decimal(0)
+
+    cat_budgets = {
+        b.category_id: b.amount
+        for b in Budget.objects.filter(user=request.user, category__isnull=False, month=month_start)
+    }
+    spent_by_cat = {
+        row["category"]: row["s"]
+        for row in Expense.objects.filter(
+            user=request.user, type="expense", status="confirmed", is_deleted=False,
+            occurred_at__gte=aware_day_start(month_start), occurred_at__lte=aware_day_end(month_end),
+        ).values("category").annotate(s=Sum("amount"))
+    }
+
+    env_rows = []
+    alloc_total = Decimal(0)
+    spent_total = Decimal(0)
+    for cat_id, amt in cat_budgets.items():
+        cat = Category.objects.filter(pk=cat_id).first()
+        if not cat:
+            continue
+        spent = spent_by_cat.get(cat_id, Decimal(0))
+        rem = amt - spent
+        # ── 花销节奏洞察：按当前速度预测月末是否超支 ──
+        daily_avg = None
+        projected = None
+        projected_over = Decimal(0)
+        pace = None
+        if amt > 0 and days_elapsed > 0 and spent > 0:
+            daily_avg = spent / days_elapsed
+            projected = daily_avg * total_days
+            projected_over = max(projected - amt, Decimal(0))
+            spend_pct = float(spent / amt)
+            month_pct = days_elapsed / total_days
+            if spend_pct > month_pct + 0.1:
+                pace = "fast"
+            elif spend_pct < month_pct - 0.1:
+                pace = "slow"
+            else:
+                pace = "normal"
+        env_rows.append({
+            "obj": cat, "budget": amt, "spent": spent, "remaining": rem,
+            "pct": min(int(spent / amt * 100) if amt > 0 else 0, 100),
+            "over": spent > amt > 0,
+            "over_amount": abs(rem) if rem < 0 else Decimal(0),
+            "days_left": days_left, "daily_avg": daily_avg,
+            "projected": projected, "projected_over": projected_over, "pace": pace,
+        })
+        alloc_total += amt
+        spent_total += spent
+    # 超支的排前面，其余按使用率降序
+    env_rows.sort(key=lambda r: (not r["over"], -r["pct"]))
+
+    available = Category.objects.filter(
+        Q(user=request.user) | Q(user__isnull=True), type="expense", is_active=True,
+    ).exclude(pk__in=list(cat_budgets.keys()))
+
+    unallocated = max(total_amount - alloc_total, Decimal(0))
+    overall_pct = min(int(spent_total / alloc_total * 100) if alloc_total > 0 else 0, 100)
+
+    return render(request, "life/envelopes.html", {
+        "today": today, "month_start": month_start,
+        "total_amount": total_amount, "alloc_total": alloc_total,
+        "spent_total": spent_total, "unallocated": unallocated,
+        "overall_pct": overall_pct,
+        "month_elapsed_pct": month_elapsed_pct, "days_left": days_left,
+        "env_rows": env_rows, "available": available,
+    })
+
+
+@login_required
+def net_worth(request):
+    """净值趋势图：账户余额按日快照，画净值 / 资产曲线。
+
+    数据底座是 BalanceSnapshot（每日余额快照），由 snapshot_balances 命令回填；
+    视图侧「懒确保」今日快照，保证未跑命令也能立即出图。纯后端分析，不干扰后续 UI。
+    支持 ?range=30|90|180|365 区间切换（缺省为全部历史）。
+    """
+    import json
+
+    raw = request.GET.get("range", "all")
+    days = int(raw) if raw.isdigit() else None
+    data = net_worth_data(request.user, days=days)
+    nw_json = json.dumps({
+        "labels": data["labels"],
+        "series": data["series"],
+        "has_data": data["has_data"],
+        "accounts": [
+            {"name": a["obj"].name, "balance": float(a["balance"]), "pct": a["pct"], "color": a["color"]}
+            for a in data["accounts"]
+        ],
+    }, ensure_ascii=False)
+    return render(request, "life/net_worth.html", {
+        "today": timezone.localdate(),
+        "range": raw,
+        "nw_json": nw_json,
+        "current": data["current"],
+        "first": data["first"],
+        "change": data["change"],
+        "change_pct": data["change_pct"],
+        "change_30": data["change_30"],
+        "accounts": data["accounts"],
+        "has_data": data["has_data"],
+    })
+
+
 # ── Recurring Expense CRUD ───────────────────────────────────────────
 
 @login_required
@@ -798,6 +1209,7 @@ def recurring_create(request):
             due_day=int(request.POST.get("due_day", "1")),
             start_date=request.POST.get("start_date", timezone.localdate().isoformat()),
             remind_days_before=int(request.POST.get("remind_days_before", "3")),
+            auto_post=request.POST.get("auto_post") == "on",
         )
         return redirect("recurring_list")
     from django.db.models import Q
@@ -816,6 +1228,7 @@ def recurring_edit(request, pk):
         item.start_date = request.POST.get("start_date", item.start_date)
         item.end_date = request.POST.get("end_date") or None
         item.remind_days_before = int(request.POST.get("remind_days_before", item.remind_days_before))
+        item.auto_post = request.POST.get("auto_post") == "on"
         cat_id = request.POST.get("category")
         item.category_id = int(cat_id) if cat_id else None
         item.save()
@@ -948,7 +1361,7 @@ def dashboard(request):
     month_range = range(1, 13)
 
     # ── monthly totals ─────────────────────────────────────────────
-    base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
+    base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed").select_related("category")
     month_qs = base.filter(occurred_at__gte=aware_day_start(month_start),
                            occurred_at__lte=aware_day_end(month_end))
 
@@ -1068,7 +1481,7 @@ def dashboard(request):
     large_items = []
     threshold = daily_avg * 3 if daily_avg > 0 else Decimal(999999)
     for e in month_qs.filter(type="expense", amount__gte=threshold).order_by("-amount")[:LARGE_ITEM_TOPN]:
-        large_items.append({"note": e.note or e.merchant or "未命名", "amount": e.amount})
+        large_items.append({"note": e.display_title, "amount": e.amount})
     # Exclude large items for a conservative estimate
     excluded = sum(item["amount"] for item in large_items)
     conservative_total = predicted_total - excluded if excluded else predicted_total
@@ -1247,7 +1660,7 @@ def dashboard(request):
     for e in month_qs.filter(type="expense", amount__gte=threshold_large).order_by("-amount")[:LARGE_ITEM_TOPN]:
         life_suggestions.append({
             "icon": "wallet",
-            "title": f"本月大额支出：{e.note or e.merchant or '未命名'}",
+            "title": f"本月大额支出：{e.display_title}",
             "detail": f"¥{e.amount:.0f}，{e.occurred_at.strftime('%m/%d')} {e.category.name if e.category else '未分类'}。占总支出 {round(e.amount / total_expense * 100) if total_expense else 0}%",
             "tone": "warning",
         })
@@ -1337,6 +1750,316 @@ def dashboard(request):
         # ── 跳转链接（供模板里 KPI/结余/分类名点击） ──
         "expense_list_url": "/expenses/",
     })
+
+
+@login_required
+def reports(request):
+    """报表增强（2026-08-30）：
+    - 时间预设：本月 / 上月 / 今年 / 去年 / 全部
+    - 自定义区间（start/end，YYYY-MM-DD）
+    - 本期收入 / 支出 / 结余
+    - 环比（上一周期）/ 同比（去年同期）增幅
+    - 分类支出 / 收入构成
+    - 每日趋势（Chart.js）
+    - 打印 / 导出 PDF（window.print + 打印样式）
+    """
+    import json
+    from datetime import date, timedelta
+    from decimal import Decimal
+
+    from django.db.models import Sum
+
+    today = timezone.localdate()
+    base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
+
+    # ── 解析区间 ───────────────────────────────────────────────
+    preset = request.GET.get("preset", "month")
+
+    def _parse(d):
+        try:
+            return date.fromisoformat(d)
+        except (ValueError, TypeError):
+            return None
+
+    custom_start = _parse(request.GET.get("start"))
+    custom_end = _parse(request.GET.get("end"))
+
+    if custom_start and custom_end and custom_start <= custom_end:
+        period_start, period_end = custom_start, custom_end
+        preset = "custom"
+    elif preset == "last_month":
+        y, m = (today.year - 1, 12) if today.month == 1 else (today.year, today.month - 1)
+        period_start = date(y, m, 1)
+        _, ld = monthrange(y, m)
+        period_end = date(y, m, ld)
+    elif preset == "year":
+        period_start = date(today.year, 1, 1)
+        period_end = date(today.year, 12, 31)
+    elif preset == "last_year":
+        period_start = date(today.year - 1, 1, 1)
+        period_end = date(today.year - 1, 12, 31)
+    elif preset == "all":
+        first = base.order_by("occurred_at").first()
+        period_start = first.occurred_at.date() if first else today
+        period_end = today
+    else:  # month（默认）
+        period_start = date(today.year, today.month, 1)
+        _, ld = monthrange(today.year, today.month)
+        period_end = date(today.year, today.month, ld)
+
+    is_all = (preset == "all")
+
+    # ── 环比 / 同比 区间 ───────────────────────────────────────
+    span_days = (period_end - period_start).days + 1
+    if is_all:
+        prev_start = prev_end = yoy_start = yoy_end = None
+    else:
+        prev_end = period_start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=span_days - 1)
+        yoy_end = period_end - timedelta(days=365)
+        yoy_start = period_start - timedelta(days=365)
+
+    # ── 总额（本期 / 环比 / 同比）─────────────────────────────
+    def _totals(s, e):
+        qs = base.filter(occurred_at__gte=aware_day_start(s), occurred_at__lte=aware_day_end(e))
+        expense = qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+        income = qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+        return expense, income, income - expense
+
+    cur_e, cur_i, cur_b = _totals(period_start, period_end)
+    if prev_start:
+        prev_e, prev_i, prev_b = _totals(prev_start, prev_end)
+    else:
+        prev_e = prev_i = prev_b = Decimal(0)
+    if yoy_start:
+        yoy_e, yoy_i, yoy_b = _totals(yoy_start, yoy_end)
+    else:
+        yoy_e = yoy_i = yoy_b = Decimal(0)
+
+    def _pct(cur, ref):
+        if ref is None or ref == 0:
+            return None
+        return round((cur - ref) / ref * 100, 1)
+
+    delta_expense_mom = _pct(cur_e, prev_e) if not is_all else None
+    delta_income_mom = _pct(cur_i, prev_i) if not is_all else None
+    delta_balance_mom = _pct(cur_b, prev_b) if not is_all else None
+    delta_expense_yoy = _pct(cur_e, yoy_e) if not is_all else None
+    delta_income_yoy = _pct(cur_i, yoy_i) if not is_all else None
+    delta_balance_yoy = _pct(cur_b, yoy_b) if not is_all else None
+
+    savings_rate = round(cur_b / cur_i * 100, 1) if cur_i > 0 else None
+
+    # ── 分类构成（支出 / 收入）───────────────────────────────
+    def _cat_breakdown(typ):
+        rows = base.filter(
+            type=typ,
+            occurred_at__gte=aware_day_start(period_start),
+            occurred_at__lte=aware_day_end(period_end),
+        ).values("category__name", "category__icon", "category__color").annotate(s=Sum("amount"))
+        total = sum((r["s"] or Decimal(0)) for r in rows)
+        out = []
+        for r in sorted(rows, key=lambda x: x["s"] or Decimal(0), reverse=True):
+            amt = r["s"] or Decimal(0)
+            out.append({
+                "name": r["category__name"] or "未分类",
+                "icon": r["category__icon"] or "💸",
+                "color": r["category__color"] or "#6b7280",
+                "amount": amt,
+                "pct": round(amt / total * 100) if total > 0 else 0,
+            })
+        return out, total
+
+    expense_cats, expense_cat_total = _cat_breakdown("expense")
+    income_cats, income_cat_total = _cat_breakdown("income")
+
+    # ── 每日趋势 ──────────────────────────────────────────────
+    daily_agg = {
+        row["occurred_at__date"]: row["s"]
+        for row in base.filter(
+            occurred_at__gte=aware_day_start(period_start),
+            occurred_at__lte=aware_day_end(period_end),
+        ).values("occurred_at__date").annotate(s=Sum("amount"))
+    }
+    daily = []
+    d = period_start
+    while d <= period_end:
+        daily.append({"date": d.isoformat(), "amount": daily_agg.get(d, Decimal(0)) or Decimal(0)})
+        d += timedelta(days=1)
+    if len(daily) > 92:  # 区间过长时降采样，避免图太密
+        step = (len(daily) // 92) or 1
+        daily = daily[::step]
+
+    # ── 区间标签 ──────────────────────────────────────────────
+    if preset == "month":
+        period_label = f"{period_start.year}年{period_start.month}月"
+    elif preset == "last_month":
+        period_label = f"{period_start.year}年{period_start.month}月（上月）"
+    elif preset == "year":
+        period_label = f"{period_start.year}年"
+    elif preset == "last_year":
+        period_label = f"{period_start.year}年（去年）"
+    elif preset == "custom":
+        period_label = f"{period_start} ~ {period_end}"
+    else:
+        period_label = "全部"
+
+    chart_data = json.dumps({
+        "dailyLabels": [x["date"][5:] for x in daily],
+        "dailyAmounts": [float(x["amount"]) for x in daily],
+        "catLabels": [c["name"] for c in expense_cats],
+        "catAmounts": [float(c["amount"]) for c in expense_cats],
+        "catColors": ["#f97316", "#3b82f6", "#8b5cf6", "#06b6d4", "#ec4899", "#6b7280", "#22c55e", "#eab308"][:len(expense_cats)],
+    })
+    # 防存储型 XSS：与 dashboard 同源的转义策略
+    chart_data = chart_data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+
+    context = {
+        "today": today,
+        "preset": preset,
+        "period_start": period_start, "period_end": period_end,
+        "period_label": period_label,
+        "is_all": is_all,
+        "total_expense": cur_e, "total_income": cur_i, "balance": cur_b,
+        "prev_expense": prev_e, "prev_income": prev_i, "prev_balance": prev_b,
+        "yoy_expense": yoy_e, "yoy_income": yoy_i, "yoy_balance": yoy_b,
+        "delta_expense_mom": delta_expense_mom, "delta_income_mom": delta_income_mom, "delta_balance_mom": delta_balance_mom,
+        "delta_expense_yoy": delta_expense_yoy, "delta_income_yoy": delta_income_yoy, "delta_balance_yoy": delta_balance_yoy,
+        "savings_rate": savings_rate,
+        "expense_cats": expense_cats, "expense_cat_total": expense_cat_total,
+        "income_cats": income_cats, "income_cat_total": income_cat_total,
+        "daily": daily,
+        "chart_data": chart_data,
+    }
+    return render(request, "life/reports.html", context)
+
+
+# ── 年度总结（P1-7，支付宝式年度账单，留存钩子）─────────────────────────
+
+@login_required
+def annual_summary(request):
+    """年度账单：全年收支概览、月度趋势、分类排行、最大单笔、同比。
+
+    纯只读聚合，与 reports 共用 aware_day_* 边界处理；一次性取数后在 Python 里
+    按月份 / 分类分组，避免 12 次月度查询。
+    """
+    from datetime import date
+
+    from django.db.models import Sum
+
+    from .services import aware_day_end, aware_day_start
+
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get("year", today.year))
+    except (TypeError, ValueError):
+        year = today.year
+    if year < 2000 or year > today.year + 1:
+        year = today.year
+
+    year_start = date(year, 1, 1)
+    year_end = date(year, 12, 31)
+    prev_start = date(year - 1, 1, 1)
+    prev_end = date(year - 1, 12, 31)
+
+    base = Expense.objects.filter(user=request.user, is_deleted=False, status="confirmed")
+
+    def _totals(s, e):
+        qs = base.filter(occurred_at__gte=aware_day_start(s), occurred_at__lte=aware_day_end(e))
+        expense = qs.filter(type="expense").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+        income = qs.filter(type="income").aggregate(s=Sum("amount"))["s"] or Decimal(0)
+        return expense, income, income - expense
+
+    cur_e, cur_i, cur_b = _totals(year_start, year_end)
+    prev_e, prev_i, prev_b = _totals(prev_start, prev_end)
+
+    saving_rate = round(cur_b / cur_i * 100, 1) if cur_i > 0 else None
+    avg_monthly_expense = (cur_e / 12) if cur_e > 0 else Decimal(0)
+
+    # 一次性取全年数据，Python 内分组（12 个月 + 分类）
+    rows = list(
+        base.filter(
+            occurred_at__gte=aware_day_start(year_start),
+            occurred_at__lte=aware_day_end(year_end),
+        ).values("occurred_at__date", "type", "amount", "category__name", "category__icon")
+    )
+
+    monthly_expense = [Decimal(0)] * 12
+    monthly_income = [Decimal(0)] * 12
+    cat_map = {}
+    txn_count = 0
+    biggest = None
+    for r in rows:
+        d = r["occurred_at__date"]
+        m = d.month - 1
+        amt = r["amount"] or Decimal(0)
+        txn_count += 1
+        if r["type"] == "expense":
+            monthly_expense[m] += amt
+            if biggest is None or amt > biggest["amount"]:
+                biggest = {"amount": amt, "date": d, "category": r["category__name"] or "未分类",
+                           "icon": r["category__icon"] or "💸"}
+        else:
+            monthly_income[m] += amt
+        key = r["category__name"] or "未分类"
+        if key not in cat_map:
+            cat_map[key] = {"name": key, "icon": r["category__icon"] or "💸",
+                            "amount": Decimal(0), "count": 0}
+        cat_map[key]["amount"] += amt
+        cat_map[key]["count"] += 1
+
+    top_categories = sorted(cat_map.values(), key=lambda x: x["amount"], reverse=True)[:8]
+    cat_total = sum((c["amount"] for c in top_categories), Decimal(0))
+    for c in top_categories:
+        c["pct"] = round(c["amount"] / cat_total * 100) if cat_total > 0 else 0
+
+    # 花得最多的月份
+    peak_month_idx = max(range(12), key=lambda i: monthly_expense[i]) if cur_e > 0 else 0
+    peak_month = {
+        "month": peak_month_idx + 1,
+        "amount": monthly_expense[peak_month_idx],
+    }
+
+    def _pct(cur, ref):
+        if ref is None or ref == 0:
+            return None
+        return round((cur - ref) / ref * 100, 1)
+
+    delta_e = _pct(cur_e, prev_e)
+    delta_i = _pct(cur_i, prev_i)
+    delta_b = _pct(cur_b, prev_b)
+
+    import json
+
+    chart_labels = json.dumps([f"{i+1}月" for i in range(12)], ensure_ascii=False)
+    chart_expense = json.dumps([float(x) for x in monthly_expense])
+    chart_income = json.dumps([float(x) for x in monthly_income])
+
+    context = {
+        "year": year,
+        "today_year": today.year,
+        "total_expense": cur_e,
+        "total_income": cur_i,
+        "balance": cur_b,
+        "prev_expense": prev_e,
+        "prev_income": prev_i,
+        "prev_balance": prev_b,
+        "delta_expense_yoy": delta_e,
+        "delta_expense_yoy_abs": abs(delta_e) if delta_e is not None else None,
+        "delta_income_yoy": delta_i,
+        "delta_income_yoy_abs": abs(delta_i) if delta_i is not None else None,
+        "delta_balance_yoy": delta_b,
+        "saving_rate": saving_rate,
+        "avg_monthly_expense": avg_monthly_expense,
+        "txn_count": txn_count,
+        "biggest": biggest,
+        "peak_month": peak_month,
+        "top_categories": top_categories,
+        "chart_labels": chart_labels,
+        "chart_expense": chart_expense,
+        "chart_income": chart_income,
+    }
+    return render(request, "life/annual_summary.html", context)
 
 
 # ── Review ─────────────────────────────────────────────────────────
@@ -1645,8 +2368,8 @@ def daily_delete(request, pk):
         item.deleted_at = timezone.now()
         item.save()
         record(request.user, "daily.delete", item.pk, f"删除每日提醒: {title}")
-        messages.success(request, f"已删除「{title}」")
-        return redirect("daily_list")
+        messages.success(request, f"已删除「{title}」— 可撤销，或在回收站恢复")
+        return undo_redirect("daily_list", "daily", item.pk)
     return render(request, "life/_confirm_delete.html", {"item": item, "back": "daily_list", "title": title})
 
 

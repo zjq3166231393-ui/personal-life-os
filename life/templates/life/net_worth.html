@@ -1,0 +1,159 @@
+{% extends "_base.html" %}
+{% block title %}净值趋势 · Personal Life OS{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">净值趋势</h1>
+    <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      首页
+    </a>
+  </header>
+
+  {# ───── 当前净值 Hero（与储蓄/信封同一套渐变语言） ───── #}
+  <section class="lf-card lf-card--padded lf-hero-anim lf-hero--brand lf-mb-4">
+    <div class="lf-row" style="gap:24px;align-items:center;">
+      <div style="flex:1;min-width:0;">
+        <div class="lf-text-sm" style="opacity:.85;">当前净值</div>
+        <div class="lf-amount lf-amount--xl lf-num" id="nwCurrent" data-count="{{ current }}" style="margin-top:4px;color:#fff;font-variant-numeric:tabular-nums;">¥{{ current|floatformat:2 }}</div>
+        <div class="lf-text-xs" style="opacity:.85;margin-top:4px;">所有活跃账户余额之和</div>
+      </div>
+      <div style="text-align:right;min-width:150px;">
+        <div class="lf-text-xs" style="opacity:.85;">{% if range == "all" %}累计变化{% else %}近 {{ range }} 天变化{% endif %}</div>
+        <div class="lf-num lf-mt-1" style="color:#fff;font-size:16px;">
+          {% if change >= 0 %}▲{% else %}▼{% endif %} {% if change >= 0 %}+{% endif %}¥{{ change|floatformat:2 }}
+          <span style="opacity:.85;font-size:12px;">（{{ change_pct }}%）</span>
+        </div>
+        <div class="lf-text-xs lf-mt-2" style="opacity:.85;">近 30 天</div>
+        <div class="lf-num" style="color:#fff;">
+          {% if change_30 is None %}—{% else %}{% if change_30 >= 0 %}▲{% else %}▼{% endif %} {% if change_30 >= 0 %}+{% endif %}¥{{ change_30|floatformat:2 }}{% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ───── 净值曲线 + 区间切换 ───── #}
+  <section class="lf-card lf-mb-4 lf-hero-anim">
+    <div class="lf-card__header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><line x1="3" y1="21" x2="21" y2="21"/></svg></span>
+        <h2 class="lf-card__title" style="margin:0;">净值 / 资产曲线</h2>
+      </div>
+      <div class="lf-seg" role="group" aria-label="时间区间">
+        <a href="?range=30" class="lf-seg__btn {% if range == '30' %}is-active{% endif %}">30天</a>
+        <a href="?range=90" class="lf-seg__btn {% if range == '90' %}is-active{% endif %}">90天</a>
+        <a href="?range=180" class="lf-seg__btn {% if range == '180' %}is-active{% endif %}">半年</a>
+        <a href="?range=365" class="lf-seg__btn {% if range == '365' %}is-active{% endif %}">一年</a>
+        <a href="?range=all" class="lf-seg__btn {% if range == 'all' %}is-active{% endif %}">全部</a>
+      </div>
+    </div>
+    <div class="chart-wrap" style="position:relative;height:260px;">
+      <canvas id="chartNetWorth"></canvas>
+    </div>
+    {% if not has_data %}
+    <div class="lf-empty"><p class="lf-empty__text">还没有账户数据，先去「账户」添加资金账户吧。</p></div>
+    {% endif %}
+  </section>
+
+  {# ───── 账户构成（当前余额 + 环形图） ───── #}
+  <section class="lf-card lf-mb-4">
+    <div class="lf-card__header">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="lf-icon-tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></span>
+        <h2 class="lf-card__title" style="margin:0;">账户构成</h2>
+      </div>
+    </div>
+    <div class="lf-row lf-row--wrap" style="gap:20px;align-items:center;">
+      <div style="width:180px;max-width:50%;flex:0 0 auto;position:relative;">
+        <canvas id="chartComposition"></canvas>
+      </div>
+      <div class="lf-list" style="flex:1;min-width:200px;">
+        {% for a in accounts %}
+        <div class="lf-list__item">
+          <span class="lf-dot" style="background:{{ a.color }};"></span>
+          <div class="lf-list__body">
+            <div class="lf-list__title">{{ a.obj.name }}</div>
+            <div class="lf-text-xs lf-text-faint">{{ a.obj.get_type_display }} · 占 {{ a.pct }}%</div>
+          </div>
+          <div class="lf-num {% if a.balance >= 0 %}lf-text-strong{% else %}lf-text-danger{% endif %}">¥{{ a.balance|floatformat:2 }}</div>
+        </div>
+        {% empty %}
+        <div class="lf-empty"><p class="lf-empty__text">暂无账户</p></div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ───── 回填提示 ───── #}
+  <p class="lf-text-xs lf-text-faint lf-mt-2" style="line-height:1.6;">
+    曲线基于每日余额快照。想要更长的历史？在终端运行
+    <code style="background:#f1f5f9;padding:1px 6px;border-radius:4px;">python manage.py snapshot_balances</code>
+    回填历史快照（可重复运行，已存在的日期会被忽略）。
+  </p>
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script type="application/json" id="nw-data">{{ nw_json|safe }}</script>
+<script>
+(function(){
+  function ensureChart(cb){
+    if(typeof Chart!=='undefined'){cb();return;}
+    var tries=0,iv=setInterval(function(){
+      tries++;
+      if(typeof Chart!=='undefined'){clearInterval(iv);cb();}
+      else if(tries>60){clearInterval(iv);}
+    },50);
+  }
+  function animateCount(el){
+    if(!el) return;
+    var target=parseFloat(el.getAttribute('data-count'));
+    if(isNaN(target)) return;
+    if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var dur=700, start=null;
+    function step(ts){
+      if(!start) start=ts;
+      var p=Math.min((ts-start)/dur,1);
+      var eased=1-Math.pow(1-p,3);
+      el.textContent='¥'+(target*eased).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+      if(p<1) requestAnimationFrame(step);
+      else el.textContent='¥'+target.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+    }
+    requestAnimationFrame(step);
+  }
+  function init(){
+    try{
+      animateCount(document.getElementById('nwCurrent'));
+      ensureChart(function(){
+        if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){ Chart.defaults.animation=false; }
+        try{
+          var node=document.getElementById('nw-data');
+          if(!node) return;
+          var D=JSON.parse(node.textContent||node.innerText||'{}');
+          if(D.has_data && D.series && D.series.length){
+            var font={family:"'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif"};
+            var ctx=document.getElementById('chartNetWorth').getContext('2d');
+            var grad=ctx.createLinearGradient(0,0,0,260);
+            grad.addColorStop(0,'rgba(43,86,216,.20)');
+            grad.addColorStop(1,'rgba(43,86,216,0)');
+            new Chart(ctx,{type:'line',data:{labels:D.labels,datasets:[{label:'净值',data:D.series,borderColor:'#2b56d8',backgroundColor:grad,borderWidth:2,fill:true,tension:.3,pointRadius:0,pointHoverRadius:4}]},options:{responsive:true,maintainAspectRatio:false,animation:{duration:600},plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return '¥'+Number(c.parsed.y).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});}}}},scales:{x:{grid:{display:false},ticks:{font:font,maxRotation:0,autoSkip:true,maxTicksLimit:8}},y:{grid:{color:'#eef2f7'},ticks:{font:font,callback:function(v){return '¥'+v;}}}}}});
+          }
+          if(D.accounts && D.accounts.length){
+            var cctx=document.getElementById('chartComposition').getContext('2d');
+            new Chart(cctx,{type:'doughnut',data:{labels:D.accounts.map(function(a){return a.name;}),datasets:[{data:D.accounts.map(function(a){return a.balance;}),backgroundColor:D.accounts.map(function(a){return a.color;}),borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var total=c.dataset.data.reduce(function(s,v){return s+v;},0);var pct=total>0?Math.round(c.parsed/total*100):0;return c.label+'：¥'+Number(c.parsed).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})+'（'+pct+'%）';}}}}}});
+          }
+        }catch(e){}
+      });
+    }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

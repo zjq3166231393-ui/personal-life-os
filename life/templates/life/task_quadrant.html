@@ -1,0 +1,74 @@
+{% extends "_base.html" %}
+{% block title %}四象限 · Personal Life OS{% endblock %}
+{% block body_class %}lf-has-bottom-nav{% endblock %}
+{% block body %}
+<main class="lf-container">
+
+  <header class="lf-page-header">
+    <h1 class="lf-page-header__title">
+      四象限
+      <span class="lf-text-sm lf-text-faint lf-num">活跃任务 {{ total }} 条</span>
+    </h1>
+    <div class="lf-row" style="gap:8px;align-items:center;">
+      <a href="{% url 'task_list' %}" class="lf-btn lf-btn--ghost lf-btn--sm">全部任务</a>
+      <a href="{% url 'home' %}" class="lf-page-header__back" data-back="history">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        首页
+      </a>
+    </div>
+  </header>
+
+  <p class="lf-text-xs lf-text-faint lf-mb-3">按「重要 × 紧急」归类活跃任务。点任务右侧的「重 / 急」可即时翻转标记，任务会自动跳格。</p>
+
+  <div class="lf-quad-grid">
+    {% for q in quadrants %}
+    <section class="lf-quad {{ q.cls }}">
+      <header class="lf-quad__head">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+          <span class="lf-icon-tile" aria-hidden="true">
+            {% if forloop.counter == 1 %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            {% elif forloop.counter == 2 %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {% elif forloop.counter == 3 %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            {% else %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>{% endif %}
+          </span>
+          <div style="min-width:0;">
+            <h3 class="lf-quad__title">{{ q.title }}</h3>
+            <span class="lf-quad__hint">{{ q.hint }}</span>
+          </div>
+        </div>
+        <span class="lf-quad__count lf-num">{{ q.tasks.count }}</span>
+      </header>
+      <div class="lf-quad__body">
+        {% for t in q.tasks %}
+        <article class="lf-list-item lf-list-item--hover">
+          <div style="flex:1;min-width:0;">
+            <a href="{% url 'task_edit' t.pk %}" class="lf-text-1" style="text-decoration:none;">{{ t.title }}</a>
+            <div class="lf-row lf-mt-1" style="gap:6px;">
+              <span class="lf-badge lf-badge--outline lf-text-xs">{{ t.get_status_display }}</span>
+              {% if t.due_at %}<span class="lf-text-xs lf-text-faint lf-num">{{ t.due_at|date:"m/d H:i" }}</span>{% endif %}
+            </div>
+          </div>
+          <div class="lf-quad__flags">
+            <form method="post" action="{% url 'task_toggle_flag' t.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="flag" value="important">
+              <button type="submit" class="lf-flag lf-flag--imp {% if t.important %}is-on{% endif %}" title="重要">重</button>
+            </form>
+            <form method="post" action="{% url 'task_toggle_flag' t.pk %}" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="flag" value="urgent">
+              <button type="submit" class="lf-flag lf-flag--urg {% if t.urgent %}is-on{% endif %}" title="紧急">急</button>
+            </form>
+          </div>
+        </article>
+        {% empty %}
+        <div class="lf-text-xs lf-text-faint lf-mt-2">暂无任务</div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+</main>
+{% endblock %}
+{% block bottom_nav %}{% include "life/_bottom_nav.html" %}{% endblock %}

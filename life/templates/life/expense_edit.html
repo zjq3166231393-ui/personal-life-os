@@ -7,7 +7,7 @@
   <header class="lf-page-header">
     <h1 class="lf-page-header__title">编辑账目</h1>
     <a href="{% url 'expense_list' %}" class="lf-page-header__back" data-back="history">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       返回
     </a>
   </header>
@@ -17,7 +17,7 @@
       <div class="lf-row" style="gap:12px;">
         <div class="lf-field" style="flex:1;margin-bottom:16px;">
           <label class="lf-label">类型</label>
-          <select name="type" class="lf-select">
+          <select name="type" class="lf-select" onchange="var tf=document.getElementById('transferField');if(tf)tf.style.display=this.value==='transfer'?'block':'none';">
             <option value="expense" {% if expense.type == 'expense' %}selected{% endif %}>支出</option>
             <option value="income" {% if expense.type == 'income' %}selected{% endif %}>收入</option>
             <option value="transfer" {% if expense.type == 'transfer' %}selected{% endif %}>转账</option>
@@ -25,8 +25,18 @@
         </div>
         <div class="lf-field" style="flex:1;margin-bottom:16px;">
           <label class="lf-label">金额</label>
-          <input type="number" name="amount" class="lf-input lf-num" step="0.01" min="0.01" value="{{ expense.amount }}" required>
+          <div class="lf-row" style="gap:8px;">
+            <input type="number" name="amount" class="lf-input lf-num" step="0.01" min="0.01" value="{{ expense.amount }}" required style="flex:2;">
+            <select name="currency" class="lf-select" style="flex:1;">
+              {% for code, label in currency_choices %}<option value="{{ code }}" {% if expense.currency == code %}selected{% endif %}>{{ code }}</option>{% endfor %}
+            </select>
+          </div>
         </div>
+      </div>
+
+      <div class="lf-field">
+        <label class="lf-label">汇率（1 {{ expense.currency }} = ? CNY，默认 1）</label>
+        <input type="number" name="rate" class="lf-input lf-num" step="0.0001" min="0" value="{{ expense.rate }}" placeholder="1">
       </div>
 
       <div class="lf-field">
@@ -56,6 +66,24 @@
         </div>
       </div>
 
+      <div class="lf-field">
+        <label class="lf-label">账户</label>
+        <select name="account" class="lf-select">
+          <option value="">未指定</option>
+          {% for a in accounts %}<option value="{{ a.pk }}" {% if a.pk == expense.account_id %}selected{% endif %}>{{ a.display_icon }} {{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div id="transferField" style="display:{% if expense.type == 'transfer' %}block{% else %}none{% endif %};">
+        <div class="lf-field">
+          <label class="lf-label">转入账户（仅转账）</label>
+          <select name="transfer_to_account" class="lf-select">
+            <option value="">未指定</option>
+            {% for a in accounts %}<option value="{{ a.pk }}" {% if a.pk == expense.transfer_to_account_id %}selected{% endif %}>{{ a.display_icon }} {{ a.name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+
       <div class="lf-row" style="gap:12px;">
         <div class="lf-field" style="flex:1;margin-bottom:16px;">
           <label class="lf-label">来源</label>
@@ -66,6 +94,8 @@
           <select name="status" class="lf-select">{% for val, label in expense.Status.choices %}<option value="{{ val }}" {% if expense.status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
         </div>
       </div>
+
+      {% include "life/_tag_picker.html" %}
 
       <div class="lf-row lf-mt-6" style="gap:8px;">
         <button type="submit" class="lf-btn lf-btn--primary">保存</button>
