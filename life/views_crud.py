@@ -13,9 +13,6 @@ from django.views.decorators.http import require_POST
 from common.audit import record
 from common.utils import safe_next
 
-from .views_trash import undo_redirect
-from .currency import CURRENCY_CHOICES
-
 from .constants import (
     ANOMALY_SPIKE_FACTOR,
     ANOMALY_TOPN,
@@ -48,6 +45,7 @@ from .constants import (
     UPCOMING_TOPN,
     WEEK_TREND_DAYS,
 )
+from .currency import CURRENCY_CHOICES
 from .models import (
     Account,
     Budget,
@@ -65,6 +63,7 @@ from .models import (
 from .models_daily import DailyCheckin
 from .services import aware_day_end, aware_day_start, net_worth_data
 from .views_tag import apply_tags, parse_tag_ids, user_tags
+from .views_trash import undo_redirect
 
 
 def _user_queryset(model, request):
@@ -252,7 +251,8 @@ def expense_edit(request, pk):
         expense.merchant = request.POST.get("merchant", expense.merchant)[:200]
         expense.source = request.POST.get("source", expense.source)
         # 多币种（P1-5）：币种 + 汇率
-        from decimal import Decimal as _D, InvalidOperation as _IO
+        from decimal import Decimal as _D
+        from decimal import InvalidOperation as _IO
 
         from .currency import CURRENCY_META
 

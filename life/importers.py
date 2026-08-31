@@ -17,7 +17,6 @@
 """
 
 import csv
-import io
 import re
 from datetime import datetime
 

@@ -32,10 +32,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .importers import (
-    SOURCE_ALIPAY,
-    SOURCE_LIFEOS,
-    SOURCE_WECHAT,
     SOURCE_LABELS,
+    SOURCE_LIFEOS,
     detect_source,
     parse_statement,
     to_naive_str,
